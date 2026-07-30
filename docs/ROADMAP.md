@@ -20,7 +20,10 @@ The arm count grew from three to five. TSDF fusion arms are now:
 
 | # | Arm | Authored by | Purpose |
 |---|-----|-------------|---------|
-| A0 | `vendor/libinfer` hash TSDF (existing Rust/CUDA) | Petr, already exists | Golden correctness reference. Not a language arm |
+_(A0, the existing Rust/CUDA hash TSDF as a vendored golden reference, was
+**removed 2026-07-30**. No code is reused from OSN; it is a rough reference for
+algorithm and API shape only. See section 0.5 for what replaces it.)_
+
 | A1 | Open3D `VoxelBlockGrid` (C++) | Third party | External baseline. Answers "why not just use Open3D" |
 | A2 | Our own C++ TSDF, CPU, C++17/20 | Petr, new | **P1.1 evidence.** Pure C++, no CUDA behind it |
 | A3 | Our own CUDA C++ TSDF | Petr, new | Kernel authorship, the performance reference point |
@@ -109,6 +112,35 @@ discard the FP16-safe-set and custom-operator work that is the project's bonus g
    `rust-src` and `llvm-tools`, which is the `cuda-oxide` pin. Stable remains default, so
    existing Rust builds are untouched. Triton 3.6.0 and Open3D 0.19.0 are present in
    `.venv`; torch is 2.10.0+cu130.
+
+### 0.5 No code reuse from OSN (decided 2026-07-30)
+
+Nothing is copied from the OSN tree. Prior implementations inform algorithm and
+API shape only. This removes arm A0, the vendored `tsdf_hash.cu` (3,458 lines),
+and with it the single-oracle correctness design.
+
+**This is a net improvement, not just a constraint.** The old design had A3/A4/A5
+ported *from* A0 and then certified *against* A0, which is weakly circular: a
+shared misunderstanding of the algorithm would pass the gate. It also put 3,458
+lines of code we did not write into a repository whose headline claim is
+production C++ authorship.
+
+Correctness now triangulates across three independent sources, in decreasing
+order of authority:
+
+1. **Analytic.** Synthetic scenes whose surface is known in closed form (plane
+   at known depth, sphere of known radius). Independent of every
+   implementation, including ours. This is the tier that makes the design
+   stronger than a single oracle: no implementation gets to define "correct".
+2. **Third-party.** Open3D `VoxelBlockGrid` on identical input, already built
+   and acceptance-tested for both CPU and CUDA (section 0.3.8 / S3).
+3. **Cross-arm.** All arms must agree. Catches per-arm bugs, cannot catch a
+   mistake common to all of them, hence last.
+
+Cost: **A2 (our CPU C++ arm) moves earlier**, because tiers 1 and 3 need at
+least one of our arms running before anything else can be gated. A2 is the right
+one to lead with: no GPU nondeterminism, simplest to audit, and it is also the
+P1.1 evidence.
 
 ### 0.4 Revised effort
 

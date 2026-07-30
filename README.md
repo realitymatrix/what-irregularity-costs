@@ -30,7 +30,6 @@ construction". A rigorous measurement on a real irregular workload is novel.
 
 | # | Arm | Purpose |
 |---|-----|---------|
-| A0 | Existing Rust/CUDA hash TSDF | Golden correctness reference, not a language arm |
 | A1 | Open3D `VoxelBlockGrid` (C++) | External baseline |
 | A2 | Our own C++ TSDF (CPU, C++17/20) | Production C++ authorship evidence |
 | A3 | Our own CUDA C++ TSDF | Kernel authorship, the performance reference point |
@@ -71,6 +70,27 @@ Headlines:
   Open3D source changes needed.
 
 Full detail with measurements: [docs/SPIKE-RESULTS.md](docs/SPIKE-RESULTS.md).
+
+## Correctness
+
+Nothing in this repository is copied from another codebase. Prior work informed
+algorithm and API shape only, so there is no "reference implementation" arm to
+certify against, and deliberately so: certifying ports against the code they
+were ported from is weakly circular, because a shared misunderstanding of the
+algorithm passes the gate.
+
+The gate triangulates across three independent sources, in decreasing order of
+authority:
+
+1. **Analytic.** Synthetic scenes with a closed-form surface (plane, sphere).
+   Independent of every implementation, including ours.
+2. **Third-party.** Open3D `VoxelBlockGrid` on identical input.
+3. **Cross-arm.** All arms must agree. Catches per-arm bugs, cannot catch a
+   mistake common to all of them, hence last.
+
+`crates/mesh-metrics` implements the symmetric point-to-triangle surface
+distance the gate runs on, validated against an analytic case and cross-checked
+against Open3D to 3e-7.
 
 ## Dataset
 

@@ -1,45 +1,46 @@
-//! C ABI bindings to every TSDF fusion arm.
+//! The one interface every TSDF fusion arm implements.
 //!
-//! Every arm in this project exposes the same `extern "C"` surface, modelled on
-//! the existing hash TSDF in `openstrate-reconstruct-rs/vendor/libinfer/src/`
-//! (`tsdf_hash.h`). That header is already a pure C ABI with no Rust types, no
-//! ARCore state and no TensorRT, so the golden reference needs a binding here
-//! rather than a reimplementation, and stays bit-comparable.
+//! Nothing here is copied from another codebase. Prior implementations were
+//! studied for algorithm and API shape only; every line is written for this
+//! project.
 //!
 //! Arms:
-//!   A0  reference  the existing Rust/CUDA hash TSDF. Golden, not a language arm.
-//!   A1  open3d     Open3D VoxelBlockGrid behind a C shim.
-//!   A2  cpu        our own C++17/20 CPU TSDF.
-//!   A3  cuda       our own CUDA C++ TSDF.
-//!   A4  rust       our own Rust CUDA TSDF via cuda-oxide.
-//!   A5a triton-shared  Triton per-block update; hash insertion shared with A3.
-//!   A5b triton-full    Triton does insertion too.
+//!   A1  open3d        Open3D VoxelBlockGrid behind a C shim. Third-party baseline.
+//!   A2  cpu           our C++17/20 CPU TSDF.
+//!   A3  cuda          our CUDA C++ TSDF.
+//!   A4  rust-cuda     our Rust CUDA TSDF via cuda-oxide.
+//!   A5a triton-shared Triton per-block update, insertion shared with A3.
+//!   A5b triton-full   Triton does insertion too.
 //!
-//! A5 ships as two variants deliberately. A5a is the clean update-only
-//! comparison against A3. A5b prices Triton's control-flow tax end to end,
-//! since spike S2 showed the irregular CAS insertion IS expressible in Triton
-//! but pays worst-case probe cost (7.9 us at MAX_PROBE=4 vs 65.5 us at 64, on a
-//! workload where nearly every lane resolves in one or two probes). The delta
-//! between A5a and A5b is therefore a direct measurement of that tax rather
-//! than an inference from microbenchmarks.
+//! # Correctness without a code-derived oracle
 //!
-//! The point of one ABI is that the harness holds `Box<dyn TsdfBackend>` and
-//! cannot accidentally measure a different code path per arm.
-
-use std::ffi::c_void;
+//! There is deliberately no "reference implementation" arm. Certifying ports
+//! against the implementation they were ported from is weakly circular: a
+//! shared misunderstanding of the algorithm passes the gate. Instead the gate
+//! triangulates across three independent sources of truth, in decreasing order
+//! of authority (see the `tsdf-harness` crate):
+//!
+//!   1. **Analytic.** Synthetic scenes whose surface is known in closed form
+//!      (plane, sphere). Independent of every implementation, including ours.
+//!   2. **Third-party.** Open3D's `VoxelBlockGrid` on identical input. An
+//!      independent implementation by other authors.
+//!   3. **Cross-arm.** All arms must agree with each other. Catches per-arm
+//!      bugs, but cannot catch a mistake common to all of them, which is why it
+//!      ranks last.
+//!
+//! Tier 1 is what makes this stronger than a single-oracle design: no
+//! implementation, ours or anyone else's, gets to define what "correct" means.
 
 /// Which implementation to instantiate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Arm {
-    /// A0: the existing Rust/CUDA implementation. Correctness reference.
-    Reference,
-    /// A1: Open3D VoxelBlockGrid.
+    /// A1: Open3D VoxelBlockGrid. Third-party baseline and cross-check.
     Open3d,
-    /// A2: our own C++ CPU implementation.
+    /// A2: our C++ CPU implementation.
     Cpu,
-    /// A3: our own CUDA C++ implementation.
+    /// A3: our CUDA C++ implementation.
     Cuda,
-    /// A4: our own Rust CUDA implementation (cuda-oxide).
+    /// A4: our Rust CUDA implementation (cuda-oxide).
     RustCuda,
     /// A5a: Triton per-block update, hash insertion shared with the CUDA arm.
     /// The clean update-only comparison against A3.
@@ -50,8 +51,7 @@ pub enum Arm {
 }
 
 impl Arm {
-    pub const ALL: [Arm; 7] = [
-        Arm::Reference,
+    pub const ALL: [Arm; 6] = [
         Arm::Open3d,
         Arm::Cpu,
         Arm::Cuda,
@@ -62,7 +62,6 @@ impl Arm {
 
     pub fn name(self) -> &'static str {
         match self {
-            Arm::Reference => "reference",
             Arm::Open3d => "open3d",
             Arm::Cpu => "cpu",
             Arm::Cuda => "cuda",
@@ -78,31 +77,46 @@ impl Arm {
     pub fn is_gpu(self) -> bool {
         !matches!(self, Arm::Cpu)
     }
+
+    /// True for arms authored in this project. Open3D is not, so it is a
+    /// baseline rather than a subject of the language comparison.
+    pub fn is_ours(self) -> bool {
+        !matches!(self, Arm::Open3d)
+    }
 }
 
-/// Construction parameters, mirroring `tsdf_hash_create`.
+/// Construction parameters.
 #[derive(Debug, Clone, Copy)]
 pub struct VolumeConfig {
     pub voxel_size_m: f32,
+    /// Voxels per side of a block. 8 gives 512 voxels per block, small enough
+    /// that the hash table stays cheap while still amortising each lookup over
+    /// a useful number of voxels.
+    pub block_dim: i32,
     pub pool_capacity_blocks: i32,
-    pub committed_cap_points: i32,
-    /// TSDF truncation half-width. <= 0 selects 4 x voxel_size, matching the
-    /// reference's `tsdf_hash_set_mesh_mode` contract.
+    /// TSDF truncation half-width in metres. <= 0 selects 4 x voxel_size.
     pub trunc_m: f32,
 }
 
 impl VolumeConfig {
     /// Device bytes the block pool will consume.
     ///
-    /// One block is `BLOCK_DIM^3` voxels (8^3 = 512) across 8 SoA f32/u32
-    /// fields, so 16 KiB per block. Worth computing before allocating: the
-    /// header's illustrative 1<<20 blocks is 16 GiB, which exceeds a 16 GB card
-    /// and fails as a bare "out of memory" at create with no indication that the
-    /// pool size is the cause.
-    pub const fn pool_bytes(&self) -> u64 {
-        const BLOCK_DIM: u64 = 8;
+    /// Worth computing before allocating: an oversized pool fails as a bare
+    /// out-of-memory at construction, with nothing naming the pool as the
+    /// cause. At 8^3 blocks across 8 f32/u32 fields that is 16 KiB per block,
+    /// so a nominal-looking 1<<20 blocks is 16 GiB.
+    pub fn pool_bytes(&self) -> u64 {
         const FIELDS: u64 = 8;
-        self.pool_capacity_blocks as u64 * BLOCK_DIM.pow(3) * FIELDS * 4
+        let bd = self.block_dim as u64;
+        self.pool_capacity_blocks as u64 * bd * bd * bd * FIELDS * 4
+    }
+
+    pub fn trunc_or_default(&self) -> f32 {
+        if self.trunc_m > 0.0 {
+            self.trunc_m
+        } else {
+            4.0 * self.voxel_size_m
+        }
     }
 }
 
@@ -110,11 +124,11 @@ impl Default for VolumeConfig {
     fn default() -> Self {
         Self {
             voxel_size_m: 0.01,
-            // 65_536 blocks = 1 GiB, which covers a room-scale scan at 1-2 cm
-            // voxels with headroom. Scale up deliberately, after checking
-            // `pool_bytes()` against the device, rather than by default.
+            block_dim: 8,
+            // 65_536 blocks = 1 GiB at the default block_dim, which covers a
+            // room-scale scan with headroom. Scale up deliberately, after
+            // checking `pool_bytes()` against the device.
             pool_capacity_blocks: 1 << 16,
-            committed_cap_points: 1 << 22,
             trunc_m: -1.0,
         }
     }
@@ -122,8 +136,8 @@ impl Default for VolumeConfig {
 
 /// One batch of world-space points to integrate.
 ///
-/// World-space, deliberately: the reference API takes world points, so pose
-/// composition never enters the volume and cannot differ between arms.
+/// World-space, deliberately: pose composition happens once, in the loader, so
+/// it cannot differ between arms.
 #[derive(Debug, Clone, Copy)]
 pub struct PointBatch {
     /// Device pointer to 3 * n_points f32, interleaved xyz.
@@ -133,9 +147,11 @@ pub struct PointBatch {
     /// Device pointer to n_points f32 weights, or 0 for uniform 1.0.
     pub d_weights: u64,
     pub n_points: i32,
-    /// Monotonic chunk id, used for LRU eviction stamping.
+    /// Monotonic chunk id, for LRU eviction stamping.
     pub chunk_id: i32,
-    /// Camera origin for the radius gate.
+    /// Camera origin. Required for projective TSDF: the sign of the distance
+    /// depends on which side of the surface a sample lies, which is only
+    /// defined relative to a viewpoint.
     pub cam: [f32; 3],
     /// Far-field cutoff in metres. <= 0 disables.
     ///
@@ -160,23 +176,21 @@ impl Mesh {
         self.n_vertices / 3
     }
 
-    pub fn positions(&self) -> impl Iterator<Item = [f32; 3]> + '_ {
-        (0..self.n_vertices).map(move |i| {
-            [
-                self.posnor[i * 6],
-                self.posnor[i * 6 + 1],
-                self.posnor[i * 6 + 2],
-            ]
-        })
+    /// Positions only, which is what the mesh metrics consume.
+    pub fn positions(&self) -> Vec<f32> {
+        let mut v = Vec::with_capacity(self.n_vertices * 3);
+        for i in 0..self.n_vertices {
+            v.extend_from_slice(&self.posnor[i * 6..i * 6 + 3]);
+        }
+        v
     }
 }
 
 /// The one interface every arm implements.
 ///
-/// Intentionally narrow. Anything an arm needs beyond this (allocation policy,
-/// eviction, streaming) is an implementation detail, because the moment arms
-/// differ in what the harness calls, the comparison stops being apples to
-/// apples.
+/// Intentionally narrow. Allocation policy, eviction and streaming are
+/// implementation details, because the moment arms differ in what the harness
+/// calls, the comparison stops being apples to apples.
 pub trait TsdfBackend {
     fn arm(&self) -> Arm;
 
@@ -186,13 +200,13 @@ pub trait TsdfBackend {
     /// Marching cubes over the current volume.
     fn extract_mesh(&mut self, min_weight: f32, iso: f32) -> Result<Mesh, TsdfError>;
 
-    /// Allocated block count. Diagnostic, and a cheap cross-arm invariant: two
-    /// arms that disagree here have diverged before any mesh is compared.
+    /// Allocated block count. A cheap cross-arm invariant: arms that disagree
+    /// here have diverged before any mesh is compared.
     fn block_count(&self) -> i32;
 
     /// Points dropped because the block pool was exhausted. Must be reported,
-    /// never silently ignored: a saturating pool looks like a quality
-    /// regression rather than a capacity problem.
+    /// never silently ignored: a saturating pool presents as a quality
+    /// regression when it is a capacity problem.
     fn drop_count(&self) -> u64;
 }
 
@@ -208,267 +222,6 @@ pub enum TsdfError {
     },
     #[error("{arm}: output buffer too small, needed more than {cap} vertices")]
     BufferTooSmall { arm: &'static str, cap: i32 },
-    #[error("{arm}: null handle returned from create")]
-    NullHandle { arm: &'static str },
-}
-
-// ---------------------------------------------------------------------------
-// A0: the golden reference, bound to the existing C ABI verbatim.
-// ---------------------------------------------------------------------------
-
-#[repr(C)]
-pub struct TsdfHash {
-    _private: [u8; 0],
-}
-
-// Signatures copied from vendor/libinfer/src/tsdf_hash.h. Kept verbatim so the
-// reference is bit-comparable rather than merely similar.
-extern "C" {
-    pub fn tsdf_hash_create(
-        voxel_size_m: f32,
-        pool_capacity_blocks: i32,
-        committed_cap_points: i32,
-    ) -> *mut TsdfHash;
-
-    pub fn tsdf_hash_destroy(h: *mut TsdfHash);
-
-    pub fn tsdf_hash_set_mesh_mode(h: *mut TsdfHash, on: i32, trunc_m: f32) -> i32;
-
-    /// Host-pointer integrate. Unlike the device variant, this one honours
-    /// mesh mode. See `ReferenceBackend::use_host_path`.
-    pub fn tsdf_hash_add_points_chunk(
-        h: *mut TsdfHash,
-        positions: *const f32,
-        colors: *const u8,
-        weights: *const f32,
-        n_points: i32,
-        chunk_id: i32,
-        cam_x: f32,
-        cam_y: f32,
-        cam_z: f32,
-        radius_m: f32,
-    ) -> i32;
-
-    pub fn tsdf_hash_add_points_chunk_device(
-        h: *mut TsdfHash,
-        d_positions: u64,
-        d_colors: u64,
-        d_weights: u64,
-        n_points: i32,
-        chunk_id: i32,
-        cam_x: f32,
-        cam_y: f32,
-        cam_z: f32,
-        radius_m: f32,
-    ) -> i32;
-
-    pub fn tsdf_hash_extract_mesh(
-        h: *mut TsdfHash,
-        buffer_posnor: *mut f32,
-        buffer_rgb: *mut u8,
-        buffer_block: *mut i32,
-        vert_cap: i32,
-        min_weight: f32,
-        iso: f32,
-        dirty_only: i32,
-        current_chunk: i32,
-    ) -> i32;
-
-    pub fn tsdf_hash_block_count(h: *mut TsdfHash) -> i32;
-    pub fn tsdf_hash_drop_count(h: *mut TsdfHash) -> u64;
-}
-
-/// A0. Owns the C handle and frees it on drop.
-pub struct ReferenceBackend {
-    handle: *mut TsdfHash,
-    current_chunk: i32,
-    vert_cap: i32,
-    /// Route integrate through the host-pointer entry point.
-    ///
-    /// Required for mesh extraction. `tsdf_hash_add_points_chunk_device` does
-    /// NOT dispatch on mesh mode: it always calls `hash_integrate_kernel`
-    /// (centroid binning), whereas the host path branches to
-    /// `hash_integrate_tsdf_kernel` (projective TSDF) when mesh mode is on.
-    /// With the device path, no signed distance field is ever built, marching
-    /// cubes finds no zero crossing, and extraction silently returns zero
-    /// vertices while every other diagnostic (block count, drop count) looks
-    /// healthy. See docs/REFERENCE-BUG.md.
-    use_host_path: bool,
-    host_scratch: Vec<f32>,
-}
-
-impl ReferenceBackend {
-    pub fn new(cfg: &VolumeConfig) -> Result<Self, TsdfError> {
-        // SAFETY: plain scalars in, opaque handle out. Null signals allocation
-        // failure, which is checked below.
-        let handle = unsafe {
-            tsdf_hash_create(
-                cfg.voxel_size_m,
-                cfg.pool_capacity_blocks,
-                cfg.committed_cap_points,
-            )
-        };
-        if handle.is_null() {
-            return Err(TsdfError::NullHandle { arm: "reference" });
-        }
-        // Mesh mode is required: without it, integrate does centroid binning
-        // instead of projective TSDF splatting and marching cubes has no
-        // signed field to walk.
-        let rc = unsafe { tsdf_hash_set_mesh_mode(handle, 1, cfg.trunc_m) };
-        if rc != 0 {
-            unsafe { tsdf_hash_destroy(handle) };
-            return Err(TsdfError::Ffi {
-                arm: "reference",
-                op: "set_mesh_mode",
-                code: rc,
-            });
-        }
-        Ok(Self {
-            handle,
-            current_chunk: 0,
-            vert_cap: 1 << 22,
-            use_host_path: true,
-            host_scratch: Vec::new(),
-        })
-    }
-}
-
-impl Drop for ReferenceBackend {
-    fn drop(&mut self) {
-        if !self.handle.is_null() {
-            // SAFETY: handle came from tsdf_hash_create and is freed once.
-            unsafe { tsdf_hash_destroy(self.handle) };
-            self.handle = std::ptr::null_mut();
-        }
-    }
-}
-
-impl TsdfBackend for ReferenceBackend {
-    fn arm(&self) -> Arm {
-        Arm::Reference
-    }
-
-    fn integrate(&mut self, b: &PointBatch) -> Result<(), TsdfError> {
-        self.current_chunk = b.chunk_id;
-        if self.use_host_path {
-            // Stage device -> host -> device. Wasteful, and only necessary
-            // because the device entry point ignores mesh mode.
-            let n = (b.n_points as usize) * 3;
-            self.host_scratch.resize(n, 0.0);
-            // SAFETY: d_positions covers 3 * n_points floats per the contract
-            // on PointBatch; host_scratch is sized to match.
-            unsafe {
-                let rc = cuda_memcpy_d2h(
-                    self.host_scratch.as_mut_ptr() as *mut core::ffi::c_void,
-                    b.d_positions,
-                    n * std::mem::size_of::<f32>(),
-                );
-                if rc != 0 {
-                    return Err(TsdfError::Ffi {
-                        arm: "reference",
-                        op: "cuMemcpyDtoH",
-                        code: rc,
-                    });
-                }
-                let rc = tsdf_hash_add_points_chunk(
-                    self.handle,
-                    self.host_scratch.as_ptr(),
-                    std::ptr::null(),
-                    std::ptr::null(),
-                    b.n_points,
-                    b.chunk_id,
-                    b.cam[0],
-                    b.cam[1],
-                    b.cam[2],
-                    b.radius_m,
-                );
-                if rc != 0 {
-                    return Err(TsdfError::Ffi {
-                        arm: "reference",
-                        op: "add_points_chunk",
-                        code: rc,
-                    });
-                }
-            }
-            return Ok(());
-        }
-        // SAFETY: device pointers are caller-owned and must cover n_points as
-        // documented on PointBatch; 0 is the documented null for colors/weights.
-        let rc = unsafe {
-            tsdf_hash_add_points_chunk_device(
-                self.handle,
-                b.d_positions,
-                b.d_colors,
-                b.d_weights,
-                b.n_points,
-                b.chunk_id,
-                b.cam[0],
-                b.cam[1],
-                b.cam[2],
-                b.radius_m,
-            )
-        };
-        if rc != 0 {
-            return Err(TsdfError::Ffi {
-                arm: "reference",
-                op: "add_points_chunk_device",
-                code: rc,
-            });
-        }
-        Ok(())
-    }
-
-    fn extract_mesh(&mut self, min_weight: f32, iso: f32) -> Result<Mesh, TsdfError> {
-        let cap = self.vert_cap as usize;
-        let mut posnor = vec![0.0f32; cap * 6];
-        let mut rgb = vec![0u8; cap * 3];
-        let mut block = vec![0i32; cap];
-
-        // SAFETY: buffers are sized to vert_cap as the C API requires. A
-        // negative return means overflow, not a partial write.
-        let n = unsafe {
-            tsdf_hash_extract_mesh(
-                self.handle,
-                posnor.as_mut_ptr(),
-                rgb.as_mut_ptr(),
-                block.as_mut_ptr(),
-                self.vert_cap,
-                min_weight,
-                iso,
-                0, // dirty_only = 0: full re-mesh, so arms are comparable
-                self.current_chunk,
-            )
-        };
-        if n < 0 {
-            return Err(TsdfError::BufferTooSmall {
-                arm: "reference",
-                cap: self.vert_cap,
-            });
-        }
-        let n = n as usize;
-        posnor.truncate(n * 6);
-        rgb.truncate(n * 3);
-        Ok(Mesh {
-            posnor,
-            rgb,
-            n_vertices: n,
-        })
-    }
-
-    fn block_count(&self) -> i32 {
-        // SAFETY: read-only query on a live handle.
-        unsafe { tsdf_hash_block_count(self.handle) }
-    }
-
-    fn drop_count(&self) -> u64 {
-        // SAFETY: read-only query on a live handle.
-        unsafe { tsdf_hash_drop_count(self.handle) }
-    }
-}
-
-// Driver-API copy, used only for the host-path staging above.
-#[link(name = "cuda")]
-extern "C" {
-    #[link_name = "cuMemcpyDtoH_v2"]
-    fn cuda_memcpy_d2h(dst: *mut c_void, src: u64, n: usize) -> i32;
+    #[error("{arm}: allocation failed")]
+    Alloc { arm: &'static str },
 }
