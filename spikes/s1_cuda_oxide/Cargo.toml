@@ -1,0 +1,20 @@
+[package]
+name = "tsdf_hash_spike"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+# Standalone crate, not part of the parent workspace.
+[workspace]
+
+# Spike S1 for the tsdf-backends project: can cuda-oxide express the two
+# primitives the hash TSDF integrate path needs, on sm_120?
+#   1. atomicAdd accumulation into an SoA voxel pool
+#   2. atomicCAS linear-probe hash insertion (tsdf_hash.cu:338)
+# Build with:
+#   cargo oxide run tsdf_hash_spike --arch sm_120
+
+[dependencies]
+cuda-device = { path = "../../../cuda-device" }
+cuda-host = { path = "../../../cuda-host" }
+cuda-core = { path = "../../../cuda-core" }

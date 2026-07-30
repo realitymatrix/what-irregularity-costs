@@ -1,0 +1,25 @@
+# Build artefacts
+target/
+build/
+build-cpu/
+*.o
+*.so
+*.a
+*.engine
+*.ptx
+*.cubin
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+ta-venv/
+
+# Datasets and results: pointers live in docs, data does not live in git
+data/
+ta-data/
+captures/
+*.log
+*.csv
+*.png
+!docs/**/*.png
