@@ -1,0 +1,8 @@
+[package]
+name = "mesh-metrics"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Mesh agreement metrics for the correctness gate: symmetric surface distance and Hausdorff"
+
+[dependencies]
