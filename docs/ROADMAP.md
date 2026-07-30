@@ -25,7 +25,15 @@ The arm count grew from three to five. TSDF fusion arms are now:
 | A2 | Our own C++ TSDF, CPU, C++17/20 | Petr, new | **P1.1 evidence.** Pure C++, no CUDA behind it |
 | A3 | Our own CUDA C++ TSDF | Petr, new | Kernel authorship, the performance reference point |
 | A4 | Our own Rust CUDA TSDF via `cuda-oxide` | Petr, new | Rust-to-PTX vs nvcc codegen |
-| A5 | Triton fusion backend (`@triton.jit`) | Petr, new | **P1.2 evidence.** Head-to-head vs A3 |
+| A5a | Triton fusion, insertion shared with A3 | Petr, new | **P1.2 evidence.** Clean update-only comparison vs A3 |
+| A5b | Triton fusion, insertion in Triton too | Petr, new | Prices the control-flow tax end to end |
+
+**A5 ships as two variants, decided 2026-07-30.** Spike S2 showed the irregular
+CAS insertion IS expressible in Triton, so the second variant became available.
+A5a isolates the regular per-block update; A5b adds Triton's own insertion. The
+**delta between them is a direct measurement** of the control-flow tax
+(no per-lane early exit, no mask on `atomic_cas`) rather than an inference from
+microbenchmarks. Seven arms total.
 
 ### 0.2 One contradiction to resolve, resolved in favour of the scope doc
 
@@ -34,9 +42,12 @@ sitting in the depth path. The pasted scope doc says the opposite, explicitly an
 better argument: *"Triton's role is the fusion backend, not depth pre/post-processing.
 Rectification and normalisation kernels are memory-bound and prove nothing."*
 
-This roadmap follows the scope doc. Triton is arm A5, a fusion backend competing directly
-with A3. If that is wrong, it is the single highest-impact correction to make before
-Phase 3 starts, because it changes what A5 is.
+**RESOLVED 2026-07-30, in favour of the scope doc.** Triton is arm A5, a fusion backend
+competing directly with A3. Depth runs on TensorRT via **Rust libinfer**, not Triton and
+not torch.compile. Rationale beyond the scope doc's: a Triton/Inductor depth stage would
+be slower than the existing TensorRT FP16 path, and a *slower* depth stage pushes the
+crossover the wrong way by making fusion look less like the bottleneck. It would also
+discard the FP16-safe-set and custom-operator work that is the project's bonus gate.
 
 ### 0.3 VERIFIED findings that change the plan
 
@@ -378,10 +389,13 @@ config agree inside stated noise. If timing is not reproducible yet, no arm is c
 
 - **2a. Split insertion from integrate (prerequisite).** Per finding 0.3.4 they are fused.
   Extract allocation into a separate pass so all arms share one allocation path. The
-  original reason (A5 cannot express insertion) is void per section 1.2, but the remaining
-  reason stands on its own: a shared allocator makes the comparison measure the *update*,
-  not allocation-order luck. Still worth doing, no longer forced. Validate against the
-  golden reference before going on.
+  original reason (A5 cannot express insertion) is void per section 1.2. Two reasons now
+  stand in its place, and the first makes it **required again**:
+    1. **A5a is defined by it.** The shared-insertion Triton variant cannot exist without
+       an allocation pass that is callable independently of integrate.
+    2. A shared allocator makes the comparison measure the *update* rather than
+       allocation-order luck.
+  Validate against the golden reference before going on.
 - **2b. `include/tsdf/`.** `types.hpp` (block layout, `HashEntry`, accumulator, params),
   `kernel_backend.hpp` (`integrate()`, `extract_surface()`, `extract_mesh()`).
 - **2c. `src/volume.cpp`.** RAII device-memory ownership, pool and free-stack management,
@@ -409,15 +423,35 @@ compiler, expect toolchain spelunking.
 
 ### Phase 4. A5, the Triton arm. P1.2. ~1.5 weeks.
 
-Triton `integrate` over already-allocated blocks, plus `backend_triton.cpp` as the C++
-dispatch layer. State plainly in the README that `@triton.jit` kernels are Python and the
-C++ authorship claim rests on the subsystem, volume management, build and tests. That is a
-design fact, not a weakness.
+**Launched from Rust via AOT cubin, not embedded Python.** Triton exposes the compiled
+cubin (`kernel.asm["cubin"]`, verified: 18,808 bytes for the S2 hash-insert kernel, with
+metadata `name`, `num_warps=4`, `shared=2048`, `global_scratch_size`). So: compile the
+kernels ahead of time in Python as a build step, emit `.cubin` plus a manifest, then load
+and launch from the Rust driver with `cuModuleLoadData` / `cuModuleGetFunction` /
+`cuLaunchKernel`. **Python becomes a build-time dependency only.**
 
-Seeded from the S2 spike, which already has both kernels working. Build **both** variants
-now that section 1.2 shows insertion is expressible: (a) insertion shared with CUDA, the
-clean update-only comparison, and (b) Triton-does-everything, which prices the control-flow
-tax end to end.
+Why this matters for the paper: every arm then runs under one driver and the benchmark
+measures kernel time rather than language runtime. That removes the confound which makes
+most published "Triton vs CUDA" comparisons unreliable, and it should be stated explicitly.
+
+RISK to retire early, same treatment as S1/S2: Triton's **launch ABI**. Constexprs are
+compiled in rather than passed, argument packing order must match exactly, and Triton 3.x
+kernels may require a `global_scratch` pointer argument. Getting it subtly wrong yields
+plausible-but-wrong results rather than a crash, so validate the Rust-launched kernel
+against the known-good numbers from the Python-launched S2 spike before trusting any
+timing.
+
+Seeded from the S2 spike, which already has both kernels working, and from the validated
+Rust launch path (`crates/triton-aot`, see docs/TRITON-ABI.md).
+
+**Both variants ship (decided 2026-07-30):**
+  * **A5a, insertion shared with A3.** The clean update-only comparison. Depends on the
+    Phase 2a split.
+  * **A5b, Triton does insertion too.** Reuses the S2 `hash_insert_kernel` directly.
+
+Report `A5b - A5a` as the measured control-flow tax. That is a stronger result than either
+number alone, and stronger than the microbenchmark in section 1.2, because it is priced on
+the real workload rather than a synthetic contention test.
 
 The claim to report is no longer "cannot express it" but the measured version:
 *"Triton matches hand-tuned CUDA on the regular per-block update, and expresses the
@@ -431,10 +465,26 @@ Phase 3 or 5, not here.
 
 ### Phase 5. Depth stage. ~1 week.
 
-FoundationStereo (accuracy) and Fast-FoundationStereo (speed) via ONNX Runtime and
-TensorRT FP16, at 576x960 and 320x736 to match the published ONNX profiles. Cheaper than
-the original estimate because `Fast-FoundationStereo/cpp/` already provides a C++ TRT
-runner, used as an external dependency per finding 0.3.7. Re-uses the FP16-safe-set,
+**Architecture decided 2026-07-30: Rust libinfer driving pre-built sm_120 TensorRT
+engines.** Not the NVIDIA C++ runner (finding 0.3.7: it is upstream-licensed and not
+authorship evidence), and not torch.compile.
+
+FoundationStereo (accuracy) and Fast-FoundationStereo (speed) at 576x960 and 320x736,
+matching the published deployable ONNX profiles.
+
+Two facts that shape this:
+
+- **libinfer does not build engines** (zero `IBuilder`/`IParser` in `engine.cpp`); it
+  loads pre-built `.engine` files. Build them with the existing OSN recipe,
+  `scripts/build_blackwell_s120_engines.sh`: `trtexec --fp16
+  --builderOptimizationLevel=3 --memPoolSize=workspace:N` with explicit
+  min/opt/maxShapes. The two fixed resolutions map to either two engines or two
+  optimisation profiles; libinfer supports both via `get_num_profiles` /
+  `set_active_profile_async`.
+- **libinfer has `infer_device_io`**, device pointers in and out. Depth therefore never
+  round-trips to host and feeds `tsdf_hash_add_points_chunk_device` directly. This makes
+  the host-transfer ablation (expected to be the paper's second finding) a first-class
+  part of the design rather than an afterthought. Re-uses the FP16-safe-set,
 custom-operator and Myelin-workaround material. Resolve the max-disparity ceiling from
 section 2.3 here.
 
@@ -490,8 +540,7 @@ Non-negotiable, and the actual differentiator given five years of statistical ac
 - ~~S1, `cuda-oxide` on sm_120~~. **DONE, PASSED 2026-07-29.** See section 1.1.
 - ~~S2, Triton hash-TSDF feasibility~~. **DONE, PASSED BOTH PARTS 2026-07-29.** See
   section 1.2. A5 is no longer the highest-risk arm; no arm now carries feasibility risk.
-- **BLOCKING (last one):** confirm Triton's role is fusion (section 0.2), since it defines
-  A5. S2 validated the fusion reading, but the decision is still Petr's to confirm.
+- ~~Confirm Triton's role is fusion~~. **RESOLVED 2026-07-30: fusion. No blockers remain.**
 - **S3, Open3D C++ from source: NOT YET RUN.** Now the only unstarted Phase 0 spike, and
   by elimination the largest remaining unknown.
 - Cloud L4: deferred to Phase 6, second-architecture axis only. Not on the critical path.

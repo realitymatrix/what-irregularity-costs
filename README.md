@@ -35,7 +35,13 @@ construction". A rigorous measurement on a real irregular workload is novel.
 | A2 | Our own C++ TSDF (CPU, C++17/20) | Production C++ authorship evidence |
 | A3 | Our own CUDA C++ TSDF | Kernel authorship, the performance reference point |
 | A4 | Our own Rust CUDA TSDF via `cuda-oxide` | Rust-to-PTX vs nvcc codegen |
-| A5 | Triton fusion backend (`@triton.jit`) | Head-to-head vs A3 |
+| A5a | Triton fusion, insertion shared with A3 | Clean update-only comparison vs A3 |
+| A5b | Triton fusion, insertion in Triton too | Prices the control-flow tax end to end |
+
+A5 ships as two variants because spike S2 showed Triton *can* express the
+irregular CAS insertion. `A5b - A5a` is then a direct measurement of Triton's
+control-flow tax on the real workload, rather than an inference from a synthetic
+contention test.
 
 Triton here means **OpenAI Triton** (`@triton.jit`), the kernel DSL, not NVIDIA
 Triton Inference Server. Its role is the fusion backend, not depth

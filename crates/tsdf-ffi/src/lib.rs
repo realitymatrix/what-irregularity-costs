@@ -12,7 +12,16 @@
 //!   A2  cpu        our own C++17/20 CPU TSDF.
 //!   A3  cuda       our own CUDA C++ TSDF.
 //!   A4  rust       our own Rust CUDA TSDF via cuda-oxide.
-//!   A5  triton     Triton kernels, AOT-compiled to cubin, launched from Rust.
+//!   A5a triton-shared  Triton per-block update; hash insertion shared with A3.
+//!   A5b triton-full    Triton does insertion too.
+//!
+//! A5 ships as two variants deliberately. A5a is the clean update-only
+//! comparison against A3. A5b prices Triton's control-flow tax end to end,
+//! since spike S2 showed the irregular CAS insertion IS expressible in Triton
+//! but pays worst-case probe cost (7.9 us at MAX_PROBE=4 vs 65.5 us at 64, on a
+//! workload where nearly every lane resolves in one or two probes). The delta
+//! between A5a and A5b is therefore a direct measurement of that tax rather
+//! than an inference from microbenchmarks.
 //!
 //! The point of one ABI is that the harness holds `Box<dyn TsdfBackend>` and
 //! cannot accidentally measure a different code path per arm.
@@ -32,18 +41,23 @@ pub enum Arm {
     Cuda,
     /// A4: our own Rust CUDA implementation (cuda-oxide).
     RustCuda,
-    /// A5: Triton kernels launched from Rust.
-    Triton,
+    /// A5a: Triton per-block update, hash insertion shared with the CUDA arm.
+    /// The clean update-only comparison against A3.
+    TritonShared,
+    /// A5b: Triton does the irregular hash insertion too. Isolates the
+    /// control-flow tax: no per-lane early exit and no mask on `atomic_cas`.
+    TritonFull,
 }
 
 impl Arm {
-    pub const ALL: [Arm; 6] = [
+    pub const ALL: [Arm; 7] = [
         Arm::Reference,
         Arm::Open3d,
         Arm::Cpu,
         Arm::Cuda,
         Arm::RustCuda,
-        Arm::Triton,
+        Arm::TritonShared,
+        Arm::TritonFull,
     ];
 
     pub fn name(self) -> &'static str {
@@ -53,7 +67,8 @@ impl Arm {
             Arm::Cpu => "cpu",
             Arm::Cuda => "cuda",
             Arm::RustCuda => "rust-cuda",
-            Arm::Triton => "triton",
+            Arm::TritonShared => "triton-shared",
+            Arm::TritonFull => "triton-full",
         }
     }
 
