@@ -9,6 +9,20 @@ license = "MIT"
 # of the project builds on stable.
 [workspace]
 
+[lib]
+name = "tsdf_rust_cuda"
+# staticlib so the C++ test harness can link A4 directly. cuda-oxide's model is
+# single-source (device artifact embedded in the host object, typed launch
+# methods generated), so there is no standalone cubin to hand to a separate
+# launcher; exposing a C ABI is the way another arm's driver reaches these
+# kernels.
+crate-type = ["staticlib", "rlib"]
+path = "src/lib.rs"
+
+[[bin]]
+name = "tsdf-rust-cuda"
+path = "src/main.rs"
+
 [dependencies]
 cuda-device = { path = "/home/petr/.local/opt/cuda-oxide/crates/cuda-device" }
 cuda-host = { path = "/home/petr/.local/opt/cuda-oxide/crates/cuda-host" }

@@ -19,7 +19,7 @@ if(OSN_TSDF_CUDA)
     if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
         set(CMAKE_CUDA_ARCHITECTURES 120)
     endif()
-    list(APPEND OSN_TSDF_SOURCES src/volume_cuda.cu src/marching_tets_cuda.cu)
+    list(APPEND OSN_TSDF_SOURCES src/volume_cuda.cu src/marching_tets_cuda.cu src/c_api_cuda.cu)
 endif()
 
 add_library(osn_tsdf STATIC ${OSN_TSDF_SOURCES})
@@ -53,5 +53,21 @@ if(OSN_TSDF_CUDA)
     add_executable(test_cuda_analytic tests/test_cuda_analytic.cu)
     target_include_directories(test_cuda_analytic PRIVATE tests)
     target_link_libraries(test_cuda_analytic PRIVATE osn_tsdf)
+
+    # Arm A4 is a Rust staticlib built separately by cuda-oxide (it needs the
+    # pinned nightly). Linked in when present so the cross-check can drive it;
+    # the test compiles without it and simply skips that section.
+    set(A4_LIB ${CMAKE_CURRENT_SOURCE_DIR}/../crates/tsdf-rust-cuda/target/release/libtsdf_rust_cuda.a)
+    if(EXISTS ${A4_LIB})
+        target_compile_definitions(test_cuda_analytic PRIVATE OSN_TSDF_HAVE_A4=1)
+        # cuda_core uses the CUDA DRIVER API (cuInit, cuCtxSetCurrent, ...),
+        # which is a separate library from the runtime the C++ arms link.
+        find_package(CUDAToolkit REQUIRED)
+        target_link_libraries(test_cuda_analytic PRIVATE ${A4_LIB} CUDA::cuda_driver dl pthread)
+        message(STATUS "Arm A4 (Rust/cuda-oxide) will be linked into the cross-check")
+    else()
+        message(STATUS "Arm A4 staticlib not found; cross-check will skip it")
+    endif()
+
     add_test(NAME cuda_analytic COMMAND test_cuda_analytic)
 endif()

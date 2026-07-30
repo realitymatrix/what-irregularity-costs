@@ -198,6 +198,8 @@ const VolumeConfig& CudaVolume::config() const { return impl_->cfg; }
 
 void CudaVolume::synchronize() const { cudaStreamSynchronize(impl_->stream); }
 
+const DeviceView& CudaVolume::device_view() const { return impl_->v; }
+
 void CudaVolume::allocate_blocks(const PointBatch& b) {
     if (!valid() || b.n <= 0) return;
     const int threads = 256;

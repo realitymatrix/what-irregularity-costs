@@ -58,6 +58,12 @@ public:
     /// not synchronise records queue-submission time, not execution time.
     void synchronize() const;
 
+    /// Device pointers backing this volume, so other arms can run their own
+    /// kernels against state this class allocated. Returned by reference to a
+    /// type defined in the private CUDA header; callers outside the library go
+    /// through the C API's flattened `OsnTsdfDeviceView`.
+    const struct DeviceView& device_view() const;
+
 private:
     CudaVolumeImpl* impl_ = nullptr;
 };

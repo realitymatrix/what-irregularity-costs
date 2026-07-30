@@ -25,8 +25,23 @@
 #include <vector>
 
 #include "analytic_scenes.hpp"
+#include "osn_tsdf/c_api.h"
 #include "osn_tsdf/volume.hpp"
 #include "osn_tsdf/volume_cuda.hpp"
+
+#ifdef OSN_TSDF_HAVE_A4
+// Arm A4 lives in a Rust staticlib built by cuda-oxide. It allocates nothing:
+// it runs its kernels over the device state this library owns, then hands the
+// volume back for the shared extraction. See docs/ARM-SCOPE.md.
+extern "C" {
+int32_t a4_init();
+int32_t a4_allocate_blocks(const OsnTsdfDeviceView* view, uint64_t d_positions, int32_t n_points,
+                           float cam_x, float cam_y, float cam_z, float radius_m);
+int32_t a4_update_voxels(const OsnTsdfDeviceView* view, uint64_t d_positions, int32_t n_points,
+                         float cam_x, float cam_y, float cam_z, float radius_m);
+int32_t a4_synchronize();
+}
+#endif
 
 using namespace osn_tsdf;
 
@@ -248,6 +263,79 @@ int main() {
               fmt("%.9f m (voxel %.3f)", mean_sym, voxel));
         check("A2/A3 hausdorff < voxel/10", hausdorff < voxel * 0.1, fmt("%.9f m", hausdorff));
     }
+
+#ifdef OSN_TSDF_HAVE_A4
+    // ---- A4: Rust kernels over C++-allocated device state -----------------
+    {
+        std::printf("\n--- A4 (Rust via cuda-oxide) on the same points ---\n");
+        if (a4_init() != 0) {
+            std::printf("  [FAIL] a4_init\n");
+            ++g_failures;
+        } else {
+            OsnTsdfCudaVolume* rv = osn_tsdf_cuda_create(voxel, cfg.pool_capacity_blocks, -1.0f, 32.0f);
+            OsnTsdfDeviceView dv{};
+            if (!rv || osn_tsdf_cuda_device_view(rv, &dv) != 0) {
+                std::printf("  [FAIL] device view\n");
+                ++g_failures;
+            } else {
+                a4_allocate_blocks(&dv, (uint64_t)d_pts, n_pts, 0.0f, 0.0f, 0.0f, 0.0f);
+                a4_update_voxels(&dv, (uint64_t)d_pts, n_pts, 0.0f, 0.0f, 0.0f, 0.0f);
+                a4_synchronize();
+                osn_tsdf_cuda_synchronize(rv);
+
+                std::vector<float> rbuf((std::size_t)(4 << 20) * 6);
+                const int32_t rn = osn_tsdf_cuda_extract_mesh(rv, rbuf.data(), nullptr, 4 << 20,
+                                                              0.5f, 0.0f);
+                const std::size_t r_nv = rn > 0 ? (std::size_t)rn : 0;
+                rbuf.resize(r_nv * 6);
+                std::printf("  A4: %d blocks, %zu vertices\n", osn_tsdf_cuda_block_count(rv), r_nv);
+
+                check("A4 produced geometry", r_nv > 1000, fmt("%.0f vertices", (double)r_nv));
+                check("A4 no points dropped", osn_tsdf_cuda_drop_count(rv) == 0,
+                      fmt("%.0f dropped", (double)osn_tsdf_cuda_drop_count(rv)));
+                check("A3/A4 block counts identical",
+                      osn_tsdf_cuda_block_count(rv) == gpu.block_count(),
+                      fmt("%.0f vs %.0f", (double)osn_tsdf_cuda_block_count(rv),
+                          (double)gpu.block_count()));
+
+                double r_mean = 0.0, r_max = 0.0;
+                for (std::size_t i = 0; i < r_nv; ++i) {
+                    const double x = rbuf[i * 6], y = rbuf[i * 6 + 1], z = rbuf[i * 6 + 2];
+                    const double e = std::fabs(std::sqrt(x * x + y * y + z * z) - R);
+                    r_mean += e;
+                    r_max = std::max(r_max, e);
+                }
+                if (r_nv) r_mean /= r_nv;
+                check("A4 mean |r - R| < voxel/4", r_mean < voxel * 0.25,
+                      fmt("%.6f m (voxel %.3f)", r_mean, voxel));
+                check("A4 max |r - R| < voxel", r_max < voxel, fmt("%.6f m", r_max));
+
+                if (r_nv && g_nv) {
+                    const auto rpos = positions_of(rbuf);
+                    const auto gpos2 = positions_of(gmesh);
+                    GridNN gg(gpos2, voxel * 2.0f);
+                    GridNN rr(rpos, voxel * 2.0f);
+                    double s1 = 0.0, m1 = 0.0, s2 = 0.0, m2 = 0.0;
+                    for (std::size_t i = 0; i < r_nv; ++i) {
+                        const float d = gg.nearest(&rpos[i * 3]);
+                        s1 += d; m1 = std::max(m1, (double)d);
+                    }
+                    for (std::size_t i = 0; i < g_nv; ++i) {
+                        const float d = rr.nearest(&gpos2[i * 3]);
+                        s2 += d; m2 = std::max(m2, (double)d);
+                    }
+                    const double mean_sym = 0.5 * (s1 / r_nv + s2 / g_nv);
+                    const double haus = std::max(m1, m2);
+                    std::printf("  A3 vs A4: mean %.9f m, hausdorff %.9f m\n", mean_sym, haus);
+                    check("A3/A4 mean surface distance < voxel/100", mean_sym < voxel * 0.01,
+                          fmt("%.9f m", mean_sym));
+                    check("A3/A4 hausdorff < voxel/10", haus < voxel * 0.1, fmt("%.9f m", haus));
+                }
+            }
+            if (rv) osn_tsdf_cuda_destroy(rv);
+        }
+    }
+#endif
 
     // ---- A3 on the plane --------------------------------------------------
     cudaFree(d_pts);

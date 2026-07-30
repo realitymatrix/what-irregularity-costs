@@ -21,7 +21,7 @@ namespace osn_tsdf {
         }                                                                               \
     } while (0)
 
-struct DeviceView {
+struct DeviceView {  // NOLINT: shared with other arms via the C API
     HashEntry* table;
     uint32_t hash_mask;
     int32_t* block_count;
