@@ -57,7 +57,7 @@ def main(argv: list[str]) -> int:
         pos, t64, t32, bc, bco, dr, scratch, 1024, hash_size - 1, pool,
         0.01, 0.04, 0.0, 0.0, 0.0, 0.0, **cx)
     k_update = K.tsdf_update_kernel[(4,)](
-        pos, t64, t32, tsdf, w, 1024, hash_size - 1,
+        pos, t64, t32, tsdf, w, w, w, w, 1024, hash_size - 1,
         0.01, 0.04, 32.0, 0.0, 0.0, 0.0, 0.0, BLOCK_VOXELS=BLOCK_VOXELS, **cx)
 
     lines = [

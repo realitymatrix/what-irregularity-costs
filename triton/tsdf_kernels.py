@@ -221,6 +221,9 @@ def tsdf_update_kernel(
     table_i32,
     tsdf_ptr,
     weight_ptr,
+    r_ptr,
+    g_ptr,
+    b_ptr,
     n_points,
     hash_mask,
     voxel_size,
@@ -309,5 +312,13 @@ def tsdf_update_kernel(
         sdf_n = tl.minimum(tl.maximum(sdf * inv_trunc, -1.0), 1.0)
         # Weighted SUMS, not running means. Sums commute, so plain atomic adds
         # suffice and no read-modify-write exists to race.
+        #
+        # All five accumulators, matching A3 exactly. Omitting colour would
+        # leave this arm doing 2 atomics per voxel against A3's 5, and the
+        # update comparison would measure a 40% workload difference rather than
+        # how each language expresses the algorithm.
         tl.atomic_add(weight_ptr + vidx, 1.0, mask=ok)
         tl.atomic_add(tsdf_ptr + vidx, sdf_n, mask=ok)
+        tl.atomic_add(r_ptr + vidx, 128.0, mask=ok)
+        tl.atomic_add(g_ptr + vidx, 128.0, mask=ok)
+        tl.atomic_add(b_ptr + vidx, 128.0, mask=ok)

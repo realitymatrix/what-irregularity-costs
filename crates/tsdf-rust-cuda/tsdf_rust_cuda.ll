@@ -8,222 +8,249 @@ declare float @__nv_ceilf(float)
 declare i32 @llvm.fptosi.sat.i32.f32(float)
 declare float @__nv_floorf(float)
 
-define void @update_kernel(ptr %v0, i64 %v1, ptr %v2, i64 %v3, ptr %v4, i64 %v5, ptr %v6, i64 %v7, i32 %v8, i32 %v9, float %v10, float %v11, float %v12, float %v13, float %v14, float %v15, float %v16) #0 {
+define void @update_kernel(ptr %v0, i64 %v1, ptr %v2, i64 %v3, ptr %v4, i64 %v5, ptr %v6, i64 %v7, ptr %v8, i64 %v9, ptr %v10, i64 %v11, ptr %v12, i64 %v13, i32 %v14, i32 %v15, float %v16, float %v17, float %v18, float %v19, float %v20, float %v21, float %v22) #0 {
 entry:
-  %v17 = insertvalue { ptr, i64 } undef, ptr %v0, 0
-  %v18 = insertvalue { ptr, i64 } %v17, i64 %v1, 1
-  %v19 = insertvalue { ptr, i64 } undef, ptr %v2, 0
-  %v20 = insertvalue { ptr, i64 } %v19, i64 %v3, 1
-  %v21 = insertvalue { ptr, i64 } undef, ptr %v4, 0
-  %v22 = insertvalue { ptr, i64 } %v21, i64 %v5, 1
-  %v23 = insertvalue { ptr, i64 } undef, ptr %v6, 0
-  %v24 = insertvalue { ptr, i64 } %v23, i64 %v7, 1
+  %v23 = insertvalue { ptr, i64 } undef, ptr %v0, 0
+  %v24 = insertvalue { ptr, i64 } %v23, i64 %v1, 1
+  %v25 = insertvalue { ptr, i64 } undef, ptr %v2, 0
+  %v26 = insertvalue { ptr, i64 } %v25, i64 %v3, 1
+  %v27 = insertvalue { ptr, i64 } undef, ptr %v4, 0
+  %v28 = insertvalue { ptr, i64 } %v27, i64 %v5, 1
+  %v29 = insertvalue { ptr, i64 } undef, ptr %v6, 0
+  %v30 = insertvalue { ptr, i64 } %v29, i64 %v7, 1
+  %v31 = insertvalue { ptr, i64 } undef, ptr %v8, 0
+  %v32 = insertvalue { ptr, i64 } %v31, i64 %v9, 1
+  %v33 = insertvalue { ptr, i64 } undef, ptr %v10, 0
+  %v34 = insertvalue { ptr, i64 } %v33, i64 %v11, 1
+  %v35 = insertvalue { ptr, i64 } undef, ptr %v12, 0
+  %v36 = insertvalue { ptr, i64 } %v35, i64 %v13, 1
   br label %bb0
 bb0:
-  %v25 = phi { ptr, i64 } [ %v18, %entry ]
-  %v26 = phi { ptr, i64 } [ %v20, %entry ]
-  %v27 = phi { ptr, i64 } [ %v22, %entry ]
-  %v28 = phi { ptr, i64 } [ %v24, %entry ]
-  %v29 = phi i32 [ %v8, %entry ]
-  %v30 = phi i32 [ %v9, %entry ]
-  %v31 = phi float [ %v10, %entry ]
-  %v32 = phi float [ %v11, %entry ]
-  %v33 = phi float [ %v12, %entry ]
-  %v34 = phi float [ %v13, %entry ]
-  %v35 = phi float [ %v14, %entry ]
-  %v36 = phi float [ %v15, %entry ]
-  %v37 = phi float [ %v16, %entry ]
-  %v38 = alloca {  }, align 1
-  %v39 = bitcast ptr %v38 to ptr
-  %v40 = call i64 @_RINvNtNtCscaYDm7YuRWO_11cuda_device6thread10___internal8index_1dNtB2_13UnknownDomainNtB2_17NativeCoordinatesECshAQQRahQDk9_14tsdf_rust_cuda(ptr %v39) #0
+  %v37 = phi { ptr, i64 } [ %v24, %entry ]
+  %v38 = phi { ptr, i64 } [ %v26, %entry ]
+  %v39 = phi { ptr, i64 } [ %v28, %entry ]
+  %v40 = phi { ptr, i64 } [ %v30, %entry ]
+  %v41 = phi { ptr, i64 } [ %v32, %entry ]
+  %v42 = phi { ptr, i64 } [ %v34, %entry ]
+  %v43 = phi { ptr, i64 } [ %v36, %entry ]
+  %v44 = phi i32 [ %v14, %entry ]
+  %v45 = phi i32 [ %v15, %entry ]
+  %v46 = phi float [ %v16, %entry ]
+  %v47 = phi float [ %v17, %entry ]
+  %v48 = phi float [ %v18, %entry ]
+  %v49 = phi float [ %v19, %entry ]
+  %v50 = phi float [ %v20, %entry ]
+  %v51 = phi float [ %v21, %entry ]
+  %v52 = phi float [ %v22, %entry ]
+  %v53 = alloca {  }, align 1
+  %v54 = bitcast ptr %v53 to ptr
+  %v55 = call i64 @_RINvNtNtCscaYDm7YuRWO_11cuda_device6thread10___internal8index_1dNtB2_13UnknownDomainNtB2_17NativeCoordinatesECshAQQRahQDk9_14tsdf_rust_cuda(ptr %v54) #0
   br label %bb1
 bb1:
-  %v41 = trunc i64 %v40 to i32
-  %v42 = icmp sge i32 %v41, %v29
-  %v43 = xor i1 %v42, 1
-  br i1 %v43, label %bb3, label %bb2
+  %v56 = trunc i64 %v55 to i32
+  %v57 = icmp sge i32 %v56, %v44
+  %v58 = xor i1 %v57, 1
+  br i1 %v58, label %bb3, label %bb2
 bb2:
-  br label %bb28
+  br label %bb31
 bb3:
-  %v44 = extractvalue { ptr, i64 } %v25, 0
-  %v45 = mul i32 %v41, 3
-  %v46 = sext i32 %v45 to i64
-  %v47 = getelementptr inbounds float, ptr %v44, i64 %v46
-  %v48 = load float, ptr %v47, align 4
-  %v49 = getelementptr inbounds float, ptr %v47, i64 1
-  %v50 = load float, ptr %v49, align 4
-  %v51 = getelementptr inbounds float, ptr %v47, i64 2
-  %v52 = load float, ptr %v51, align 4
-  %v53 = fsub contract float %v48, %v34
-  %v54 = fsub contract float %v50, %v35
-  %v55 = fsub contract float %v52, %v36
-  %v56 = fmul contract float %v53, %v53
-  %v57 = fmul contract float %v54, %v54
-  %v58 = fadd contract float %v56, %v57
-  %v59 = fmul contract float %v55, %v55
-  %v60 = fadd contract float %v58, %v59
-  %v61 = fcmp ogt float %v37, 0.0
-  %v62 = xor i1 %v61, 1
-  br i1 %v62, label %bb6, label %bb4
+  %v59 = extractvalue { ptr, i64 } %v37, 0
+  %v60 = mul i32 %v56, 3
+  %v61 = sext i32 %v60 to i64
+  %v62 = getelementptr inbounds float, ptr %v59, i64 %v61
+  %v63 = load float, ptr %v62, align 4
+  %v64 = getelementptr inbounds float, ptr %v62, i64 1
+  %v65 = load float, ptr %v64, align 4
+  %v66 = getelementptr inbounds float, ptr %v62, i64 2
+  %v67 = load float, ptr %v66, align 4
+  %v68 = fsub contract float %v63, %v49
+  %v69 = fsub contract float %v65, %v50
+  %v70 = fsub contract float %v67, %v51
+  %v71 = fmul contract float %v68, %v68
+  %v72 = fmul contract float %v69, %v69
+  %v73 = fadd contract float %v71, %v72
+  %v74 = fmul contract float %v70, %v70
+  %v75 = fadd contract float %v73, %v74
+  %v76 = fcmp ogt float %v52, 0.0
+  %v77 = xor i1 %v76, 1
+  br i1 %v77, label %bb6, label %bb4
 bb4:
-  %v63 = fcmp ogt float %v60, %v37
-  %v64 = xor i1 %v63, 1
-  br i1 %v64, label %bb6, label %bb5
+  %v78 = fcmp ogt float %v75, %v52
+  %v79 = xor i1 %v78, 1
+  br i1 %v79, label %bb6, label %bb5
 bb5:
-  br label %bb27
-bb6:
-  %v65 = call float @__nv_sqrtf(float %v60) #0
-  br label %bb29
-bb7:
-  %v66 = fdiv contract float %v53, %v65
-  %v67 = fdiv contract float %v54, %v65
-  %v68 = fdiv contract float %v55, %v65
-  %v69 = fdiv contract float 1.0, %v31
-  %v70 = fdiv contract float 1.0, %v32
-  %v71 = fmul contract float %v32, %v69
-  %v72 = call float @__nv_ceilf(float %v71) #0
   br label %bb30
+bb6:
+  %v80 = call float @__nv_sqrtf(float %v75) #0
+  br label %bb32
+bb7:
+  %v81 = fdiv contract float %v68, %v80
+  %v82 = fdiv contract float %v69, %v80
+  %v83 = fdiv contract float %v70, %v80
+  %v84 = fdiv contract float 1.0, %v46
+  %v85 = fdiv contract float 1.0, %v47
+  %v86 = fmul contract float %v47, %v84
+  %v87 = call float @__nv_ceilf(float %v86) #0
+  br label %bb33
 bb8:
-  br label %bb27
+  br label %bb30
 bb9:
-  %v73 = sub i32 0, %v122
+  %v88 = sub i32 0, %v149
   br label %bb10
 bb10:
-  %v74 = phi i32 [ %v73, %bb9 ], [ %v83, %bb12 ], [ %v118, %bb25 ]
-  %v75 = icmp sle i32 %v74, %v122
-  %v76 = xor i1 %v75, 1
-  br i1 %v76, label %bb26, label %bb11
+  %v89 = phi i32 [ %v88, %bb9 ], [ %v98, %bb12 ], [ %v145, %bb28 ]
+  %v90 = icmp sle i32 %v89, %v149
+  %v91 = xor i1 %v90, 1
+  br i1 %v91, label %bb29, label %bb11
 bb11:
-  %v77 = sitofp i32 %v74 to float
-  %v78 = fmul contract float %v77, %v31
-  %v79 = fmul contract float %v66, %v78
-  %v80 = fadd contract float %v48, %v79
-  %v81 = fmul contract float %v80, %v69
-  %v82 = call float @__nv_floorf(float %v81) #0
-  br label %bb31
+  %v92 = sitofp i32 %v89 to float
+  %v93 = fmul contract float %v92, %v46
+  %v94 = fmul contract float %v81, %v93
+  %v95 = fadd contract float %v63, %v94
+  %v96 = fmul contract float %v95, %v84
+  %v97 = call float @__nv_floorf(float %v96) #0
+  br label %bb34
 bb12:
-  %v83 = add i32 %v74, 1
+  %v98 = add i32 %v89, 1
   br label %bb10
 bb13:
-  %v84 = call i32 @tsdf_rust_cuda__kernels__floor_div(i32 %v123, i32 8) #0
+  %v99 = call i32 @tsdf_rust_cuda__kernels__floor_div(i32 %v150, i32 8) #0
   br label %bb14
 bb14:
-  %v85 = call i32 @tsdf_rust_cuda__kernels__floor_div(i32 %v128, i32 8) #0
+  %v100 = call i32 @tsdf_rust_cuda__kernels__floor_div(i32 %v155, i32 8) #0
   br label %bb15
 bb15:
-  %v86 = call i32 @tsdf_rust_cuda__kernels__floor_div(i32 %v133, i32 8) #0
+  %v101 = call i32 @tsdf_rust_cuda__kernels__floor_div(i32 %v160, i32 8) #0
   br label %bb16
 bb16:
-  %v87 = extractvalue { ptr, i64 } %v26, 0
-  %v88 = call i32 @tsdf_rust_cuda__kernels__find_block(ptr %v87, i32 %v30, i32 %v84, i32 %v85, i32 %v86) #0
+  %v102 = extractvalue { ptr, i64 } %v38, 0
+  %v103 = call i32 @tsdf_rust_cuda__kernels__find_block(ptr %v102, i32 %v45, i32 %v99, i32 %v100, i32 %v101) #0
   br label %bb17
 bb17:
-  %v89 = icmp sge i32 %v88, 0
-  %v90 = xor i1 %v89, 1
-  br i1 %v90, label %bb25, label %bb18
+  %v104 = icmp sge i32 %v103, 0
+  %v105 = xor i1 %v104, 1
+  br i1 %v105, label %bb28, label %bb18
 bb18:
-  %v91 = mul i32 %v84, 8
-  %v92 = sub i32 %v123, %v91
-  %v93 = mul i32 %v85, 8
-  %v94 = sub i32 %v128, %v93
-  %v95 = mul i32 %v86, 8
-  %v96 = sub i32 %v133, %v95
-  %v97 = mul i32 %v88, 512
-  %v98 = mul i32 %v96, 8
-  %v99 = add i32 %v98, %v94
-  %v100 = mul i32 %v99, 8
-  %v101 = add i32 %v97, %v100
-  %v102 = add i32 %v101, %v92
-  %v103 = sext i32 %v102 to i64
-  %v104 = extractvalue { ptr, i64 } %v28, 0
-  %v105 = getelementptr inbounds float, ptr %v104, i64 %v103
-  %v106 = bitcast ptr %v105 to ptr
-  %v107 = load volatile float, ptr %v105, align 4
-  br label %bb35
+  %v106 = mul i32 %v99, 8
+  %v107 = sub i32 %v150, %v106
+  %v108 = mul i32 %v100, 8
+  %v109 = sub i32 %v155, %v108
+  %v110 = mul i32 %v101, 8
+  %v111 = sub i32 %v160, %v110
+  %v112 = mul i32 %v103, 512
+  %v113 = mul i32 %v111, 8
+  %v114 = add i32 %v113, %v109
+  %v115 = mul i32 %v114, 8
+  %v116 = add i32 %v112, %v115
+  %v117 = add i32 %v116, %v107
+  %v118 = sext i32 %v117 to i64
+  %v119 = extractvalue { ptr, i64 } %v40, 0
+  %v120 = getelementptr inbounds float, ptr %v119, i64 %v118
+  %v121 = bitcast ptr %v120 to ptr
+  %v122 = load volatile float, ptr %v120, align 4
+  br label %bb38
 bb19:
-  %v108 = fcmp oge float %v107, %v33
-  %v109 = xor i1 %v108, 1
-  br i1 %v109, label %bb20, label %bb24
+  %v123 = fcmp oge float %v122, %v48
+  %v124 = xor i1 %v123, 1
+  br i1 %v124, label %bb20, label %bb27
 bb20:
-  %v110 = bitcast ptr %v105 to ptr
-  %v111 = fmul contract float %v152, %v70
-  %v112 = call float @core__f32___impl_f32___clamp(float %v111, float -1.0, float 1.0) #0
+  %v125 = bitcast ptr %v120 to ptr
+  %v126 = fmul contract float %v179, %v85
+  %v127 = call float @core__f32___impl_f32___clamp(float %v126, float -1.0, float 1.0) #0
   br label %bb21
 bb21:
-  %v113 = atomicrmw fadd ptr %v110, float 1.0 syncscope("device") monotonic
+  %v128 = atomicrmw fadd ptr %v125, float 1.0 syncscope("device") monotonic
   br label %bb22
 bb22:
-  %v114 = extractvalue { ptr, i64 } %v27, 0
-  %v115 = getelementptr inbounds float, ptr %v114, i64 %v103
-  %v116 = bitcast ptr %v115 to ptr
-  %v117 = atomicrmw fadd ptr %v116, float %v112 syncscope("device") monotonic
+  %v129 = extractvalue { ptr, i64 } %v39, 0
+  %v130 = getelementptr inbounds float, ptr %v129, i64 %v118
+  %v131 = bitcast ptr %v130 to ptr
+  %v132 = atomicrmw fadd ptr %v131, float %v127 syncscope("device") monotonic
   br label %bb23
 bb23:
+  %v133 = extractvalue { ptr, i64 } %v41, 0
+  %v134 = getelementptr inbounds float, ptr %v133, i64 %v118
+  %v135 = bitcast ptr %v134 to ptr
+  %v136 = atomicrmw fadd ptr %v135, float 128.0 syncscope("device") monotonic
   br label %bb24
 bb24:
+  %v137 = extractvalue { ptr, i64 } %v42, 0
+  %v138 = getelementptr inbounds float, ptr %v137, i64 %v118
+  %v139 = bitcast ptr %v138 to ptr
+  %v140 = atomicrmw fadd ptr %v139, float 128.0 syncscope("device") monotonic
   br label %bb25
 bb25:
-  %v118 = add i32 %v74, 1
-  br label %bb10
+  %v141 = extractvalue { ptr, i64 } %v43, 0
+  %v142 = getelementptr inbounds float, ptr %v141, i64 %v118
+  %v143 = bitcast ptr %v142 to ptr
+  %v144 = atomicrmw fadd ptr %v143, float 128.0 syncscope("device") monotonic
+  br label %bb26
 bb26:
-  br label %bb28
+  br label %bb27
 bb27:
   br label %bb28
 bb28:
-  ret void
+  %v145 = add i32 %v89, 1
+  br label %bb10
 bb29:
-  %v119 = fcmp ogt float %v65, 0.0000009999999974752427
-  %v120 = xor i1 %v119, 1
-  br i1 %v120, label %bb8, label %bb7
+  br label %bb31
 bb30:
-  %v121 = call i32 @llvm.fptosi.sat.i32.f32(float %v72) #0
-  %v122 = call i32 @_RNvYlNtNtCsiQ4CSjCKWVc_4core3cmp3Ord3maxCshAQQRahQDk9_14tsdf_rust_cuda(i32 %v121, i32 1) #0
-  br label %bb9
+  br label %bb31
 bb31:
-  %v123 = call i32 @llvm.fptosi.sat.i32.f32(float %v82) #0
-  %v124 = fmul contract float %v67, %v78
-  %v125 = fadd contract float %v50, %v124
-  %v126 = fmul contract float %v125, %v69
-  %v127 = call float @__nv_floorf(float %v126) #0
-  br label %bb32
+  ret void
 bb32:
-  %v128 = call i32 @llvm.fptosi.sat.i32.f32(float %v127) #0
-  %v129 = fmul contract float %v68, %v78
-  %v130 = fadd contract float %v52, %v129
-  %v131 = fmul contract float %v130, %v69
-  %v132 = call float @__nv_floorf(float %v131) #0
-  br label %bb33
+  %v146 = fcmp ogt float %v80, 0.0000009999999974752427
+  %v147 = xor i1 %v146, 1
+  br i1 %v147, label %bb8, label %bb7
 bb33:
-  %v133 = call i32 @llvm.fptosi.sat.i32.f32(float %v132) #0
-  %v134 = sitofp i32 %v123 to float
-  %v135 = fadd contract float %v134, 0.5
-  %v136 = fmul contract float %v135, %v31
-  %v137 = sitofp i32 %v128 to float
-  %v138 = fadd contract float %v137, 0.5
-  %v139 = fmul contract float %v138, %v31
-  %v140 = sitofp i32 %v133 to float
-  %v141 = fadd contract float %v140, 0.5
-  %v142 = fmul contract float %v141, %v31
-  %v143 = fsub contract float %v136, %v34
-  %v144 = fsub contract float %v139, %v35
-  %v145 = fsub contract float %v142, %v36
-  %v146 = fmul contract float %v143, %v143
-  %v147 = fmul contract float %v144, %v144
-  %v148 = fadd contract float %v146, %v147
-  %v149 = fmul contract float %v145, %v145
-  %v150 = fadd contract float %v148, %v149
-  %v151 = call float @__nv_sqrtf(float %v150) #0
-  br label %bb34
+  %v148 = call i32 @llvm.fptosi.sat.i32.f32(float %v87) #0
+  %v149 = call i32 @_RNvYlNtNtCsiQ4CSjCKWVc_4core3cmp3Ord3maxCshAQQRahQDk9_14tsdf_rust_cuda(i32 %v148, i32 1) #0
+  br label %bb9
 bb34:
-  %v152 = fsub contract float %v65, %v151
-  %v153 = fneg float %v32
-  %v154 = fcmp olt float %v152, %v153
-  %v155 = xor i1 %v154, 1
-  br i1 %v155, label %bb13, label %bb12
+  %v150 = call i32 @llvm.fptosi.sat.i32.f32(float %v97) #0
+  %v151 = fmul contract float %v82, %v93
+  %v152 = fadd contract float %v65, %v151
+  %v153 = fmul contract float %v152, %v84
+  %v154 = call float @__nv_floorf(float %v153) #0
+  br label %bb35
 bb35:
-  %v156 = fcmp ogt float %v33, 0.0
-  %v157 = xor i1 %v156, 1
-  br i1 %v157, label %bb20, label %bb19
+  %v155 = call i32 @llvm.fptosi.sat.i32.f32(float %v154) #0
+  %v156 = fmul contract float %v83, %v93
+  %v157 = fadd contract float %v67, %v156
+  %v158 = fmul contract float %v157, %v84
+  %v159 = call float @__nv_floorf(float %v158) #0
+  br label %bb36
+bb36:
+  %v160 = call i32 @llvm.fptosi.sat.i32.f32(float %v159) #0
+  %v161 = sitofp i32 %v150 to float
+  %v162 = fadd contract float %v161, 0.5
+  %v163 = fmul contract float %v162, %v46
+  %v164 = sitofp i32 %v155 to float
+  %v165 = fadd contract float %v164, 0.5
+  %v166 = fmul contract float %v165, %v46
+  %v167 = sitofp i32 %v160 to float
+  %v168 = fadd contract float %v167, 0.5
+  %v169 = fmul contract float %v168, %v46
+  %v170 = fsub contract float %v163, %v49
+  %v171 = fsub contract float %v166, %v50
+  %v172 = fsub contract float %v169, %v51
+  %v173 = fmul contract float %v170, %v170
+  %v174 = fmul contract float %v171, %v171
+  %v175 = fadd contract float %v173, %v174
+  %v176 = fmul contract float %v172, %v172
+  %v177 = fadd contract float %v175, %v176
+  %v178 = call float @__nv_sqrtf(float %v177) #0
+  br label %bb37
+bb37:
+  %v179 = fsub contract float %v80, %v178
+  %v180 = fneg float %v47
+  %v181 = fcmp olt float %v179, %v180
+  %v182 = xor i1 %v181, 1
+  br i1 %v182, label %bb13, label %bb12
+bb38:
+  %v183 = fcmp ogt float %v48, 0.0
+  %v184 = xor i1 %v183, 1
+  br i1 %v184, label %bb20, label %bb19
 }
 
 define void @alloc_kernel(ptr %v0, i64 %v1, ptr %v2, i64 %v3, ptr %v4, i64 %v5, ptr %v6, i64 %v7, ptr %v8, i64 %v9, i32 %v10, i32 %v11, i32 %v12, float %v13, float %v14, float %v15, float %v16, float %v17, float %v18) #0 {

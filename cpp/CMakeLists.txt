@@ -75,4 +75,13 @@ if(OSN_TSDF_CUDA)
     endif()
 
     add_test(NAME cuda_analytic COMMAND test_cuda_analytic)
+
+    add_executable(bench_arms bench/bench_arms.cu)
+    target_include_directories(bench_arms PRIVATE tests
+        ${CMAKE_CURRENT_SOURCE_DIR}/../artifacts/triton)
+    target_link_libraries(bench_arms PRIVATE osn_tsdf)
+    if(EXISTS ${A4_LIB})
+        target_compile_definitions(bench_arms PRIVATE OSN_TSDF_HAVE_A4=1)
+        target_link_libraries(bench_arms PRIVATE ${A4_LIB} CUDA::cuda_driver dl pthread)
+    endif()
 endif()

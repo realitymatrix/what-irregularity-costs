@@ -88,6 +88,12 @@ int32_t osn_tsdf_cuda_extract_mesh(OsnTsdfCudaVolume* v, float* buffer_posnor, u
     return v->vol.extract_mesh(out, min_weight, iso);
 }
 
+int32_t osn_tsdf_cuda_reset(OsnTsdfCudaVolume* v) {
+    if (!v) return 1;
+    v->vol.reset();
+    return 0;
+}
+
 int32_t osn_tsdf_cuda_block_count(const OsnTsdfCudaVolume* v) { return v ? v->vol.block_count() : 0; }
 uint64_t osn_tsdf_cuda_drop_count(const OsnTsdfCudaVolume* v) { return v ? v->vol.drop_count() : 0; }
 void osn_tsdf_cuda_synchronize(const OsnTsdfCudaVolume* v) { if (v) v->vol.synchronize(); }

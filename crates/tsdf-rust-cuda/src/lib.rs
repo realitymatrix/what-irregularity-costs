@@ -293,6 +293,9 @@ mod kernels {
         table: &[i64],
         tsdf: &[f32],
         weight: &[f32],
+        r: &[f32],
+        g: &[f32],
+        b: &[f32],
         n_points: i32,
         hash_mask: u32,
         voxel_size: f32,
@@ -375,9 +378,21 @@ mod kernels {
                         // Weighted SUMS, matching the other arms. Sums commute,
                         // so plain atomic adds suffice and no read-modify-write
                         // exists to race.
+                        // All five accumulators, matching A3 exactly. Omitting
+                        // colour would leave this arm doing 2 atomics per voxel
+                        // against A3's 5, and the update comparison would be
+                        // measuring a 40% workload difference rather than code
+                        // generation. Colours are the neutral-grey default the
+                        // other arms use when no colour buffer is supplied.
                         w_atomic.fetch_add(1.0, AtomicOrdering::Relaxed);
                         DeviceAtomicF32::from_ptr(tsdf.as_ptr().add(idx) as *mut f32)
                             .fetch_add(sdf_n, AtomicOrdering::Relaxed);
+                        DeviceAtomicF32::from_ptr(r.as_ptr().add(idx) as *mut f32)
+                            .fetch_add(128.0, AtomicOrdering::Relaxed);
+                        DeviceAtomicF32::from_ptr(g.as_ptr().add(idx) as *mut f32)
+                            .fetch_add(128.0, AtomicOrdering::Relaxed);
+                        DeviceAtomicF32::from_ptr(b.as_ptr().add(idx) as *mut f32)
+                            .fetch_add(128.0, AtomicOrdering::Relaxed);
                     }
                 }
                 s += 1;
@@ -565,6 +580,9 @@ pub unsafe extern "C" fn a4_update_voxels(
     let table = unsafe { Borrowed::<i64>::new(v.table, table_len, m.ctx.clone()) };
     let tsdf = unsafe { Borrowed::<f32>::new(v.tsdf, n_vox, m.ctx.clone()) };
     let weight = unsafe { Borrowed::<f32>::new(v.weight, n_vox, m.ctx.clone()) };
+    let cr = unsafe { Borrowed::<f32>::new(v.r, n_vox, m.ctx.clone()) };
+    let cg = unsafe { Borrowed::<f32>::new(v.g, n_vox, m.ctx.clone()) };
+    let cb = unsafe { Borrowed::<f32>::new(v.b, n_vox, m.ctx.clone()) };
 
     let rsq = if radius_m > 0.0 { radius_m * radius_m } else { 0.0 };
     let stream = m.ctx.default_stream();
@@ -577,6 +595,9 @@ pub unsafe extern "C" fn a4_update_voxels(
             table.get(),
             tsdf.get(),
             weight.get(),
+            cr.get(),
+            cg.get(),
+            cb.get(),
             n_points,
             v.hash_mask,
             v.voxel_size_m,

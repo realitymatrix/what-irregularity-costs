@@ -200,6 +200,25 @@ void CudaVolume::synchronize() const { cudaStreamSynchronize(impl_->stream); }
 
 const DeviceView& CudaVolume::device_view() const { return impl_->v; }
 
+void CudaVolume::reset() {
+    if (!valid()) return;
+    const uint32_t size = impl_->v.hash_mask + 1;
+    const size_t n_vox = (size_t)impl_->cfg.pool_capacity_blocks * kBlockVoxels;
+    // The table must be refilled with kEmptyKey, not zeroed: zero is a valid
+    // packed coordinate, so a zeroed table reads as occupied.
+    std::vector<HashEntry> host(size, HashEntry{kEmptyKey, -1, 0});
+    cudaMemcpyAsync(impl_->v.table, host.data(), (size_t)size * sizeof(HashEntry),
+                    cudaMemcpyHostToDevice, impl_->stream);
+    cudaMemsetAsync(impl_->v.block_count, 0, sizeof(int32_t), impl_->stream);
+    cudaMemsetAsync(impl_->v.drop_count, 0, sizeof(unsigned long long), impl_->stream);
+    cudaMemsetAsync(impl_->v.tsdf, 0, n_vox * sizeof(float), impl_->stream);
+    cudaMemsetAsync(impl_->v.weight, 0, n_vox * sizeof(float), impl_->stream);
+    cudaMemsetAsync(impl_->v.r, 0, n_vox * sizeof(float), impl_->stream);
+    cudaMemsetAsync(impl_->v.g, 0, n_vox * sizeof(float), impl_->stream);
+    cudaMemsetAsync(impl_->v.b, 0, n_vox * sizeof(float), impl_->stream);
+    cudaStreamSynchronize(impl_->stream);
+}
+
 void CudaVolume::allocate_blocks(const PointBatch& b) {
     if (!valid() || b.n <= 0) return;
     const int threads = 256;

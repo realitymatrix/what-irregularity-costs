@@ -329,7 +329,8 @@ int main() {
             }
 
             void* uargs[] = {(void*)&d_pts,   (void*)&dv.table,   (void*)&dv.table,
-                             (void*)&dv.tsdf, (void*)&dv.weight,  (void*)&n,
+                             (void*)&dv.tsdf, (void*)&dv.weight,
+                             (void*)&dv.r, (void*)&dv.g, (void*)&dv.b, (void*)&n,
                              (void*)&hash_mask_i, (void*)&dv.voxel_size_m, (void*)&dv.trunc_m,
                              (void*)&dv.weight_cap, (void*)&camv, (void*)&camv, (void*)&camv,
                              (void*)&rsq};

@@ -96,6 +96,14 @@ int32_t osn_tsdf_cuda_update_voxels(OsnTsdfCudaVolume* v, const float* d_positio
 int32_t osn_tsdf_cuda_extract_mesh(OsnTsdfCudaVolume* v, float* buffer_posnor, uint8_t* buffer_rgb,
                                    int32_t vert_cap, float min_weight, float iso);
 
+/// Clear the volume to its just-constructed state without reallocating.
+///
+/// Required by the benchmark harness: allocation can only be measured from an
+/// empty table, and reconstructing the volume per repetition would put ~1 GiB
+/// of cudaMalloc and memset inside the measurement. Resetting is a memset of
+/// the table plus the counters, which is untimed between repetitions.
+int32_t osn_tsdf_cuda_reset(OsnTsdfCudaVolume* v);
+
 int32_t osn_tsdf_cuda_block_count(const OsnTsdfCudaVolume* v);
 uint64_t osn_tsdf_cuda_drop_count(const OsnTsdfCudaVolume* v);
 void osn_tsdf_cuda_synchronize(const OsnTsdfCudaVolume* v);
