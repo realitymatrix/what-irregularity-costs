@@ -7,4 +7,7 @@ description = "Correctness gate and timing harness. Built before any arm, so eve
 
 [dependencies]
 tsdf-ffi = { path = "../tsdf-ffi" }
+mesh-metrics = { path = "../mesh-metrics" }
+tartanair = { path = "../tartanair" }
+cuda-min = { path = "../cuda-min" }
 thiserror = "2"

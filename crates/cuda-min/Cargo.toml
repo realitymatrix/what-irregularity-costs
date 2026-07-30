@@ -1,0 +1,9 @@
+[package]
+name = "cuda-min"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Minimal CUDA driver-API bindings: context, device buffers, module load/launch"
+
+[dependencies]
+thiserror = "2"

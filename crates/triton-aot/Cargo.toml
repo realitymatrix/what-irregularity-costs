@@ -6,6 +6,7 @@ license.workspace = true
 description = "Load and launch AOT-compiled Triton kernels from Rust via the CUDA driver API"
 
 [dependencies]
+cuda-min = { path = "../cuda-min" }
 thiserror = "2"
 
 [build-dependencies]

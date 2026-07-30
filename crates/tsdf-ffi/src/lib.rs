@@ -91,11 +91,29 @@ pub struct VolumeConfig {
     pub trunc_m: f32,
 }
 
+impl VolumeConfig {
+    /// Device bytes the block pool will consume.
+    ///
+    /// One block is `BLOCK_DIM^3` voxels (8^3 = 512) across 8 SoA f32/u32
+    /// fields, so 16 KiB per block. Worth computing before allocating: the
+    /// header's illustrative 1<<20 blocks is 16 GiB, which exceeds a 16 GB card
+    /// and fails as a bare "out of memory" at create with no indication that the
+    /// pool size is the cause.
+    pub const fn pool_bytes(&self) -> u64 {
+        const BLOCK_DIM: u64 = 8;
+        const FIELDS: u64 = 8;
+        self.pool_capacity_blocks as u64 * BLOCK_DIM.pow(3) * FIELDS * 4
+    }
+}
+
 impl Default for VolumeConfig {
     fn default() -> Self {
         Self {
             voxel_size_m: 0.01,
-            pool_capacity_blocks: 1 << 20,
+            // 65_536 blocks = 1 GiB, which covers a room-scale scan at 1-2 cm
+            // voxels with headroom. Scale up deliberately, after checking
+            // `pool_bytes()` against the device, rather than by default.
+            pool_capacity_blocks: 1 << 16,
             committed_cap_points: 1 << 22,
             trunc_m: -1.0,
         }
@@ -216,6 +234,21 @@ extern "C" {
 
     pub fn tsdf_hash_set_mesh_mode(h: *mut TsdfHash, on: i32, trunc_m: f32) -> i32;
 
+    /// Host-pointer integrate. Unlike the device variant, this one honours
+    /// mesh mode. See `ReferenceBackend::use_host_path`.
+    pub fn tsdf_hash_add_points_chunk(
+        h: *mut TsdfHash,
+        positions: *const f32,
+        colors: *const u8,
+        weights: *const f32,
+        n_points: i32,
+        chunk_id: i32,
+        cam_x: f32,
+        cam_y: f32,
+        cam_z: f32,
+        radius_m: f32,
+    ) -> i32;
+
     pub fn tsdf_hash_add_points_chunk_device(
         h: *mut TsdfHash,
         d_positions: u64,
@@ -250,6 +283,18 @@ pub struct ReferenceBackend {
     handle: *mut TsdfHash,
     current_chunk: i32,
     vert_cap: i32,
+    /// Route integrate through the host-pointer entry point.
+    ///
+    /// Required for mesh extraction. `tsdf_hash_add_points_chunk_device` does
+    /// NOT dispatch on mesh mode: it always calls `hash_integrate_kernel`
+    /// (centroid binning), whereas the host path branches to
+    /// `hash_integrate_tsdf_kernel` (projective TSDF) when mesh mode is on.
+    /// With the device path, no signed distance field is ever built, marching
+    /// cubes finds no zero crossing, and extraction silently returns zero
+    /// vertices while every other diagnostic (block count, drop count) looks
+    /// healthy. See docs/REFERENCE-BUG.md.
+    use_host_path: bool,
+    host_scratch: Vec<f32>,
 }
 
 impl ReferenceBackend {
@@ -282,6 +327,8 @@ impl ReferenceBackend {
             handle,
             current_chunk: 0,
             vert_cap: 1 << 22,
+            use_host_path: true,
+            host_scratch: Vec::new(),
         })
     }
 }
@@ -303,6 +350,48 @@ impl TsdfBackend for ReferenceBackend {
 
     fn integrate(&mut self, b: &PointBatch) -> Result<(), TsdfError> {
         self.current_chunk = b.chunk_id;
+        if self.use_host_path {
+            // Stage device -> host -> device. Wasteful, and only necessary
+            // because the device entry point ignores mesh mode.
+            let n = (b.n_points as usize) * 3;
+            self.host_scratch.resize(n, 0.0);
+            // SAFETY: d_positions covers 3 * n_points floats per the contract
+            // on PointBatch; host_scratch is sized to match.
+            unsafe {
+                let rc = cuda_memcpy_d2h(
+                    self.host_scratch.as_mut_ptr() as *mut core::ffi::c_void,
+                    b.d_positions,
+                    n * std::mem::size_of::<f32>(),
+                );
+                if rc != 0 {
+                    return Err(TsdfError::Ffi {
+                        arm: "reference",
+                        op: "cuMemcpyDtoH",
+                        code: rc,
+                    });
+                }
+                let rc = tsdf_hash_add_points_chunk(
+                    self.handle,
+                    self.host_scratch.as_ptr(),
+                    std::ptr::null(),
+                    std::ptr::null(),
+                    b.n_points,
+                    b.chunk_id,
+                    b.cam[0],
+                    b.cam[1],
+                    b.cam[2],
+                    b.radius_m,
+                );
+                if rc != 0 {
+                    return Err(TsdfError::Ffi {
+                        arm: "reference",
+                        op: "add_points_chunk",
+                        code: rc,
+                    });
+                }
+            }
+            return Ok(());
+        }
         // SAFETY: device pointers are caller-owned and must cover n_points as
         // documented on PointBatch; 0 is the documented null for colors/weights.
         let rc = unsafe {
@@ -377,5 +466,9 @@ impl TsdfBackend for ReferenceBackend {
     }
 }
 
-/// Suppress the unused-import warning until the arms that need raw pointers land.
-const _: Option<*mut c_void> = None;
+// Driver-API copy, used only for the host-path staging above.
+#[link(name = "cuda")]
+extern "C" {
+    #[link_name = "cuMemcpyDtoH_v2"]
+    fn cuda_memcpy_d2h(dst: *mut c_void, src: u64, n: usize) -> i32;
+}

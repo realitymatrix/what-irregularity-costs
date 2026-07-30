@@ -7,3 +7,6 @@ description = "C ABI bindings to every TSDF fusion arm, including the golden ref
 
 [dependencies]
 thiserror = "2"
+
+[build-dependencies]
+cc = { version = "1", features = ["parallel"] }
