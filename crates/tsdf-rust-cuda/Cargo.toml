@@ -1,0 +1,15 @@
+[package]
+name = "tsdf-rust-cuda"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+# Standalone, NOT a member of the top-level workspace. cuda-oxide needs the
+# pinned nightly in rust-toolchain.toml plus its own codegen backend; the rest
+# of the project builds on stable.
+[workspace]
+
+[dependencies]
+cuda-device = { path = "/home/petr/.local/opt/cuda-oxide/crates/cuda-device" }
+cuda-host = { path = "/home/petr/.local/opt/cuda-oxide/crates/cuda-host" }
+cuda-core = { path = "/home/petr/.local/opt/cuda-oxide/crates/cuda-core" }
