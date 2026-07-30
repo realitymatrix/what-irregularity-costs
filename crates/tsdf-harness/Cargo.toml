@@ -1,0 +1,10 @@
+[package]
+name = "tsdf-harness"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Correctness gate and timing harness. Built before any arm, so every change is measured."
+
+[dependencies]
+tsdf-ffi = { path = "../tsdf-ffi" }
+thiserror = "2"

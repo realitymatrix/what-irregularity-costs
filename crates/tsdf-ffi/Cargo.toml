@@ -1,0 +1,9 @@
+[package]
+name = "tsdf-ffi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "C ABI bindings to every TSDF fusion arm, including the golden reference"
+
+[dependencies]
+thiserror = "2"

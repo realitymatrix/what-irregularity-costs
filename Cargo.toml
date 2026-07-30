@@ -1,0 +1,17 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/tsdf-ffi",       # C ABI bindings to every TSDF arm, incl. the golden reference
+    "crates/depth-libinfer", # FoundationStereo via libinfer TRT engines (sm_120, FP16)
+    "crates/tsdf-harness",   # correctness gate + timing harness, the Phase 1 deliverable
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[profile.release]
+debug = true          # keep symbols: profiling and ncu need them, and it costs nothing
+lto = "thin"
+codegen-units = 1
