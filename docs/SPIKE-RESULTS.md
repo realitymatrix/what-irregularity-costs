@@ -10,7 +10,7 @@ discovered later. Two of three spikes overturned a prediction in the roadmap.
 |---|---|---|
 | S1 | Can `cuda-oxide` (Rust to PTX) target sm_120 and express the TSDF primitives? | **PASS** |
 | S2 | Can Triton express the irregular atomicCAS hash insertion? | **PASS**, with a measured cost |
-| S3 | Does Open3D build as a C++ library here? | **PARTIAL**, CUDA module blocked |
+| S3 | Does Open3D build as a C++ library here? | **PASS on CPU**, CUDA module blocked |
 
 ---
 
@@ -149,7 +149,7 @@ Triton-does-everything, and price the tax end to end.
 
 ---
 
-## S3: Open3D C++ from source. PARTIAL. CUDA module blocked.
+## S3: Open3D C++ from source. CPU PASSES. CUDA module blocked.
 
 **Open3D 0.19 is not CUDA 13 clean.** Configure succeeded with
 `-DCMAKE_CUDA_ARCHITECTURES=120` (Open3D's own defaults stop at sm_90, but it
@@ -195,10 +195,27 @@ the GPU hashmap that `VoxelBlockGrid` depends on. Not a small patch.
 
 ### Options
 
-1. **CPU-only Open3D** (`-DBUILD_CUDA_MODULE=OFF`). Loses the CUDA anchor but
-   provides the CPU baseline and, importantly, the mesh-comparison API that the
-   Phase 1 correctness gate needs (Hausdorff, mean surface-to-surface). In
-   progress.
+1. **CPU-only Open3D** (`-DBUILD_CUDA_MODULE=OFF`). **DONE, clean build, 0
+   errors.** Installed to `$HOME/.local/opt/open3d-cpu`. Verified from C++
+   against the installed library (`spikes/s3_open3d/acceptance/`):
+
+   ```
+   Open3D 0.19.0
+     unique block coords: 3700
+     hashmap size after integrate: 3700
+     mesh: 463761 vertices, 924800 triangles
+     sphere r=1.00 vs r=1.02: mean surface dist 0.0460, hausdorff 0.1216
+   VoxelBlockGrid (A1)        : PASS
+   Mesh comparison (P1 gate)  : PASS
+   ```
+
+   Both things the project needs are confirmed working: the A1 arm on CPU, and
+   the mesh-comparison API the Phase 1 correctness gate depends on regardless of
+   whether A1 ships.
+
+   Trap: `ExtractTriangleMesh` defaults to `weight_threshold = 3.0`, so a single
+   integration extracts zero vertices. That looks exactly like a broken TSDF and
+   is not one.
 2. **Newer Open3D** from `main`, which may have Thrust 3 support.
 3. **Use the Python wheel** for the Open3D CUDA arm and the C++ library for CPU.
    Mixed-language, but the wheel ships a working CUDA build.

@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.20)
+project(o3d_test LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
+find_package(Open3D REQUIRED)
+add_executable(o3d_test main.cpp)
+target_link_libraries(o3d_test PRIVATE Open3D::Open3D)
