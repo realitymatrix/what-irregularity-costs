@@ -24,6 +24,7 @@
 #include <utility>
 #include <vector>
 
+#include "analytic_scenes.hpp"
 #include "osn_tsdf/volume.hpp"
 
 using namespace osn_tsdf;
@@ -41,38 +42,6 @@ std::string fmt(const char* f, double a, double b = 0.0, double c = 0.0) {
     char buf[256];
     std::snprintf(buf, sizeof(buf), f, a, b, c);
     return buf;
-}
-
-/// Points on a sphere, as if seen from a camera at the centre looking outward.
-/// Viewing from inside keeps every surface point visible from one viewpoint,
-/// so the sign convention is exercised without needing multiple views.
-std::vector<float> sphere_points(float radius, int n_theta, int n_phi) {
-    std::vector<float> p;
-    p.reserve(static_cast<std::size_t>(n_theta) * n_phi * 3);
-    for (int i = 0; i < n_theta; ++i) {
-        const float theta = static_cast<float>(M_PI) * (i + 0.5f) / n_theta;
-        for (int j = 0; j < n_phi; ++j) {
-            const float phi = 2.0f * static_cast<float>(M_PI) * j / n_phi;
-            p.push_back(radius * std::sin(theta) * std::cos(phi));
-            p.push_back(radius * std::sin(theta) * std::sin(phi));
-            p.push_back(radius * std::cos(theta));
-        }
-    }
-    return p;
-}
-
-/// A z = z0 plane patch, seen from a camera below it.
-std::vector<float> plane_points(float z0, float half_extent, int n) {
-    std::vector<float> p;
-    p.reserve(static_cast<std::size_t>(n) * n * 3);
-    for (int i = 0; i < n; ++i) {
-        for (int j = 0; j < n; ++j) {
-            p.push_back(-half_extent + 2.0f * half_extent * i / (n - 1));
-            p.push_back(-half_extent + 2.0f * half_extent * j / (n - 1));
-            p.push_back(z0);
-        }
-    }
-    return p;
 }
 
 std::vector<float> extract(Volume& v, float min_weight, int32_t cap = 4 << 20) {
@@ -101,7 +70,7 @@ int main() {
         cfg.pool_capacity_blocks = 1 << 14;
         Volume vol(cfg);
 
-        const auto pts = sphere_points(R, 400, 800);
+        const auto pts = scenes::sphere(R, 400, 800);
         PointBatch b;
         b.positions = pts.data();
         b.n = static_cast<int32_t>(pts.size() / 3);
@@ -145,7 +114,7 @@ int main() {
         cfg.pool_capacity_blocks = 1 << 14;
         Volume vol(cfg);
 
-        const auto pts = plane_points(z0, 0.25f, 500);
+        const auto pts = scenes::plane(z0, 0.25f, 500);
         PointBatch b;
         b.positions = pts.data();
         b.n = static_cast<int32_t>(pts.size() / 3);
@@ -180,7 +149,7 @@ int main() {
     {
         const float R = 0.4f;
         const float voxel = 0.02f;
-        const auto pts = sphere_points(R, 200, 400);
+        const auto pts = scenes::sphere(R, 200, 400);
 
         auto run = [&](int threads) {
             VolumeConfig cfg;
@@ -220,7 +189,7 @@ int main() {
         cfg.voxel_size_m = 0.005f;
         cfg.pool_capacity_blocks = 16;  // far too small on purpose
         Volume vol(cfg);
-        const auto pts = sphere_points(0.5f, 200, 400);
+        const auto pts = scenes::sphere(0.5f, 200, 400);
         PointBatch b;
         b.positions = pts.data();
         b.n = static_cast<int32_t>(pts.size() / 3);

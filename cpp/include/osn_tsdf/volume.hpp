@@ -95,6 +95,18 @@ private:
     /// but colour only when present, and the extractor reads tsdf alone across
     /// whole blocks. Interleaving would pull colour into cache on every
     /// tsdf-only sweep.
+    ///
+    /// These hold WEIGHTED SUMS, not means. The mean is formed on read.
+    ///
+    /// That is a correctness requirement, not a style choice. Storing a running
+    /// mean requires reading the old mean, combining, and writing back, and
+    /// there is no way to make that atomic across four arrays with one
+    /// compare-exchange. An earlier version did exactly that under a CAS on the
+    /// weight and had a lost-update race: two threads winning consecutive CASes
+    /// could interleave their read-modify-write of the mean. It survived the
+    /// analytic test because the lost updates average out, which is how races
+    /// like it normally survive testing. Sums commute, so plain atomic adds are
+    /// sufficient and the result is order-independent up to float associativity.
     std::vector<float> tsdf_;
     std::vector<float> weight_;
     std::vector<float> r_, g_, b_;

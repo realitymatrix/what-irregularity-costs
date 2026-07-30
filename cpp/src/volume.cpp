@@ -47,7 +47,7 @@ Volume::Volume(const VolumeConfig& cfg) : cfg_(cfg) {
     // limit, so headroom is cheaper than the alternative.
     const uint32_t size = next_pow2(static_cast<uint32_t>(cfg_.pool_capacity_blocks) * 2u);
     hash_mask_ = size - 1;
-    table_.assign(size, HashEntry{kEmptyKey, 0, 0, -1});
+    table_.assign(size, HashEntry{kEmptyKey, -1, 0});
 
     const std::size_t n = static_cast<std::size_t>(cfg_.pool_capacity_blocks) * kBlockVoxels;
     tsdf_.assign(n, 0.0f);
@@ -69,6 +69,7 @@ void Volume::set_thread_count(int n) {
 }
 
 int32_t Volume::find_block(int32_t bx, int32_t by, int32_t bz) const {
+    const int64_t want = pack_coord(bx, by, bz);
     uint32_t slot = hash_block(bx, by, bz, hash_mask_);
     const uint32_t size = hash_mask_ + 1;
     for (uint32_t probe = 0; probe < size; ++probe) {
@@ -77,32 +78,42 @@ int32_t Volume::find_block(int32_t bx, int32_t by, int32_t bz) const {
         // behaviour even where it happens to work, and this is a lock-free
         // protocol where a compiler reordering would be near-impossible to
         // debug from the symptom.
-        const int32_t key =
-            std::atomic_ref<const int32_t>(e.key).load(std::memory_order_acquire);
+        const int64_t key = std::atomic_ref<const int64_t>(e.key).load(std::memory_order_acquire);
         if (key == kEmptyKey) return -1;
-        if (key == bx && e.y == by && e.z == bz) return e.block_idx;
+        if (key == want) {
+            // Wait for the winner to publish the index. Seeing the key without
+            // the index would otherwise read -1 and drop the point.
+            int32_t idx = std::atomic_ref<const int32_t>(e.block_idx).load(std::memory_order_acquire);
+            while (idx < 0) idx = std::atomic_ref<const int32_t>(e.block_idx).load(std::memory_order_acquire);
+            return idx;
+        }
     }
     return -1;
 }
 
 int32_t Volume::find_or_insert_block(int32_t bx, int32_t by, int32_t bz) {
+    const int64_t want = pack_coord(bx, by, bz);
     uint32_t slot = hash_block(bx, by, bz, hash_mask_);
     const uint32_t size = hash_mask_ + 1;
 
     for (uint32_t probe = 0; probe < size; ++probe) {
         HashEntry& e = table_[(slot + probe) & hash_mask_];
-        std::atomic_ref<int32_t> key_atomic(e.key);
+        std::atomic_ref<int64_t> key_atomic(e.key);
 
-        int32_t key = key_atomic.load(std::memory_order_acquire);
-        if (key == bx && e.y == by && e.z == bz) return e.block_idx;
+        int64_t key = key_atomic.load(std::memory_order_acquire);
+        if (key == want) {
+            int32_t idx = std::atomic_ref<int32_t>(e.block_idx).load(std::memory_order_acquire);
+            while (idx < 0) idx = std::atomic_ref<int32_t>(e.block_idx).load(std::memory_order_acquire);
+            return idx;
+        }
 
         if (key == kEmptyKey) {
             // Claim the slot with a compare-exchange on the key alone. This is
             // deliberately the same protocol the GPU arms use, so the CPU arm
             // is a parallel implementation of the same algorithm rather than a
             // mutex-guarded stand-in that would make the comparison unfair.
-            int32_t expected = kEmptyKey;
-            if (key_atomic.compare_exchange_strong(expected, bx, std::memory_order_acq_rel,
+            int64_t expected = kEmptyKey;
+            if (key_atomic.compare_exchange_strong(expected, want, std::memory_order_acq_rel,
                                                    std::memory_order_acquire)) {
                 const int32_t idx = block_count_.fetch_add(1, std::memory_order_acq_rel);
                 if (idx >= cfg_.pool_capacity_blocks) {
@@ -113,8 +124,6 @@ int32_t Volume::find_or_insert_block(int32_t bx, int32_t by, int32_t bz) {
                     drop_count_.fetch_add(1, std::memory_order_relaxed);
                     return -1;
                 }
-                e.y = by;
-                e.z = bz;
                 block_coord_[static_cast<std::size_t>(idx)] = BlockCoord{bx, by, bz};
                 // Publish block_idx last: a concurrent reader that saw our key
                 // must not read an uninitialised index.
@@ -124,8 +133,10 @@ int32_t Volume::find_or_insert_block(int32_t bx, int32_t by, int32_t bz) {
             // Lost the race. Re-read this slot: the winner may have written our
             // key, in which case we share it rather than probing past it.
             key = key_atomic.load(std::memory_order_acquire);
-            if (key == bx && e.y == by && e.z == bz) {
-                return std::atomic_ref<int32_t>(e.block_idx).load(std::memory_order_acquire);
+            if (key == want) {
+                int32_t idx = std::atomic_ref<int32_t>(e.block_idx).load(std::memory_order_acquire);
+                while (idx < 0) idx = std::atomic_ref<int32_t>(e.block_idx).load(std::memory_order_acquire);
+                return idx;
             }
         }
     }
@@ -163,6 +174,22 @@ void Volume::allocate_blocks(const PointBatch& batch) {
                 const int32_t vx = static_cast<int32_t>(std::floor((px + ux * t) * inv_voxel));
                 const int32_t vy = static_cast<int32_t>(std::floor((py + uy * t) * inv_voxel));
                 const int32_t vz = static_cast<int32_t>(std::floor((pz + uz * t) * inv_voxel));
+
+                // Cull fully occluded voxels here as well as in the update.
+                // Allocation must apply exactly the same gate, or the pool
+                // fills with blocks that never receive a contribution: the
+                // meshes still match (empty blocks extract nothing) but the
+                // block counts diverge, and block count is the cheap
+                // cross-arm invariant that is supposed to catch real
+                // divergence before any mesh is compared.
+                const float cx_ = (static_cast<float>(vx) + 0.5f) * cfg_.voxel_size_m;
+                const float cy_ = (static_cast<float>(vy) + 0.5f) * cfg_.voxel_size_m;
+                const float cz_ = (static_cast<float>(vz) + 0.5f) * cfg_.voxel_size_m;
+                const float ex = cx_ - batch.cam[0];
+                const float ey = cy_ - batch.cam[1];
+                const float ez = cz_ - batch.cam[2];
+                if (dist - std::sqrt(ex * ex + ey * ey + ez * ez) < -trunc) continue;
+
                 find_or_insert_block(floor_div(vx, kBlockDim), floor_div(vy, kBlockDim),
                                      floor_div(vz, kBlockDim));
             }
@@ -248,25 +275,24 @@ void Volume::update_voxels(const PointBatch& batch) {
                     static_cast<std::size_t>(bi) * kBlockVoxels +
                     static_cast<std::size_t>((lz * kBlockDim + ly) * kBlockDim + lx);
 
-                // Running weighted mean. Serialised per voxel by an atomic CAS
-                // loop on the weight, which is also what makes the result
-                // independent of thread count: the update is a weighted mean,
-                // and each contribution is folded in under the lock it wins.
+                // Accumulate weighted sums with plain atomic adds. Sums
+                // commute, so no ordering or locking is needed and the result
+                // is independent of thread count up to float associativity.
+                // The mean is formed in `sample()`.
                 std::atomic_ref<float> w_atomic(weight_[idx]);
-                float w_old = w_atomic.load(std::memory_order_acquire);
-                for (;;) {
-                    if (wcap > 0.0f && w_old >= wcap) break;
-                    const float w_new = w_old + w_in;
-                    if (w_atomic.compare_exchange_weak(w_old, w_new, std::memory_order_acq_rel,
-                                                       std::memory_order_acquire)) {
-                        const float inv_w = 1.0f / w_new;
-                        tsdf_[idx] = (tsdf_[idx] * w_old + sdf_n * w_in) * inv_w;
-                        r_[idx] = (r_[idx] * w_old + cr * w_in) * inv_w;
-                        g_[idx] = (g_[idx] * w_old + cg * w_in) * inv_w;
-                        b_[idx] = (b_[idx] * w_old + cb * w_in) * inv_w;
-                        break;
-                    }
-                }
+                // Approximate cap: read without ordering, so a few extra
+                // contributions can land past the threshold under contention.
+                // Acceptable, and deliberately so. The cap exists to stop an
+                // early estimate being dragged by later drifted frames, which
+                // is a bulk effect; enforcing it exactly would reintroduce the
+                // read-modify-write this loop was rewritten to avoid.
+                if (wcap > 0.0f && w_atomic.load(std::memory_order_relaxed) >= wcap) continue;
+
+                w_atomic.fetch_add(w_in, std::memory_order_relaxed);
+                std::atomic_ref<float>(tsdf_[idx]).fetch_add(sdf_n * w_in, std::memory_order_relaxed);
+                std::atomic_ref<float>(r_[idx]).fetch_add(cr * w_in, std::memory_order_relaxed);
+                std::atomic_ref<float>(g_[idx]).fetch_add(cg * w_in, std::memory_order_relaxed);
+                std::atomic_ref<float>(b_[idx]).fetch_add(cb * w_in, std::memory_order_relaxed);
             }
         }
     });
@@ -291,11 +317,14 @@ bool Volume::sample(int32_t vx, int32_t vy, int32_t vz, float min_weight, float&
     const std::size_t idx = static_cast<std::size_t>(bi) * kBlockVoxels +
                             static_cast<std::size_t>((lz * kBlockDim + ly) * kBlockDim + lx);
 
-    if (weight_[idx] < min_weight) return false;
-    tsdf_out = tsdf_[idx];
-    rgb_out[0] = r_[idx];
-    rgb_out[1] = g_[idx];
-    rgb_out[2] = b_[idx];
+    const float w = weight_[idx];
+    if (w < min_weight || w <= 0.0f) return false;
+    // Stored as weighted sums; form the mean here.
+    const float inv_w = 1.0f / w;
+    tsdf_out = tsdf_[idx] * inv_w;
+    rgb_out[0] = r_[idx] * inv_w;
+    rgb_out[1] = g_[idx] * inv_w;
+    rgb_out[2] = b_[idx] * inv_w;
     return true;
 }
 

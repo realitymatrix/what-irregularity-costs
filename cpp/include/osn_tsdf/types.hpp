@@ -22,7 +22,29 @@ inline constexpr int kBlockVoxels = kBlockDim * kBlockDim * kBlockDim;
 /// Sentinel for an empty hash slot. Chosen so a zeroed table is *not* empty,
 /// which turns "forgot to initialise the table" into an immediate miss rather
 /// than a silently valid-looking entry at block coordinate (0,0,0).
-inline constexpr int32_t kEmptyKey = INT32_MIN;
+///
+/// -1 cannot collide with a real key: `pack_coord` biases each axis to be
+/// non-negative, so every packed key is in [0, 2^63).
+inline constexpr int64_t kEmptyKey = -1;
+
+/// Half-range per axis, in blocks. 2^20 blocks at 8 voxels of 1 cm is +/- 80 km.
+inline constexpr int64_t kCoordBias = 1 << 20;
+inline constexpr int64_t kCoordBits = 21;
+
+/// Pack a block coordinate into one 64-bit key.
+///
+/// The whole coordinate must live in a single word so that one compare-exchange
+/// publishes all of it. An earlier layout CAS'd `x` and then wrote `y` and `z`
+/// separately: a concurrent reader could see a matching `x` with stale `y`/`z`,
+/// conclude the slot was a different block, and probe onward. Under low CPU
+/// contention that is invisible; with hundreds of thousands of GPU threads it
+/// degenerated into full-table scans and the integrate never finished.
+inline int64_t pack_coord(int32_t x, int32_t y, int32_t z) {
+    const int64_t bx = static_cast<int64_t>(x) + kCoordBias;
+    const int64_t by = static_cast<int64_t>(y) + kCoordBias;
+    const int64_t bz = static_cast<int64_t>(z) + kCoordBias;
+    return (bx << (2 * kCoordBits)) | (by << kCoordBits) | bz;
+}
 
 /// Integer block coordinate in world-block space.
 struct BlockCoord {
@@ -35,14 +57,15 @@ struct BlockCoord {
 
 /// One open-addressed hash slot.
 ///
-/// `key` doubles as the occupancy flag: `kEmptyKey` means free. Packing the
-/// flag into the key is what lets insertion be a single compare-exchange on
-/// one 32-bit word, which is the operation the GPU arms have to express and
-/// the CPU arm therefore mirrors rather than replacing with a mutex.
+/// `key` is the packed block coordinate and doubles as the occupancy flag:
+/// `kEmptyKey` means free. One 64-bit word holds the entire coordinate, so
+/// insertion is a single compare-exchange that publishes all of it atomically.
+/// That is the operation the GPU arms have to express, and the CPU arm mirrors
+/// it rather than substituting a mutex, so the comparison stays fair.
 struct HashEntry {
-    int32_t key;        // BlockCoord::x, or kEmptyKey
-    int32_t y, z;       // remaining coordinates
+    int64_t key;        // pack_coord(...), or kEmptyKey
     int32_t block_idx;  // index into the block pool
+    int32_t pad;        // keep the struct 16-byte aligned
 };
 
 /// Construction parameters.
