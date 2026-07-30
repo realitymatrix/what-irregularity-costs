@@ -1,0 +1,10 @@
+[package]
+name = "tartanair"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "TartanAir V2 loader: rectified stereo, GT depth, poses, backprojection to world points"
+
+[dependencies]
+png = "0.17"
+thiserror = "2"
