@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/tsdf-ffi",       # C ABI bindings to every TSDF arm, incl. the golden reference
     "crates/depth-libinfer", # FoundationStereo via libinfer TRT engines (sm_120, FP16)
+    "crates/triton-aot",     # AOT Triton cubin loader/launcher; keeps Python out of the measured path
     "crates/tsdf-harness",   # correctness gate + timing harness, the Phase 1 deliverable
 ]
 

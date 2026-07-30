@@ -1,0 +1,11 @@
+[package]
+name = "triton-aot"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Load and launch AOT-compiled Triton kernels from Rust via the CUDA driver API"
+
+[dependencies]
+thiserror = "2"
+
+[build-dependencies]
