@@ -7,7 +7,11 @@ Foundation-model stereo depth (FoundationStereo / Fast-FoundationStereo) feeding
 GPU TSDF fusion, with the fusion stage implemented five ways behind one
 interface, measured stage by stage.
 
-**Status: Phase 0 (de-risking spikes) COMPLETE, all three passed.** No project
+**Status: all five fusion arms implemented and cross-checked.** On identical
+input they agree to within 2e-08 m mean surface distance and produce identical
+block and vertex counts. Next is the timing harness.
+
+**Phase 0 (de-risking spikes) COMPLETE, all three passed.** No project
 code yet by design: the roadmap puts spikes before scaffolding, because each one
 answers a question that would force a rewrite if discovered later. All three
 overturned a prediction in the roadmap, every time in the project's favour.

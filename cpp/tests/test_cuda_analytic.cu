@@ -15,6 +15,7 @@
 // individual vertices differ in the last ulp and the triangle soups are
 // emitted in different orders. Geometry is what must agree, not bit patterns.
 
+#include <cuda.h>
 #include <cuda_runtime.h>
 
 #include <algorithm>
@@ -27,7 +28,13 @@
 #include "analytic_scenes.hpp"
 #include "osn_tsdf/c_api.h"
 #include "osn_tsdf/volume.hpp"
+#include "osn_tsdf/triton_launch.h"
 #include "osn_tsdf/volume_cuda.hpp"
+
+#if __has_include("triton_tsdf_manifest.h")
+#include "triton_tsdf_manifest.h"
+#define OSN_TSDF_HAVE_A5 1
+#endif
 
 #ifdef OSN_TSDF_HAVE_A4
 // Arm A4 lives in a Rust staticlib built by cuda-oxide. It allocates nothing:
@@ -263,6 +270,120 @@ int main() {
               fmt("%.9f m (voxel %.3f)", mean_sym, voxel));
         check("A2/A3 hausdorff < voxel/10", hausdorff < voxel * 0.1, fmt("%.9f m", hausdorff));
     }
+
+#ifdef OSN_TSDF_HAVE_A5
+    // ---- A5a / A5b: Triton kernels over the same device state -------------
+    //
+    // A5a runs A3's CUDA allocation then Triton's update. A5b runs Triton for
+    // both passes. The difference between them is the control-flow tax priced
+    // on the real workload rather than inferred from a synthetic test.
+    for (int variant = 0; variant < 2; ++variant) {
+        const bool full = (variant == 1);
+        const char* label = full ? "A5b triton-full" : "A5a triton-shared";
+        std::printf("\n--- %s ---\n", label);
+
+        const std::string dir = std::string(getenv("OSN_TRITON_DIR")
+                                                ? getenv("OSN_TRITON_DIR")
+                                                : "../artifacts/triton");
+        OsnTritonKernel* k_upd =
+            osn_triton_load((dir + "/" + OSN_TRITON_UPDATE_NAME + ".cubin").c_str(),
+                            OSN_TRITON_UPDATE_NAME);
+        OsnTritonKernel* k_alloc =
+            full ? osn_triton_load((dir + "/" + OSN_TRITON_ALLOC_NAME + ".cubin").c_str(),
+                                   OSN_TRITON_ALLOC_NAME)
+                 : nullptr;
+        if (!k_upd || (full && !k_alloc)) {
+            check(full ? "A5b cubin load" : "A5a cubin load", false, "missing artifacts");
+        } else {
+            OsnTsdfCudaVolume* tv =
+                osn_tsdf_cuda_create(voxel, cfg.pool_capacity_blocks, -1.0f, 32.0f);
+            OsnTsdfDeviceView dv{};
+            osn_tsdf_cuda_device_view(tv, &dv);
+
+            // The scratch slot absorbs CAS attempts from lanes that already
+            // resolved: tl.atomic_cas takes no mask. Its sentinel must differ
+            // from both EMPTY (-1) and any packed key.
+            const int32_t scratch_slot = (int32_t)dv.hash_mask;  // last slot
+            const int64_t sentinel = -2;
+            cuMemcpyHtoD((CUdeviceptr)((char*)dv.table + (size_t)scratch_slot * 16), &sentinel,
+                         sizeof(int64_t));
+
+            const int32_t n = n_pts;
+            const int32_t hash_mask_i = (int32_t)dv.hash_mask;
+            const float rsq = 0.0f, camv = 0.0f;
+            const uint32_t grid = (uint32_t)((n + OSN_TRITON_BLOCK - 1) / OSN_TRITON_BLOCK);
+
+            if (full) {
+                void* aargs[] = {(void*)&d_pts,      (void*)&dv.table,     (void*)&dv.table,
+                                 (void*)&dv.block_count, (void*)&dv.block_coord,
+                                 (void*)&dv.drop_count,  (void*)&scratch_slot,
+                                 (void*)&n,          (void*)&hash_mask_i,  (void*)&dv.pool_capacity,
+                                 (void*)&dv.voxel_size_m, (void*)&dv.trunc_m,
+                                 (void*)&camv, (void*)&camv, (void*)&camv, (void*)&rsq};
+                osn_triton_launch(k_alloc, grid, OSN_TRITON_ALLOC_BLOCK_DIM_X,
+                                  OSN_TRITON_ALLOC_SHARED, aargs,
+                                  (int32_t)(sizeof(aargs) / sizeof(aargs[0])));
+            } else {
+                osn_tsdf_cuda_allocate_blocks(tv, d_pts, n, 0.0f, 0.0f, 0.0f, 0.0f);
+                osn_tsdf_cuda_synchronize(tv);
+            }
+
+            void* uargs[] = {(void*)&d_pts,   (void*)&dv.table,   (void*)&dv.table,
+                             (void*)&dv.tsdf, (void*)&dv.weight,  (void*)&n,
+                             (void*)&hash_mask_i, (void*)&dv.voxel_size_m, (void*)&dv.trunc_m,
+                             (void*)&dv.weight_cap, (void*)&camv, (void*)&camv, (void*)&camv,
+                             (void*)&rsq};
+            osn_triton_launch(k_upd, grid, OSN_TRITON_UPDATE_BLOCK_DIM_X,
+                              OSN_TRITON_UPDATE_SHARED, uargs,
+                              (int32_t)(sizeof(uargs) / sizeof(uargs[0])));
+            cuCtxSynchronize();
+            osn_tsdf_cuda_synchronize(tv);
+
+            std::vector<float> tbuf((std::size_t)(4 << 20) * 6);
+            const int32_t tn = osn_tsdf_cuda_extract_mesh(tv, tbuf.data(), nullptr, 4 << 20,
+                                                          0.5f, 0.0f);
+            const std::size_t t_nv = tn > 0 ? (std::size_t)tn : 0;
+            tbuf.resize(t_nv * 6);
+            std::printf("  blocks %d, vertices %zu\n", osn_tsdf_cuda_block_count(tv), t_nv);
+
+            check((std::string(label) + " produced geometry").c_str(), t_nv > 1000,
+                  fmt("%.0f vertices", (double)t_nv));
+            check((std::string(label) + " block count matches A3").c_str(),
+                  osn_tsdf_cuda_block_count(tv) == gpu.block_count(),
+                  fmt("%.0f vs %.0f", (double)osn_tsdf_cuda_block_count(tv),
+                      (double)gpu.block_count()));
+
+            double tm = 0.0, tx = 0.0;
+            for (std::size_t i = 0; i < t_nv; ++i) {
+                const double x = tbuf[i * 6], y = tbuf[i * 6 + 1], z = tbuf[i * 6 + 2];
+                const double e = std::fabs(std::sqrt(x * x + y * y + z * z) - R);
+                tm += e; tx = std::max(tx, e);
+            }
+            if (t_nv) tm /= t_nv;
+            check((std::string(label) + " mean |r - R| < voxel/4").c_str(), tm < voxel * 0.25,
+                  fmt("%.6f m", tm));
+            check((std::string(label) + " max |r - R| < voxel").c_str(), tx < voxel,
+                  fmt("%.6f m", tx));
+
+            if (t_nv && g_nv) {
+                const auto tpos = positions_of(tbuf);
+                const auto gpos3 = positions_of(gmesh);
+                GridNN gg(gpos3, voxel * 2.0f);
+                double s1 = 0.0, m1 = 0.0;
+                for (std::size_t i = 0; i < t_nv; ++i) {
+                    const float d = gg.nearest(&tpos[i * 3]);
+                    s1 += d; m1 = std::max(m1, (double)d);
+                }
+                std::printf("  vs A3: mean %.9f m, hausdorff %.9f m\n", s1 / t_nv, m1);
+                check((std::string(label) + " vs A3 mean < voxel/100").c_str(),
+                      s1 / t_nv < voxel * 0.01, fmt("%.9f m", s1 / t_nv));
+            }
+            osn_tsdf_cuda_destroy(tv);
+        }
+        if (k_upd) osn_triton_unload(k_upd);
+        if (k_alloc) osn_triton_unload(k_alloc);
+    }
+#endif
 
 #ifdef OSN_TSDF_HAVE_A4
     // ---- A4: Rust kernels over C++-allocated device state -----------------

@@ -11,7 +11,7 @@ set(CMAKE_CXX_STANDARD 20)          # std::atomic_ref
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-set(OSN_TSDF_SOURCES src/volume.cpp src/marching_tets.cpp src/c_api.cpp)
+set(OSN_TSDF_SOURCES src/volume.cpp src/marching_tets.cpp src/c_api.cpp src/triton_launch.cpp)
 if(OSN_TSDF_CUDA)
     enable_language(CUDA)
     set(CMAKE_CUDA_STANDARD 17)
@@ -40,6 +40,11 @@ target_compile_options(osn_tsdf PRIVATE
 find_package(Threads REQUIRED)
 target_link_libraries(osn_tsdf PUBLIC Threads::Threads)
 
+# The Triton launcher uses the CUDA DRIVER API, which is a different library
+# from the runtime the CUDA arm links.
+find_package(CUDAToolkit REQUIRED)
+target_link_libraries(osn_tsdf PUBLIC CUDA::cuda_driver)
+
 install(TARGETS osn_tsdf ARCHIVE DESTINATION lib)
 install(DIRECTORY include/ DESTINATION include)
 
@@ -51,7 +56,7 @@ add_test(NAME analytic COMMAND test_analytic)
 
 if(OSN_TSDF_CUDA)
     add_executable(test_cuda_analytic tests/test_cuda_analytic.cu)
-    target_include_directories(test_cuda_analytic PRIVATE tests)
+    target_include_directories(test_cuda_analytic PRIVATE tests ${CMAKE_CURRENT_SOURCE_DIR}/../artifacts/triton)
     target_link_libraries(test_cuda_analytic PRIVATE osn_tsdf)
 
     # Arm A4 is a Rust staticlib built separately by cuda-oxide (it needs the
