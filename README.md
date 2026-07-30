@@ -7,10 +7,12 @@ Foundation-model stereo depth (FoundationStereo / Fast-FoundationStereo) feeding
 GPU TSDF fusion, with the fusion stage implemented five ways behind one
 interface, measured stage by stage.
 
-**Status: Phase 0 (de-risking spikes), 2 of 3 complete.** No project code yet by
-design: the roadmap puts spikes before scaffolding, because each one answers a
-question that would force a rewrite if discovered later. Two of them overturned
-a prediction in the roadmap.
+**Status: Phase 0 (de-risking spikes) COMPLETE, all three passed.** No project
+code yet by design: the roadmap puts spikes before scaffolding, because each one
+answers a question that would force a rewrite if discovered later. All three
+overturned a prediction in the roadmap, every time in the project's favour.
+**No arm carries feasibility risk.** Next is Phase 1: the correctness and timing
+harness.
 
 ## The claim
 
@@ -96,7 +98,7 @@ docs/ROADMAP.md          full plan, phasing, effort, fallbacks
 docs/SPIKE-RESULTS.md    Phase 0 measurements
 spikes/s1_cuda_oxide/    Rust kernels: CAS hash insert + SoA accumulate
 spikes/s2_triton/        the same two kernels in Triton, for comparison
-spikes/s3_open3d/        CUDA 13 patches for Open3D's stdgpu dependency
+spikes/s3_open3d/        CUDA 13 backport + CPU/CUDA acceptance test
 tools/tartanair.py       dataset loader + format verifier
 ```
 
