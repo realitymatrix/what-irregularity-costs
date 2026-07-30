@@ -46,7 +46,7 @@ and prove nothing.
 |---|---|---|
 | S1 | `cuda-oxide` on sm_120 with the TSDF primitives | **PASS** |
 | S2 | Triton expressing the irregular atomicCAS insertion | **PASS**, with a measured cost |
-| S3 | Open3D as a C++ library on CUDA 13 | **PARTIAL**, CUDA module blocked |
+| S3 | Open3D as a C++ library on CUDA 13 | **PASS**, CPU and CUDA |
 
 Headlines:
 
@@ -57,8 +57,10 @@ Headlines:
   It can. The real finding is a quantified control-flow tax: `tl.atomic_cas`
   takes no mask and there is no per-lane early exit, so probe cost is
   worst-case rather than actual, an **8.3x penalty** from MAX_PROBE 4 to 64.
-- **S3 found Open3D 0.19 is not CUDA 13 clean.** Three fixable issues in
-  `stdgpu`, then an unfixed one in Open3D's own GPU hashmap against Thrust 3.
+- **S3 found Open3D 0.19 is not CUDA 13 clean**, then unblocked it by
+  backporting upstream PR #7398 (two files, `3rdparty/stdgpu/` only). CPU and
+  CUDA now agree exactly: 3700 blocks, 463761 vertices on both devices. No
+  Open3D source changes needed.
 
 Full detail with measurements: [docs/SPIKE-RESULTS.md](docs/SPIKE-RESULTS.md).
 

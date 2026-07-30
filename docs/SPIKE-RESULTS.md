@@ -10,7 +10,7 @@ discovered later. Two of three spikes overturned a prediction in the roadmap.
 |---|---|---|
 | S1 | Can `cuda-oxide` (Rust to PTX) target sm_120 and express the TSDF primitives? | **PASS** |
 | S2 | Can Triton express the irregular atomicCAS hash insertion? | **PASS**, with a measured cost |
-| S3 | Does Open3D build as a C++ library here? | **PASS on CPU**, CUDA module blocked |
+| S3 | Does Open3D build as a C++ library here? | **PASS**, CPU and CUDA, via an upstream backport |
 
 ---
 
@@ -149,7 +149,7 @@ Triton-does-everything, and price the tax end to end.
 
 ---
 
-## S3: Open3D C++ from source. CPU PASSES. CUDA module blocked.
+## S3: Open3D C++ from source. PASSED, CPU and CUDA.
 
 **Open3D 0.19 is not CUDA 13 clean.** Configure succeeded with
 `-DCMAKE_CUDA_ARCHITECTURES=120` (Open3D's own defaults stop at sm_90, but it
