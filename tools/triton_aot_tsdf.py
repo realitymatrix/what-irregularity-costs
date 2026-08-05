@@ -48,13 +48,13 @@ def main(argv: list[str]) -> int:
     tsdf = torch.zeros(pool * BLOCK_VOXELS, dtype=torch.float32, device=dev)
     w = torch.zeros(pool * BLOCK_VOXELS, dtype=torch.float32, device=dev)
     pos = torch.zeros(1024 * 3, dtype=torch.float32, device=dev)
-    scratch = hash_size - 1
-    t64[scratch * 2] = -2
+
+    pass
 
     cx = dict(BLOCK=BLOCK, STEPS=STEPS, MAX_PROBE=MAX_PROBE, BLOCK_DIM=BLOCK_DIM)
 
     k_alloc = K.tsdf_alloc_kernel[(4,)](
-        pos, t64, t32, bc, bco, dr, scratch, 1024, hash_size - 1, pool,
+        pos, t64, t32, bc, bco, dr, hash_size, 1024, hash_size - 1, pool,
         0.01, 0.04, 0.0, 0.0, 0.0, 0.0, **cx)
     k_update = K.tsdf_update_kernel[(4,)](
         pos, t64, t32, tsdf, w, w, w, w, 1024, hash_size - 1,

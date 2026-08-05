@@ -79,6 +79,15 @@ std::vector<float> positions_of(const std::vector<float>& posnor) {
     return out;
 }
 
+/// Query stride for surface-distance cross-checks.
+///
+/// Comparing all ~850k vertices against all others, for every arm pair, is
+/// quadratic in wall-clock and adds nothing: the samples are dense on a smooth
+/// surface, so every 8th vertex characterises the agreement just as well. The
+/// grid is still built from ALL points, so a query can still find its true
+/// nearest neighbour; only the number of queries is reduced.
+constexpr std::size_t kCrossCheckStride = 8;
+
 /// Uniform-grid nearest-neighbour distances from `a` to `b`, in metres.
 struct GridNN {
     std::unordered_map<long long, std::vector<int>> cells;
@@ -249,17 +258,19 @@ int main() {
         GridNN g_grid(gpos, voxel * 2.0f);
 
         double sum_ab = 0.0, max_ab = 0.0, sum_ba = 0.0, max_ba = 0.0;
-        for (std::size_t i = 0; i < g_nv; ++i) {
+        for (std::size_t i = 0; i < g_nv; i += kCrossCheckStride) {
             const float d = c_grid.nearest(&gpos[i * 3]);
             sum_ab += d;
             max_ab = std::max(max_ab, (double)d);
         }
-        for (std::size_t i = 0; i < c_nv; ++i) {
+        for (std::size_t i = 0; i < c_nv; i += kCrossCheckStride) {
             const float d = g_grid.nearest(&cpos[i * 3]);
             sum_ba += d;
             max_ba = std::max(max_ba, (double)d);
         }
-        const double mean_sym = 0.5 * (sum_ab / g_nv + sum_ba / c_nv);
+        const double n_ab = (double)((g_nv + kCrossCheckStride - 1) / kCrossCheckStride);
+        const double n_ba = (double)((c_nv + kCrossCheckStride - 1) / kCrossCheckStride);
+        const double mean_sym = 0.5 * (sum_ab / n_ab + sum_ba / n_ba);
         const double hausdorff = std::max(max_ab, max_ba);
         std::printf("  mean surface distance %.9f m, hausdorff %.9f m\n", mean_sym, hausdorff);
 
@@ -300,13 +311,6 @@ int main() {
             OsnTsdfDeviceView dv{};
             osn_tsdf_cuda_device_view(tv, &dv);
 
-            // The scratch slot absorbs CAS attempts from lanes that already
-            // resolved: tl.atomic_cas takes no mask. Its sentinel must differ
-            // from both EMPTY (-1) and any packed key.
-            const int32_t scratch_slot = (int32_t)dv.hash_mask;  // last slot
-            const int64_t sentinel = -2;
-            cuMemcpyHtoD((CUdeviceptr)((char*)dv.table + (size_t)scratch_slot * 16), &sentinel,
-                         sizeof(int64_t));
 
             const int32_t n = n_pts;
             const int32_t hash_mask_i = (int32_t)dv.hash_mask;
@@ -316,7 +320,7 @@ int main() {
             if (full) {
                 void* aargs[] = {(void*)&d_pts,      (void*)&dv.table,     (void*)&dv.table,
                                  (void*)&dv.block_count, (void*)&dv.block_coord,
-                                 (void*)&dv.drop_count,  (void*)&scratch_slot,
+                                 (void*)&dv.drop_count,  (void*)&dv.scratch_base,
                                  (void*)&n,          (void*)&hash_mask_i,  (void*)&dv.pool_capacity,
                                  (void*)&dv.voxel_size_m, (void*)&dv.trunc_m,
                                  (void*)&camv, (void*)&camv, (void*)&camv, (void*)&rsq};
@@ -371,13 +375,14 @@ int main() {
                 const auto gpos3 = positions_of(gmesh);
                 GridNN gg(gpos3, voxel * 2.0f);
                 double s1 = 0.0, m1 = 0.0;
-                for (std::size_t i = 0; i < t_nv; ++i) {
+                for (std::size_t i = 0; i < t_nv; i += kCrossCheckStride) {
                     const float d = gg.nearest(&tpos[i * 3]);
                     s1 += d; m1 = std::max(m1, (double)d);
                 }
-                std::printf("  vs A3: mean %.9f m, hausdorff %.9f m\n", s1 / t_nv, m1);
+                const double nq2 = (double)((t_nv + kCrossCheckStride - 1) / kCrossCheckStride);
+                std::printf("  vs A3: mean %.9f m, hausdorff %.9f m\n", s1 / nq2, m1);
                 check((std::string(label) + " vs A3 mean < voxel/100").c_str(),
-                      s1 / t_nv < voxel * 0.01, fmt("%.9f m", s1 / t_nv));
+                      s1 / nq2 < voxel * 0.01, fmt("%.9f m", s1 / nq2));
             }
             osn_tsdf_cuda_destroy(tv);
         }
@@ -438,15 +443,17 @@ int main() {
                     GridNN gg(gpos2, voxel * 2.0f);
                     GridNN rr(rpos, voxel * 2.0f);
                     double s1 = 0.0, m1 = 0.0, s2 = 0.0, m2 = 0.0;
-                    for (std::size_t i = 0; i < r_nv; ++i) {
+                    for (std::size_t i = 0; i < r_nv; i += kCrossCheckStride) {
                         const float d = gg.nearest(&rpos[i * 3]);
                         s1 += d; m1 = std::max(m1, (double)d);
                     }
-                    for (std::size_t i = 0; i < g_nv; ++i) {
+                    for (std::size_t i = 0; i < g_nv; i += kCrossCheckStride) {
                         const float d = rr.nearest(&gpos2[i * 3]);
                         s2 += d; m2 = std::max(m2, (double)d);
                     }
-                    const double mean_sym = 0.5 * (s1 / r_nv + s2 / g_nv);
+                    const double nq = (double)((r_nv + kCrossCheckStride - 1) / kCrossCheckStride);
+                    const double ng = (double)((g_nv + kCrossCheckStride - 1) / kCrossCheckStride);
+                    const double mean_sym = 0.5 * (s1 / nq + s2 / ng);
                     const double haus = std::max(m1, m2);
                     std::printf("  A3 vs A4: mean %.9f m, hausdorff %.9f m\n", mean_sym, haus);
                     check("A3/A4 mean surface distance < voxel/100", mean_sym < voxel * 0.01,

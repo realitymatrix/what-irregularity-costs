@@ -413,8 +413,13 @@ mod kernels {
 use cuda_core::DeviceBuffer;
 use std::sync::{Arc, OnceLock};
 
-/// Mirrors `OsnTsdfDeviceView` in include/osn_tsdf/c_api.h. Field order and
-/// types must match exactly; this is a raw ABI boundary with no checking.
+/// Mirrors `OsnTsdfDeviceView` in include/osn_tsdf/c_api.h.
+///
+/// Field order and types must match EXACTLY. There is no checking across this
+/// boundary: a missing or reordered field shifts everything after it, and the
+/// symptom is a hang or garbage geometry rather than a link error. The C side
+/// carries a static_assert on the struct size as a partial guard; keep the two
+/// in step whenever either changes.
 #[repr(C)]
 pub struct DeviceViewC {
     pub table: u64,
@@ -427,6 +432,12 @@ pub struct DeviceViewC {
     pub g: u64,
     pub b: u64,
     pub hash_mask: u32,
+    /// First slot of the Triton scratch region. Unused by this arm, but the
+    /// field must be present: this struct is a raw ABI mirror of
+    /// `OsnTsdfDeviceView`, so an omitted field silently shifts every
+    /// subsequent one. Omitting it made A4 read a garbage voxel size and spin
+    /// forever, with no diagnostic.
+    pub scratch_base: u32,
     pub pool_capacity: i32,
     pub block_dim: i32,
     pub voxel_size_m: f32,

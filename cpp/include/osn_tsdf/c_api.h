@@ -69,6 +69,7 @@ typedef struct {
     void* g;
     void* b;
     uint32_t hash_mask;
+    uint32_t scratch_base;  /* first scratch slot; see Triton arm */
     int32_t pool_capacity;
     int32_t block_dim;
     float voxel_size_m;

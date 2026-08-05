@@ -236,15 +236,13 @@ int main(int argc, char** argv) {
                 osn_tsdf_cuda_create(voxel, cfg.pool_capacity_blocks, -1.0f, 32.0f);
             OsnTsdfDeviceView dv{};
             osn_tsdf_cuda_device_view(v, &dv);
-            const int32_t scratch = (int32_t)dv.hash_mask;
             const int32_t hm = (int32_t)dv.hash_mask;
             const float zero = 0.0f;
             const uint32_t grid = (uint32_t)((n + OSN_TRITON_BLOCK - 1) / OSN_TRITON_BLOCK);
-            const int64_t sentinel = -2;
 
             void* aargs[] = {(void*)&d_pts, (void*)&dv.table, (void*)&dv.table,
                              (void*)&dv.block_count, (void*)&dv.block_coord, (void*)&dv.drop_count,
-                             (void*)&scratch, (void*)&n, (void*)&hm, (void*)&dv.pool_capacity,
+                             (void*)&dv.scratch_base, (void*)&n, (void*)&hm, (void*)&dv.pool_capacity,
                              (void*)&dv.voxel_size_m, (void*)&dv.trunc_m,
                              (void*)&zero, (void*)&zero, (void*)&zero, (void*)&zero};
             void* uargs[] = {(void*)&d_pts, (void*)&dv.table, (void*)&dv.table, (void*)&dv.tsdf,
@@ -257,8 +255,6 @@ int main(int argc, char** argv) {
             std::vector<double> t_alloc, t_upd;
             for (int i = 0; i < warmup + reps; ++i) {
                 osn_tsdf_cuda_reset(v);
-                cuMemcpyHtoD((CUdeviceptr)((char*)dv.table + (size_t)scratch * 16), &sentinel,
-                             sizeof(int64_t));
                 t.start();
                 osn_triton_launch(ka, grid, OSN_TRITON_ALLOC_BLOCK_DIM_X, OSN_TRITON_ALLOC_SHARED,
                                   aargs, 16);

@@ -8,6 +8,13 @@ using osn_tsdf::MeshBuffers;
 using osn_tsdf::PointBatch;
 using osn_tsdf::VolumeConfig;
 
+// Guard the ABI mirrored by crates/tsdf-rust-cuda. A size change means a field
+// was added or reordered, which silently shifts every field after it for any
+// consumer that was not updated in the same commit.
+static_assert(sizeof(OsnTsdfDeviceView) == 104,
+              "OsnTsdfDeviceView layout changed: update crates/tsdf-rust-cuda DeviceViewC "
+              "and the Triton argument list in cpp/bench and cpp/tests");
+
 struct OsnTsdfCudaVolume {
     CudaVolume vol;
     explicit OsnTsdfCudaVolume(const VolumeConfig& c) : vol(c) {}
@@ -54,6 +61,7 @@ int32_t osn_tsdf_cuda_device_view(const OsnTsdfCudaVolume* v, OsnTsdfDeviceView*
     out->g = dv.g;
     out->b = dv.b;
     out->hash_mask = dv.hash_mask;
+    out->scratch_base = dv.scratch_base;
     out->pool_capacity = dv.pool_capacity;
     out->block_dim = osn_tsdf::kBlockDim;
     out->voxel_size_m = dv.voxel_size;

@@ -21,7 +21,11 @@ namespace osn_tsdf {
         }                                                                               \
     } while (0)
 
+/// Scratch slots appended to the hash table, one per lane of a Triton program.
+inline constexpr uint32_t kScratchSlots = 256;
+
 struct DeviceView {  // NOLINT: shared with other arms via the C API
+    uint32_t scratch_base = 0;
     HashEntry* table;
     uint32_t hash_mask;
     int32_t* block_count;
@@ -56,7 +60,13 @@ struct CudaVolumeImpl {
 
         const size_t n_vox = (size_t)cfg.pool_capacity_blocks * kBlockVoxels;
         CUDA_TRY(cudaStreamCreate(&stream));
-        CUDA_TRY(cudaMalloc(&v.table, (size_t)size * sizeof(HashEntry)));
+        // Extra slots past the live table form a scratch REGION for the
+        // Triton arm: tl.atomic_cas takes no mask, so resolved lanes must aim
+        // their inert CAS somewhere, and one address per lane avoids
+        // serialising the grid. Harmless for the other arms, which never
+        // address past hash_mask.
+        v.scratch_base = size;
+        CUDA_TRY(cudaMalloc(&v.table, (size_t)(size + kScratchSlots) * sizeof(HashEntry)));
         CUDA_TRY(cudaMalloc(&v.block_count, sizeof(int32_t)));
         CUDA_TRY(cudaMalloc(&v.drop_count, sizeof(unsigned long long)));
         CUDA_TRY(cudaMalloc(&v.block_coord, (size_t)cfg.pool_capacity_blocks * sizeof(BlockCoord)));
@@ -68,8 +78,12 @@ struct CudaVolumeImpl {
 
         // The table must be filled with kEmptyKey, not zeroed: zero is a valid
         // block coordinate, so a zeroed table reads as occupied at (0,0,0).
-        std::vector<HashEntry> host(size, HashEntry{kEmptyKey, -1, 0});
-        CUDA_TRY(cudaMemcpy(v.table, host.data(), (size_t)size * sizeof(HashEntry),
+        std::vector<HashEntry> host(size + kScratchSlots, HashEntry{kEmptyKey, -1, 0});
+        // Scratch sentinels must differ from kEmptyKey and from any packed key,
+        // so an inert CAS can never succeed there.
+        for (uint32_t i = size; i < size + kScratchSlots; ++i) host[i].key = -2;
+        CUDA_TRY(cudaMemcpy(v.table, host.data(),
+                            (size_t)(size + kScratchSlots) * sizeof(HashEntry),
                             cudaMemcpyHostToDevice));
         CUDA_TRY(cudaMemset(v.block_count, 0, sizeof(int32_t)));
         CUDA_TRY(cudaMemset(v.drop_count, 0, sizeof(unsigned long long)));

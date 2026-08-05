@@ -99,7 +99,7 @@ def tsdf_alloc_kernel(
     block_count_ptr,
     block_coord_ptr,
     drop_count_ptr,
-    scratch_slot,          # index of the sentinel slot, see module docstring
+    scratch_base,          # first slot of the scratch REGION, see below
     n_points,
     hash_mask,
     pool_capacity,
@@ -114,8 +114,18 @@ def tsdf_alloc_kernel(
 ):
     """Pass 1 (arm A5b only): claim hash slots for the blocks this batch touches."""
     pid = tl.program_id(0)
-    offs = pid * BLOCK + tl.arange(0, BLOCK)
+    lane = tl.arange(0, BLOCK)
+    offs = pid * BLOCK + lane
     live = offs < n_points
+
+    # One scratch address PER LANE, not one shared slot.
+    #
+    # `tl.atomic_cas` takes no mask, so a lane that has already resolved still
+    # issues a CAS somewhere. Aiming them all at a single slot serialises the
+    # entire grid on one address: measured 10.7 ms with a shared slot against
+    # 1.7 ms with a region, a 5.9x difference, on top of the linear cost of the
+    # fixed probe bound. See tools/profile_a5_alloc.py.
+    my_scratch = scratch_base + lane
 
     px = tl.load(positions_ptr + offs * 3 + 0, mask=live, other=0.0)
     py = tl.load(positions_ptr + offs * 3 + 1, mask=live, other=0.0)
@@ -170,14 +180,14 @@ def tsdf_alloc_kernel(
             # Resolved lanes are aimed at the scratch slot, whose key can never
             # equal `want` and can never be EMPTY. tl.atomic_cas takes no mask,
             # so this is the only way to make a lane inert.
-            eff = tl.where(done, scratch_slot, slot)
+            eff = tl.where(done, my_scratch, slot)
             key = tl.load(table_i64 + eff * 2)
 
             hit = (key == want) & (~done)
             done = done | hit
 
             empty = (key == EMPTY_KEY) & (~done)
-            eff_cas = tl.where(empty, slot, scratch_slot)
+            eff_cas = tl.where(empty, slot, my_scratch)
             cmp = tl.full((BLOCK,), EMPTY_KEY, tl.int64)
             old = tl.atomic_cas(table_i64 + eff_cas * 2, cmp, want)
 
