@@ -177,6 +177,21 @@ int main(int argc, char** argv) {
     const float voxel = 0.01f;
     const float R = 0.5f;
 
+    // Spin rather than yield while waiting on the device.
+    //
+    // By default the driver spins briefly and then blocks on an OS primitive.
+    // When it blocks, scheduler wakeup latency of roughly 130 us lands inside
+    // the measurement, and it lands unevenly: an arm whose host path returns
+    // quickly keeps the driver spinning, while one that does a little host work
+    // after the launch gives the GPU time to go idle and is more likely to
+    // yield. That produced a spurious 4x tail on arm A4's allocate (p50 0.052,
+    // p95 0.187) which probe_a4_tail showed was entirely in the wait: the
+    // kernel itself was flat at 0.050 ms and the launch call took 2 us.
+    //
+    // Spinning costs a busy core, which is the right trade for a benchmark.
+    // Must be set before any context exists.
+    const cudaError_t flag_rc = cudaSetDeviceFlags(cudaDeviceScheduleSpin);
+
     std::printf("=== TSDF fusion arm timing ===\n");
     cudaDeviceProp prop{};
     cudaGetDeviceProperties(&prop, 0);
@@ -184,6 +199,8 @@ int main(int argc, char** argv) {
                 prop.minor, reps, warmup);
     std::printf("  clocks/thermals are LOGGED, not pinned: nvidia-smi -lgc needs root\n");
     std::printf("  arm order is INTERLEAVED and rotated per repetition\n");
+    std::printf("  device sync policy: requested SPIN -> %s\n",
+                flag_rc == cudaSuccess ? "applied" : cudaGetErrorName(flag_rc));
     std::printf("  state at start: %s\n", gpu_state().c_str());
 
     const long busy = other_process_mib();
