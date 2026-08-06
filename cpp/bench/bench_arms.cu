@@ -31,6 +31,20 @@
 //     significant GPU memory. A FoundationStereo job sharing the device once
 //     made arm A3 measure 4.455 ms against its true 0.044 ms, a 100x error
 //     that looked like a plausible result.
+//   * **Amortised launches.** Each timed window contains BATCH launches rather
+//     than one, and the result is divided by BATCH. Timing a single launch
+//     measures the host's wait for completion as much as the kernel: the
+//     driver spins briefly then blocks, and the scheduler wakeup of ~130 us
+//     lands unevenly across arms depending on how much host work each does
+//     after enqueuing. That produced a spurious 4x tail on arm A4's allocate
+//     which bench/probe_a4_tail.cu showed was entirely in the wait, with the
+//     kernel flat at 0.050 ms. Batching amortises one completion over BATCH
+//     kernels, so the measurement is steady-state throughput rather than
+//     per-launch latency.
+//
+//     Allocate needs BATCH DISTINCT volumes: after the first launch the table
+//     is already populated, so re-launching into the same volume would measure
+//     a lookup-only fast path. The volumes are reset outside the timed window.
 //
 // Timing method: CUDA events around GPU stages, steady_clock around CPU ones.
 // Launches are asynchronous, so every measurement synchronises; without that a
@@ -230,28 +244,32 @@ int main(int argc, char** argv) {
     int32_t expect_blocks = -1;
     std::vector<float> mesh_buf((size_t)(4 << 20) * 6);
 
-    // ---- GPU arms, interleaved --------------------------------------------
+    // ---- GPU arms, interleaved, batched -----------------------------------
     //
-    // One repetition runs every arm once. The starting arm rotates, so no arm
-    // is systematically measured on a cold or a hot device. Samples are kept
-    // per (arm, stage) and summarised afterwards.
+    // One repetition runs every arm once; the starting arm rotates so no arm is
+    // systematically measured on a cold or hot device. Each timed window holds
+    // BATCH launches, divided out afterwards.
     {
-        OsnTsdfCudaVolume* v3 = osn_tsdf_cuda_create(voxel, cfg.pool_capacity_blocks, -1.0f, 32.0f);
-        OsnTsdfCudaVolume* v4 = nullptr;
-        OsnTsdfCudaVolume* v5 = nullptr;
-        OsnTsdfDeviceView dv4{}, dv5{};
-        OsnTritonKernel* k_upd = nullptr;
-        OsnTritonKernel* k_alloc = nullptr;
+        const int BATCH = getenv("OSN_BENCH_BATCH") ? std::atoi(getenv("OSN_BENCH_BATCH")) : 8;
+        std::printf("  batch: %d launches per timed window\n\n", BATCH);
+
+        // Volumes are shared across arms and reset before each arm's window, so
+        // the device memory cost is BATCH volumes rather than BATCH per arm.
+        std::vector<OsnTsdfCudaVolume*> vols((size_t)BATCH, nullptr);
+        std::vector<OsnTsdfDeviceView> dvs((size_t)BATCH);
+        for (int j = 0; j < BATCH; ++j) {
+            vols[j] = osn_tsdf_cuda_create(voxel, cfg.pool_capacity_blocks, -1.0f, 32.0f);
+            if (!vols[j]) { std::printf("  volume %d allocation failed\n", j); return 3; }
+            osn_tsdf_cuda_device_view(vols[j], &dvs[j]);
+        }
 
 #ifdef OSN_TSDF_HAVE_A4
         const bool have_a4 = (a4_init() == 0);
-        if (have_a4) {
-            v4 = osn_tsdf_cuda_create(voxel, cfg.pool_capacity_blocks, -1.0f, 32.0f);
-            osn_tsdf_cuda_device_view(v4, &dv4);
-        }
 #else
         const bool have_a4 = false;
 #endif
+        OsnTritonKernel* k_upd = nullptr;
+        OsnTritonKernel* k_alloc = nullptr;
 #ifdef HAVE_A5
         const std::string dir = getenv("OSN_TRITON_DIR") ? getenv("OSN_TRITON_DIR")
                                                          : "../artifacts/triton";
@@ -260,81 +278,93 @@ int main(int argc, char** argv) {
         k_alloc = osn_triton_load((dir + "/" + OSN_TRITON_ALLOC_NAME + ".cubin").c_str(),
                                   OSN_TRITON_ALLOC_NAME);
         const bool have_a5 = (k_upd && k_alloc);
-        if (have_a5) {
-            v5 = osn_tsdf_cuda_create(voxel, cfg.pool_capacity_blocks, -1.0f, 32.0f);
-            osn_tsdf_cuda_device_view(v5, &dv5);
-        }
 #else
         const bool have_a5 = false;
 #endif
 
-        // [arm][stage] -> samples. Stages: 0 allocate, 1 update, 2 extract.
+        auto reset_all = [&]() {
+            for (int j = 0; j < BATCH; ++j) osn_tsdf_cuda_reset(vols[j]);
+        };
+        auto launch_alloc = [&](int arm, int j) {
+            if (arm == 0) osn_tsdf_cuda_allocate_blocks(vols[j], d_pts, n, 0, 0, 0, 0);
+#ifdef OSN_TSDF_HAVE_A4
+            else if (arm == 1) a4_allocate_blocks(&dvs[j], (uint64_t)d_pts, n, 0, 0, 0, 0);
+#endif
+#ifdef HAVE_A5
+            else if (arm == 2) {
+                const int32_t hm = (int32_t)dvs[j].hash_mask;
+                const float z = 0.0f;
+                const uint32_t grid = (uint32_t)((n + OSN_TRITON_BLOCK - 1) / OSN_TRITON_BLOCK);
+                void* args[] = {(void*)&d_pts, (void*)&dvs[j].table, (void*)&dvs[j].table,
+                                (void*)&dvs[j].block_count, (void*)&dvs[j].block_coord,
+                                (void*)&dvs[j].drop_count, (void*)&dvs[j].scratch_base,
+                                (void*)&n, (void*)&hm, (void*)&dvs[j].pool_capacity,
+                                (void*)&dvs[j].voxel_size_m, (void*)&dvs[j].trunc_m,
+                                (void*)&z, (void*)&z, (void*)&z, (void*)&z};
+                osn_triton_launch(k_alloc, grid, OSN_TRITON_ALLOC_BLOCK_DIM_X,
+                                  OSN_TRITON_ALLOC_SHARED, args, 16);
+            }
+#endif
+        };
+        auto launch_update = [&](int arm, int j) {
+            if (arm == 0) osn_tsdf_cuda_update_voxels(vols[j], d_pts, n, 0, 0, 0, 0);
+#ifdef OSN_TSDF_HAVE_A4
+            else if (arm == 1) a4_update_voxels(&dvs[j], (uint64_t)d_pts, n, 0, 0, 0, 0);
+#endif
+#ifdef HAVE_A5
+            else if (arm == 2) {
+                const int32_t hm = (int32_t)dvs[j].hash_mask;
+                const float z = 0.0f;
+                const uint32_t grid = (uint32_t)((n + OSN_TRITON_BLOCK - 1) / OSN_TRITON_BLOCK);
+                void* args[] = {(void*)&d_pts, (void*)&dvs[j].table, (void*)&dvs[j].table,
+                                (void*)&dvs[j].tsdf, (void*)&dvs[j].weight, (void*)&dvs[j].r,
+                                (void*)&dvs[j].g, (void*)&dvs[j].b, (void*)&n, (void*)&hm,
+                                (void*)&dvs[j].voxel_size_m, (void*)&dvs[j].trunc_m,
+                                (void*)&dvs[j].weight_cap,
+                                (void*)&z, (void*)&z, (void*)&z, (void*)&z};
+                osn_triton_launch(k_upd, grid, OSN_TRITON_UPDATE_BLOCK_DIM_X,
+                                  OSN_TRITON_UPDATE_SHARED, args, 17);
+            }
+#endif
+        };
+
         std::vector<double> smp[3][3];
         const char* arm_name[3] = {"A3-cuda", "A4-rust", "A5-triton"};
         GpuTimer t;
 
         for (int i = 0; i < warmup + reps; ++i) {
-            // Rotate the starting arm so ordering cannot bias any one of them.
             for (int k = 0; k < 3; ++k) {
                 const int arm = (i + k) % 3;
                 if (arm == 1 && !have_a4) continue;
                 if (arm == 2 && !have_a5) continue;
 
-                double a = 0, u = 0, e = -1;
+                // allocate: BATCH launches into BATCH empty volumes.
+                reset_all();
+                cudaDeviceSynchronize();
+                t.start();
+                for (int j = 0; j < BATCH; ++j) launch_alloc(arm, j);
+                const double a = t.stop_ms() / BATCH;
+
+                // update: the volumes are now allocated, so BATCH updates all
+                // take the same path. Accumulating into an already-updated
+                // volume is exactly what a multi-frame integrate does.
+                t.start();
+                for (int j = 0; j < BATCH; ++j) launch_update(arm, j);
+                const double u = t.stop_ms() / BATCH;
+
+                double e = -1;
                 if (arm == 0) {
-                    osn_tsdf_cuda_reset(v3);
+                    // Extraction is shared across the GPU arms and does not
+                    // mutate the volume, so BATCH extracts of one volume are
+                    // equivalent and can share a window.
                     t.start();
-                    osn_tsdf_cuda_allocate_blocks(v3, d_pts, n, 0, 0, 0, 0);
-                    a = t.stop_ms();
-                    t.start();
-                    osn_tsdf_cuda_update_voxels(v3, d_pts, n, 0, 0, 0, 0);
-                    u = t.stop_ms();
-                    // Extraction is shared across the GPU arms, so it is
-                    // measured once rather than attributed to each of them.
-                    t.start();
-                    osn_tsdf_cuda_extract_mesh(v3, mesh_buf.data(), nullptr, 4 << 20, 0.5f, 0.0f);
-                    e = t.stop_ms();
-                    if (expect_blocks < 0) expect_blocks = osn_tsdf_cuda_block_count(v3);
+                    for (int j = 0; j < BATCH; ++j)
+                        osn_tsdf_cuda_extract_mesh(vols[0], mesh_buf.data(), nullptr, 4 << 20,
+                                                   0.5f, 0.0f);
+                    e = t.stop_ms() / BATCH;
+                    if (expect_blocks < 0) expect_blocks = osn_tsdf_cuda_block_count(vols[0]);
                 }
-#ifdef OSN_TSDF_HAVE_A4
-                else if (arm == 1) {
-                    osn_tsdf_cuda_reset(v4);
-                    t.start();
-                    a4_allocate_blocks(&dv4, (uint64_t)d_pts, n, 0, 0, 0, 0);
-                    a = t.stop_ms();
-                    t.start();
-                    a4_update_voxels(&dv4, (uint64_t)d_pts, n, 0, 0, 0, 0);
-                    u = t.stop_ms();
-                }
-#endif
-#ifdef HAVE_A5
-                else if (arm == 2) {
-                    const int32_t hm = (int32_t)dv5.hash_mask;
-                    const float zero = 0.0f;
-                    const uint32_t grid = (uint32_t)((n + OSN_TRITON_BLOCK - 1) / OSN_TRITON_BLOCK);
-                    void* aargs[] = {(void*)&d_pts, (void*)&dv5.table, (void*)&dv5.table,
-                                     (void*)&dv5.block_count, (void*)&dv5.block_coord,
-                                     (void*)&dv5.drop_count, (void*)&dv5.scratch_base,
-                                     (void*)&n, (void*)&hm, (void*)&dv5.pool_capacity,
-                                     (void*)&dv5.voxel_size_m, (void*)&dv5.trunc_m,
-                                     (void*)&zero, (void*)&zero, (void*)&zero, (void*)&zero};
-                    void* uargs[] = {(void*)&d_pts, (void*)&dv5.table, (void*)&dv5.table,
-                                     (void*)&dv5.tsdf, (void*)&dv5.weight,
-                                     (void*)&dv5.r, (void*)&dv5.g, (void*)&dv5.b,
-                                     (void*)&n, (void*)&hm, (void*)&dv5.voxel_size_m,
-                                     (void*)&dv5.trunc_m, (void*)&dv5.weight_cap,
-                                     (void*)&zero, (void*)&zero, (void*)&zero, (void*)&zero};
-                    osn_tsdf_cuda_reset(v5);
-                    t.start();
-                    osn_triton_launch(k_alloc, grid, OSN_TRITON_ALLOC_BLOCK_DIM_X,
-                                      OSN_TRITON_ALLOC_SHARED, aargs, 16);
-                    a = t.stop_ms();
-                    t.start();
-                    osn_triton_launch(k_upd, grid, OSN_TRITON_UPDATE_BLOCK_DIM_X,
-                                      OSN_TRITON_UPDATE_SHARED, uargs, 17);
-                    u = t.stop_ms();
-                }
-#endif
+
                 if (i >= warmup) {
                     smp[arm][0].push_back(a);
                     smp[arm][1].push_back(u);
@@ -347,9 +377,7 @@ int main(int argc, char** argv) {
         const char* stage_name[3] = {"allocate", "update", "extract"};
         for (int arm = 0; arm < 3; ++arm) {
             if (smp[arm][0].empty()) continue;
-            int32_t nb = arm == 0 ? osn_tsdf_cuda_block_count(v3)
-                                  : (arm == 1 ? (v4 ? osn_tsdf_cuda_block_count(v4) : -1)
-                                              : (v5 ? osn_tsdf_cuda_block_count(v5) : -1));
+            const int32_t nb = osn_tsdf_cuda_block_count(vols[0]);
             std::printf("--- %s (blocks %d%s) ---\n", arm_name[arm], nb,
                         (nb == expect_blocks || nb < 0) ? "" : "  MISMATCH");
             for (int st = 0; st < 3; ++st)
@@ -357,9 +385,6 @@ int main(int argc, char** argv) {
                     emit(rows, arm_name[arm], stage_name[st], summarize(smp[arm][st]), g);
         }
 
-        // Drift self-check. With interleaving, an arm's first half and second
-        // half should agree; a systematic gap means ordering still biases the
-        // result and the numbers should not be quoted.
         std::printf("\n  drift check (per-arm first-half vs second-half p50, update stage):\n");
         for (int arm = 0; arm < 3; ++arm) {
             auto& v = smp[arm][1];
@@ -373,9 +398,7 @@ int main(int argc, char** argv) {
         }
         std::printf("\n");
 
-        osn_tsdf_cuda_destroy(v3);
-        if (v4) osn_tsdf_cuda_destroy(v4);
-        if (v5) osn_tsdf_cuda_destroy(v5);
+        for (auto* v : vols) if (v) osn_tsdf_cuda_destroy(v);
         if (k_upd) osn_triton_unload(k_upd);
         if (k_alloc) osn_triton_unload(k_alloc);
     }
