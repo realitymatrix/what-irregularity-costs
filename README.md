@@ -30,10 +30,14 @@ accumulation, no regular tile structure anywhere. NVIDIA has published no
 comparison of `cuda-oxide`, their Rust-to-PTX compiler, against CUDA C++;
 their own comparison appendix is an empty placeholder.
 
-The strongest material is **what each language cannot express**: Triton has no
-per-lane early exit and no `mask` on `tl.atomic_cas`; `cuda-oxide` is
-constrained by libNVVM rejecting atomic loads, stores and fences. Each was hit
-while implementing the algorithm, not constructed to make a point.
+The answer has two axes. **Performance:** the arms are not equally fast on the
+same algorithm over the same memory, and each gap is pursued to a mechanism or
+reported as unattributed. Triton's 73x on allocate is fully explained by two
+things the language cannot express; Rust's 1.22x on update tracks a 1.62x SASS
+instruction count; Rust's 1.64x on allocate is unattributed at instruction
+parity and says so. **Expressiveness:** what each language cannot say, which is
+where several of those gaps come from, so the numbers are explained rather than
+just reported.
 
 **This is a reframing.** The project was originally scoped around a crossover
 between depth and fusion cost. Measured across an 11.8x depth range, fusion is

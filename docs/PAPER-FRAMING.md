@@ -14,6 +14,10 @@ available depth model, at fewer pixels than the dataset's native resolution,
 still costs 48x the fastest fusion arm.
 
 The language comparison was always the more novel half. It is now the paper.
+The performance comparison is not diminished by this; it is promoted. It stops
+being an input to a budget argument and becomes the result itself, which is
+also what forces the attribution work: a ratio that was only ever feeding a
+crossover could be reported bare, and a ratio that IS the paper cannot.
 
 ## The claim
 
@@ -26,37 +30,18 @@ compared on: an open-addressed hash table with compare-exchange insertion,
 per-lane variable probe depth, scattered atomic accumulation, and no regular
 tile structure anywhere.
 
-Three contributions, in decreasing order of confidence:
+The question is answered on two axes, and both are load-bearing:
 
-### 1. Expressiveness: what each language cannot say
+* **Performance.** The three arms are not equally fast on the same algorithm
+  over the same memory, and the differences are large enough to matter to
+  someone choosing a language. Measuring them, and attributing them to a
+  mechanism, is the primary result.
+* **Expressiveness.** What each language cannot say. This is not a separate
+  paper: several of the performance gaps ARE expressiveness costs made
+  numerical, which is what lets the measurement be explained rather than just
+  reported.
 
-This is the strongest material because it is qualitative, reproducible, and
-absent from the literature. Each finding below was hit while implementing the
-same algorithm, not constructed to make a point.
-
-**Triton** cannot express per-lane early exit. A probe loop must run to a fixed
-bound with a `done` mask, so every lane pays worst-case probe depth. Measured:
-cost is linear in the bound, 8.38x for an 8x bound. And `tl.atomic_cas` takes
-no `mask`, unlike `tl.atomic_add`, so lanes that have already resolved cannot
-be masked off; they must be aimed at a scratch address instead. Pointing them
-all at one slot serialises the grid: 10.7 ms with a shared slot against 1.7 ms
-with a per-lane region, a 5.9x difference. Both effects compound, and neither
-is visible from a throughput table.
-
-**cuda-oxide** (Rust to PTX) is constrained by libNVVM rather than by Rust.
-libNVVM rejects atomic loads and stores outright, accepting only read-modify-
-write, and rejects LLVM `fence`, so Acquire/Release orderings on RMW operations
-are unusable. Both restrictions force the code back onto exactly the
-constructs CUDA C++ uses: volatile reads and an explicit `threadfence`. The
-default LLVM path accepts what libNVVM rejects, so code can build in one mode
-and fail under `--materialize-cubin`.
-
-**A compiler crash with no source location** is a materially worse developer
-experience than a type error. Issuing a Triton atomic on a scalar pointer
-rather than a tensor of pointers aborts the compiler with an MLIR assertion,
-`only integers and floats have a bitwidth`.
-
-### 2. Performance, with attribution where it exists
+### 1. Performance, and why each arm lands where it does
 
 Integrate path only; extraction is shared across GPU arms (docs/ARM-SCOPE.md).
 Batched, interleaved, exclusive GPU, p50 ms, 320k points at 0.01 m voxel:
@@ -67,14 +52,59 @@ Batched, interleaved, exclusive GPU, p50 ms, 320k points at 0.01 m voxel:
 | A4 Rust / cuda-oxide | 0.046 | 0.303 |
 | A5 Triton | 2.040 | 0.352 |
 
-Attribution so far, in docs/A3-A4-GAP.md: A4's 1.22x on update tracks a 1.62x
-SASS instruction count. Register pressure is refuted (A4 uses fewer registers
-and neither spills), `f32::clamp` is refuted, and `read_volatile` on the hash
-key is refuted (identical SASS). The 1.64x on allocate remains unattributed at
-1.02x instruction parity, with memory-ordering scope the surviving candidate.
+Three findings, at three different levels of explanation.
+
+**Triton's 73x on allocate is fully attributed, and it is a language cost.**
+Both mechanisms are confirmed and they compound. No per-lane early exit means
+the probe loop runs to a fixed bound, so cost is linear in that bound: 8.38x
+for an 8x bound. And `tl.atomic_cas` takes no `mask`, so resolved lanes cannot
+be masked off and must be aimed at a scratch address; pointing them at one
+shared slot serialises the grid, 10.7 ms against 1.7 ms with a per-lane region,
+5.9x. Replacing the CAS with a plain load leaves 0.090 ms, 113x less. This is
+the cleanest result in the project: a measured slowdown traced to two specific
+things the language cannot express.
+
+**Rust's 1.22x on update is attributed to code generation.** It tracks a 1.62x
+SASS instruction count, 504 against 312, concentrated in LOP3, FFMA, FSETP and
+BRA. The sub-proportional runtime is consistent with a kernel partly bound by
+its atomics. Refuted along the way: register pressure (A4 uses *fewer*
+registers, 34 against 40, and neither spills), `f32::clamp` NaN semantics (zero
+SASS change), and `read_volatile` on the hash key (byte-identical SASS).
+
+**Rust's 1.64x on allocate is NOT attributed, and is reported as such.** The
+two kernels are at 1.02x instruction parity, 528 against 520, so instruction
+count explains the update gap and explicitly fails to explain this one. The
+surviving candidate is memory-ordering scope: A4 issues six system-scope
+strongly-ordered loads against A3's two, while issuing fewer atomics. That is
+suggestive, not proof, and confirming it needs GPU counters.
 
 Reporting a ratio without a mechanism is what makes most language comparisons
-unciteable. Any number that stays unattributed should be reported as such.
+unciteable. Two of these three have one; the third says so.
+
+### 2. Expressiveness: what each language cannot say
+
+The qualitative half, and absent from the literature. Each finding was hit
+while implementing the same algorithm, not constructed to make a point.
+
+**Triton** cannot express per-lane early exit, and `tl.atomic_cas` takes no
+`mask` unlike `tl.atomic_add`. Both are priced above; they are listed again
+here because the pattern generalises beyond TSDF to any irregular kernel with
+variable per-lane work.
+
+**cuda-oxide** (Rust to PTX) is constrained by libNVVM rather than by Rust.
+libNVVM rejects atomic loads and stores outright, accepting only read-modify-
+write, and rejects LLVM `fence`, so Acquire/Release orderings on RMW operations
+are unusable. Both restrictions force the code back onto exactly the
+constructs CUDA C++ uses: volatile reads and an explicit `threadfence`. The
+default LLVM path accepts what libNVVM rejects, so code can build in one mode
+and fail under `--materialize-cubin`. The irony is worth stating: the safety
+argument for Rust on the GPU is weakened when the backend removes the ordering
+primitives the safe abstractions are built on.
+
+**A compiler crash with no source location** is a materially worse developer
+experience than a type error. Issuing a Triton atomic on a scalar pointer
+rather than a tensor of pointers aborts the compiler with an MLIR assertion,
+`only integers and floats have a bitwidth`.
 
 ### 3. Methodology, and a negative result on budget share
 
@@ -83,12 +113,15 @@ confident wrong number, including a 40% workload asymmetry that made Rust look
 2x faster than CUDA, and a batching change that reversed an earlier
 "A3 and A4 are identical" claim. These are worth a section, because a reader's
 first question about any language comparison is whether the comparison was
-fair.
+fair, and because two of the seven errors would have produced a *reversed*
+ranking rather than merely a wrong magnitude.
 
 The dead crossover becomes a secondary result rather than being buried: fusion
 backend choice is worth between 0.2% and 2% of a stereo reconstruction
 pipeline. That tells a practitioner where not to spend effort, which is what a
-latency-budget paper should do.
+latency-budget paper should do. It also bounds the performance result honestly:
+the ranking is real and attributable, and in this particular pipeline it is
+not what you should optimise first.
 
 ## What the depth stage is now for
 
