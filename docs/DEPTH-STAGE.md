@@ -87,3 +87,56 @@ Engines are architecture-specific and are not committed. Build with:
 FP16 throughout, matching how both models are characterised upstream. The
 engine must be built on the same architecture it runs on: a PTX-JIT fallback
 would reintroduce exactly the confound the fusion arms were careful to avoid.
+
+
+## First measurement, and what it does to the crossover claim
+
+Fast-FoundationStereo, iters=4, 320x736, FP16, sm_120, engine built locally:
+
+    p50 13.358 ms   p95 13.708 ms   p99 13.854 ms   min 13.042 ms   (n=50)
+
+Against the fusion arms (allocate + update, batched, same GPU):
+
+| arm | fusion ms | depth ms | fusion share |
+|---|---|---|---|
+| A3 cuda | 0.277 | 13.358 | **2.0%** |
+| A4 rust | 0.347 | 13.358 | 2.5% |
+| A5 triton | 2.392 | 13.358 | 15.2% |
+
+**This is evidence against the project's headline claim.** The crossover was
+stated as: with a heavyweight depth model the fusion backend is irrelevant, but
+swap in a real-time model and fusion becomes the bottleneck. Here the
+*real-time* model already costs 48x the fastest fusion arm. Fusion is 2% of the
+pipeline, and the entire spread between the best and worst fusion arm is 15% of
+end-to-end.
+
+Caveats, none of which look large enough to rescue the claim as stated:
+
+* iters=4 is the fastest Fast-FoundationStereo variant; iters=8 is slower.
+* 320x736 is 235k pixels against TartanAir's 640x640 = 410k, so fusion at
+  matched resolution would be somewhat *cheaper*, not dearer.
+* The 13.4 ms includes a host synchronise, worth roughly 0.13 ms at worst.
+* FoundationStereo, the accuracy arm, has 11x the node count and will be far
+  slower still, pushing fusion's share toward noise.
+
+So the honest reading is that a crossover does not occur at this scale, and the
+paper should not promise one. Three ways forward, in order of how much they
+preserve the original framing:
+
+1. **Find where the crossover actually is, if anywhere.** Fusion cost scales
+   with points and scene extent; depth cost is fixed per frame. Multi-frame
+   sequences with a growing volume, larger resolutions, and the extraction and
+   eviction stages all push in fusion's favour. Extraction alone is already
+   1.8 ms, an order of magnitude above integrate.
+2. **Reframe as a negative result.** "Fusion backend choice is worth 2% of a
+   stereo reconstruction pipeline, and here is the measurement that shows it"
+   is a defensible systems finding, and more useful to a practitioner than a
+   crossover that only appears under contrived conditions.
+3. **Keep the language comparison as the primary contribution.** A3 vs A4 vs A5
+   stands on its own: it is the comparison NVIDIA has not published, it is
+   backed by correctness triangulation, and it does not depend on the depth
+   stage at all.
+
+None of these is chosen yet. The decision needs the FoundationStereo engine and
+a multi-frame sequence before it is well-founded, since a single frame of one
+model at one resolution is a thin basis for abandoning the framing.
