@@ -28,3 +28,5 @@ captures/
 artifacts/
 cpp/build/
 crates/tsdf-rust-cuda/target/
+
+results/
