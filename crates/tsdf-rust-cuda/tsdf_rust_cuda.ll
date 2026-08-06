@@ -572,7 +572,7 @@ bb0:
   %v31 = and i32 %v30, %v6
   br label %bb1
 bb1:
-  %v32 = phi i32 [ 0, %bb0 ], [ %v48, %bb6 ]
+  %v32 = phi i32 [ 0, %bb0 ], [ %v49, %bb6 ]
   %v33 = icmp ult i32 %v32, %v22
   %v34 = xor i1 %v33, 1
   br i1 %v34, label %bb10, label %bb2
@@ -585,45 +585,43 @@ bb2:
   %v40 = getelementptr inbounds i64, ptr %v39, i64 1
   %v41 = bitcast ptr %v40 to ptr
   %v42 = bitcast ptr %v39 to ptr
-  %v43 = load volatile i64, ptr %v42, align 8
-  br label %bb13
+  %v43 = load i64, ptr %v42, align 8
+  %v44 = icmp eq i64 %v43, 18446744073709551615
+  br i1 %v44, label %bb3, label %bb4
 bb3:
   br label %bb11
 bb4:
-  %v44 = icmp eq i64 %v43, %v21
-  %v45 = xor i1 %v44, 1
-  br i1 %v45, label %bb6, label %bb5
+  %v45 = icmp eq i64 %v43, %v21
+  %v46 = xor i1 %v45, 1
+  br i1 %v46, label %bb6, label %bb5
 bb5:
-  %v46 = bitcast ptr %v40 to ptr
-  %v47 = load volatile i32, ptr %v46, align 4
-  br label %bb14
+  %v47 = bitcast ptr %v40 to ptr
+  %v48 = load volatile i32, ptr %v47, align 4
+  br label %bb13
 bb6:
-  %v48 = add i32 %v32, 1
+  %v49 = add i32 %v32, 1
   br label %bb1
 bb7:
-  %v49 = phi i32 [ %v47, %bb14 ], [ %v52, %bb15 ]
-  %v50 = icmp slt i32 %v49, 0
-  %v51 = xor i1 %v50, 1
-  br i1 %v51, label %bb9, label %bb8
+  %v50 = phi i32 [ %v48, %bb13 ], [ %v53, %bb14 ]
+  %v51 = icmp slt i32 %v50, 0
+  %v52 = xor i1 %v51, 1
+  br i1 %v52, label %bb9, label %bb8
 bb8:
-  %v52 = load volatile i32, ptr %v46, align 4
-  br label %bb15
+  %v53 = load volatile i32, ptr %v47, align 4
+  br label %bb14
 bb9:
   br label %bb11
 bb10:
   br label %bb12
 bb11:
-  %v53 = phi i32 [ 4294967295, %bb3 ], [ %v49, %bb9 ]
+  %v54 = phi i32 [ 4294967295, %bb3 ], [ %v50, %bb9 ]
   br label %bb12
 bb12:
-  %v54 = phi i32 [ 4294967295, %bb10 ], [ %v53, %bb11 ]
-  ret i32 %v54
+  %v55 = phi i32 [ 4294967295, %bb10 ], [ %v54, %bb11 ]
+  ret i32 %v55
 bb13:
-  %v55 = icmp eq i64 %v43, 18446744073709551615
-  br i1 %v55, label %bb3, label %bb4
-bb14:
   br label %bb7
-bb15:
+bb14:
   br label %bb7
 }
 

@@ -49,6 +49,19 @@ A 1.62x instruction count against a 1.22x runtime is consistent with a kernel
 that is partly bound by its atomics rather than by issue rate: extra
 instructions cost, but less than proportionally.
 
+## Refuted: `read_volatile` on the hash key
+
+A4 read the hash key with `read_volatile()` where A3 uses a plain load,
+reserving `volatile` for the `block_idx` spin. That looked decisive: the probe
+loop is the hottest path in the allocate kernel, and an uncached load there
+would cost exactly the kind of time the gap represents.
+
+Changing it to a plain `read()` produced **byte-identical SASS**: 528
+instructions before and after, with no opcode counts changed at all. LLVM and
+NVVM generate the same code either way here, so the marking was never the
+cause. The change is kept because a plain read is the correct expression of the
+intent, but it buys nothing.
+
 ## Refuted: `f32::clamp` NaN semantics
 
 Rust's `clamp` is NaN-propagating and asserts its bounds, where CUDA's
@@ -73,8 +86,41 @@ allocate gap. Something else dominates there. Candidates not yet tested:
 * **Warp divergence.** A4 has +8 branches in allocate; if they sit inside the
   probe loop the cost is multiplied by probe depth.
 
-`ncu` is installed and is the right next tool: warp stall reasons would
-separate a spin-wait explanation from a memory one in a single run.
+### ncu is blocked on this machine
+
+`ncu` is installed but refuses with `ERR_NVGPUCTRPERM`: access to GPU
+performance counters is restricted to administrators. Lifting it needs root
+either way:
+
+    # /etc/modprobe.d/nvidia-profiling.conf
+    options nvidia NVreg_RestrictProfilingToAdminUsers=0
+    # then reboot
+
+Until then, warp stall reasons, memory throughput and achieved occupancy are
+all unavailable, and the attribution is limited to static analysis of the
+generated code.
+
+### Suggestive, not conclusive: memory-ordering scope
+
+The SASS memory instructions differ in scope, and the scopes are not cosmetic:
+`STRONG.SYS` is a system-scope strongly-ordered access, which is materially
+more expensive than a plain or GPU-scope one.
+
+| kernel | plain LDG.E | LDG.E.SYS | LDG.E(.64).STRONG.SYS | atomics |
+|---|---|---|---|---|
+| A3 allocate | 0 | 6 | 2 | 10 |
+| A4 allocate | 3 | 0 | 6 | 7 |
+
+A4 issues **six** system-scope strongly-ordered loads against A3's **two**,
+while issuing *fewer* atomics. That is the clearest asymmetry found so far and
+it points at how `cuda-oxide` lowers Rust's volatile and atomic accesses versus
+how nvcc lowers CUDA's `volatile` qualifier.
+
+It is not proof. Counting instructions says nothing about how often each is
+executed or how long each stalls, and the allocate kernel's cost is dominated
+by contention that a static count cannot see. Confirming it needs the counters
+above, or a variant experiment that removes the remaining `read_volatile` calls
+entirely and accepts the correctness loss to isolate their cost.
 
 ## What this does and does not license saying
 

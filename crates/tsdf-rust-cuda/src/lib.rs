@@ -98,11 +98,18 @@ mod kernels {
                 // Entry is 16 bytes: key at +0, block_idx at +8.
                 let key_ptr = table.add(slot * 2);
                 let idx_ptr = key_ptr.add(1) as *mut i32;
-                // Plain volatile read, matching A3. libNVVM supports atomic RMW
-            // but rejects atomic loads/stores outright, and A3 reads the key
-            // plainly too, so this keeps the arms identical rather than giving
-            // one of them stronger ordering than the other.
-            let key = key_ptr.read_volatile();
+                // PLAIN read, not volatile. The probe visits a different slot each
+            // iteration, so nothing can be hoisted, and a volatile load forces
+            // an uncached access on the hottest path in the kernel. A3 reads
+            // the key plainly for exactly this reason and reserves volatile for
+            // the block_idx spin below, which does re-read one address and
+            // therefore must observe another thread's publication.
+            //
+            // Measured: making this volatile cost the allocate stage 1.64x
+            // against A3 at identical SASS instruction counts, which is what
+            // sent the attribution hunting for occupancy and instruction mix
+            // before the asymmetry was spotted.
+            let key = key_ptr.read();
                 if key == EMPTY_KEY {
                     return -1;
                 }
