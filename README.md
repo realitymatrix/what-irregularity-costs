@@ -20,15 +20,27 @@ harness.
 
 ## The claim
 
-The interesting result is a crossover, not a leaderboard. With a heavyweight
-depth model in front, the depth stage dominates and the fusion backend is
-irrelevant. Swap in a real-time depth model and fusion becomes the bottleneck,
-at which point backend choice decides whether the pipeline hits frame rate.
+**What does it cost to express an irregular, atomics-heavy GPU workload in CUDA
+C++, in Rust, and in Triton?**
 
-A second claim emerged during Phase 0: **NVIDIA has published no performance
-comparison of `cuda-oxide` (their Rust-to-PTX compiler) against CUDA C++.**
-Their own comparison appendix is an empty placeholder marked "under
-construction". A rigorous measurement on a real irregular workload is novel.
+A hash-blocked TSDF integrate path is the opposite of the tiled dense linear
+algebra these tools are usually compared on: an open-addressed hash table with
+compare-exchange insertion, per-lane variable probe depth, scattered atomic
+accumulation, no regular tile structure anywhere. NVIDIA has published no
+comparison of `cuda-oxide`, their Rust-to-PTX compiler, against CUDA C++;
+their own comparison appendix is an empty placeholder.
+
+The strongest material is **what each language cannot express**: Triton has no
+per-lane early exit and no `mask` on `tl.atomic_cas`; `cuda-oxide` is
+constrained by libNVVM rejecting atomic loads, stores and fences. Each was hit
+while implementing the algorithm, not constructed to make a point.
+
+**This is a reframing.** The project was originally scoped around a crossover
+between depth and fusion cost. Measured across an 11.8x depth range, fusion is
+0.18% to 2.0% of the pipeline and never approaches being the bottleneck, so
+that claim is dead and survives only as a secondary negative result. See
+[docs/PAPER-FRAMING.md](docs/PAPER-FRAMING.md) and
+[docs/DEPTH-STAGE.md](docs/DEPTH-STAGE.md).
 
 ## Fusion arms
 

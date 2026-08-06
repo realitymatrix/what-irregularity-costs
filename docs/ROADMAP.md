@@ -533,7 +533,17 @@ Learning for CV).
 
 ---
 
-## 4. The paper's claim, revised
+## 4. The paper's claim, REFRAMED 2026-07-30
+
+**Superseded by docs/PAPER-FRAMING.md in the project repo.** The crossover
+claim below is dead: measured across an 11.8x depth range (Fast-FoundationStereo
+13.4 ms, FoundationStereo 157.2 ms), fusion is 0.18% to 2.0% of the pipeline
+and never becomes the bottleneck. The paper is now the language comparison,
+with the budget share as a secondary negative result.
+
+The original framing is kept below for the record.
+
+## 4b. The paper's claim, as originally revised
 
 The scope doc's crossover claim stands, but a stronger headline emerged: **NVIDIA has
 published no performance comparison of `cuda-oxide` against CUDA C++.** Their own
