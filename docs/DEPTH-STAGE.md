@@ -89,7 +89,7 @@ engine must be built on the same architecture it runs on: a PTX-JIT fallback
 would reintroduce exactly the confound the fusion arms were careful to avoid.
 
 
-## First measurement, and what it does to the crossover claim
+## Both depth arms measured
 
 Fast-FoundationStereo, iters=4, 320x736, FP16, sm_120, engine built locally:
 
@@ -140,3 +140,62 @@ preserve the original framing:
 None of these is chosen yet. The decision needs the FoundationStereo engine and
 a multi-frame sequence before it is well-founded, since a single frame of one
 model at one resolution is a thin basis for abandoning the framing.
+
+
+## FoundationStereo, and the crossover verdict
+
+FoundationStereo `23-51-11`, 480x640, FP16, sm_120. The build expanded 55,047
+ONNX nodes into **134,078 TensorRT layers** and took 258 s, producing an
+818 MB engine.
+
+    p50 157.236 ms   p95 157.576 ms   p99 157.608 ms   min 155.983 ms   (n=30)
+
+### The two arms, against fusion
+
+| depth model | depth | best fusion share | fusion arm spread |
+|---|---|---|---|
+| Fast-FoundationStereo, iters 4, 320x736 | 13.4 ms | 2.03% | 15.5% |
+| FoundationStereo, 23-51-11, 480x640 | 157.2 ms | **0.18%** | 1.3% |
+
+Depth ratio between the arms is **11.8x**, against an ONNX node ratio of
+11.3x. Runtime tracks graph size almost exactly, which is a tidy sanity check
+on both engines: neither is accidentally falling back to a slow path.
+
+### Verdict: the crossover does not occur
+
+The claim was that swapping a heavyweight depth model for a real-time one makes
+fusion the bottleneck. Measured, at both ends of an 11.8x depth range:
+
+* With the heavyweight model, fusion is **0.18%** of the pipeline and the
+  entire spread between the best and worst fusion backend is **1.3%**.
+* With the real-time model, fusion is **2.0%** and the spread is 15.5%.
+
+Fusion never approaches being the bottleneck. The claim as written is not
+supported, and no amount of caveat-hunting rescues it: the fastest available
+depth model, at fewer pixels than the dataset's native resolution, still costs
+48x the fastest fusion arm.
+
+Two things this does NOT invalidate:
+
+1. **The language comparison.** A3 vs A4 vs A5 is measured, correctness-gated
+   and independent of the depth stage. It remains the strongest contribution,
+   and it is still the comparison NVIDIA has not published.
+2. **The result itself.** "Fusion backend choice is worth between 0.2% and 2%
+   of a stereo reconstruction pipeline" is a useful engineering finding,
+   arrived at honestly. It tells a practitioner where not to spend effort,
+   which is what a latency-budget paper should do.
+
+### What could still move the numbers
+
+These are worth measuring before the framing is finalised, not because they are
+likely to rescue the crossover but because they bound it:
+
+* **Extraction, not integrate.** Extraction is 1.825 ms, 6.6x the whole
+  integrate path. Over a sequence it runs once rather than per frame, but on a
+  budget where fusion totals 2 ms it dominates the fusion side.
+* **Scene growth.** Fusion cost scales with points and allocated blocks; depth
+  is fixed per frame. A long sequence with a large volume shifts the ratio, and
+  a single sphere at 320k points is the small end.
+* **A faster depth stage than exists.** The gap is 48x. Closing it needs a
+  depth model roughly two orders of magnitude cheaper than FoundationStereo,
+  which is a different research problem, not a tuning exercise.
