@@ -123,8 +123,10 @@ run. The defect is worth reporting upstream on its own merits.
     no GPU. Without the entry the example still runs, but the regression this
     whole change exists to prevent would be invisible on exactly the runners
     most likely to catch it.
-  - Their process asks for an **issue before the PR**. Not done; the PR is
-    otherwise complete.
+  - Their process asks for an **issue before the PR**. Filed as
+    NVlabs/cuda-oxide#696 using the repo's bug-report template, with the
+    shipped `atomics` example as the reproducer so a maintainer can confirm it
+    without building anything of mine. The PR now opens with `Fixes #696`.
 * Scope grew by one during the work. The shipped `atomics` example turned out
   not to build under `--materialize-cubin` either, failing first on
   `fence syncscope("block") release` -> "Illegal instruction: fence" in
