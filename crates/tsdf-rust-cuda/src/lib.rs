@@ -122,10 +122,21 @@ mod kernels {
                     // SYSTEM-scope strongly-ordered load, ordering against the
                     // host and peer devices. Nothing here needs that: the table
                     // lives in one device's global memory. See docs/A3-A4-GAP.md.
-                    let idx_atomic = DeviceAtomicI32::from_ptr(idx_ptr);
-                    let mut idx = idx_atomic.load(AtomicOrdering::Relaxed);
-                    while idx < 0 {
-                        idx = idx_atomic.load(AtomicOrdering::Relaxed);
+                    // First read PLAIN, retry loop atomic. The index is
+                    // almost always already published, so the common path must
+                    // be a cacheable load: a GPU-scope atomic load has to be
+                    // coherent across SMs and therefore bypasses L1, and paying
+                    // that on every lookup rather than only when actually
+                    // waiting cost 26 points of L1 hit rate (56% -> 30%).
+                    // A stale -1 is harmless; it just enters the loop below,
+                    // where the atomic load does see the publication. This is
+                    // exactly A3's structure.
+                    let mut idx = idx_ptr.read();
+                    if idx < 0 {
+                        let idx_atomic = DeviceAtomicI32::from_ptr(idx_ptr);
+                        while idx < 0 {
+                            idx = idx_atomic.load(AtomicOrdering::Relaxed);
+                        }
                     }
                     return idx;
                 }
@@ -192,9 +203,17 @@ mod kernels {
                     // SYSTEM-scope strongly-ordered load, ordering against the
                     // host and peer devices. Nothing here needs that: the table
                     // lives in one device's global memory. See docs/A3-A4-GAP.md.
-                    let idx_atomic = DeviceAtomicI32::from_ptr(idx_ptr);
-                    let mut idx = idx_atomic.load(AtomicOrdering::Relaxed);
-                    if SPIN {
+                    // First read PLAIN and cacheable, atomic only while
+                    // actually waiting. The index is almost always already
+                    // published, and a GPU-scope atomic load must be coherent
+                    // across SMs so it bypasses L1. Paying that on every lookup
+                    // rather than only when waiting is what collapsed A4's L1
+                    // hit rate. A stale -1 is harmless: it just enters the loop,
+                    // where the atomic load does observe the publication. This
+                    // is A3's structure.
+                    let mut idx = idx_ptr.read();
+                    if SPIN && idx < 0 {
+                        let idx_atomic = DeviceAtomicI32::from_ptr(idx_ptr);
                         while idx < 0 {
                             idx = idx_atomic.load(AtomicOrdering::Relaxed);
                         }
@@ -263,9 +282,10 @@ mod kernels {
                         }
                         Err(actual) => {
                             if actual == want {
-                                let idx_atomic = DeviceAtomicI32::from_ptr(idx_ptr);
-                                let mut idx = idx_atomic.load(AtomicOrdering::Relaxed);
-                                if SPIN {
+                                // Plain first read; see the other spin site.
+                                let mut idx = idx_ptr.read();
+                                if SPIN && idx < 0 {
+                                    let idx_atomic = DeviceAtomicI32::from_ptr(idx_ptr);
                                     while idx < 0 {
                                         idx = idx_atomic.load(AtomicOrdering::Relaxed);
                                     }

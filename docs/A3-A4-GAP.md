@@ -170,6 +170,81 @@ rather than on the memory model: the probe visits a different slot each
 iteration so nothing can be hoisted, and a stale key costs at most one extra
 probe.
 
+### FOUND: two plain reads. Both sites, same mistake.
+
+The variant profile localised it. L1 sector hit rate per kernel, 320k points:
+
+| kernel | hit rate | L2 sectors | duration |
+|---|---|---|---|
+| A3 full | 55.86% | 543,060 | 43.78 us |
+| A3 probe-only | 74.13% | 147,789 | 21.44 us |
+| A4 full (before) | **28.92%** | 889,459 | 54.50 us |
+| A4 probe-only | 74.08% | 146,829 | 24.06 us |
+| A4 minus spin | 58.15% | 350,853 | 32.93 us |
+
+Two things fall out. A4's probe-only path matches A3's **exactly**, 74.08%
+against 74.13% and 146,829 sectors against 147,789, so the baseline was never
+the problem. And removing A4's spin restores the hit rate to 58%, above A3's
+full kernel, so the spin is where the L1 residency was being destroyed.
+
+Comparing the two spins side by side shows why:
+
+    A3   int32_t idx = e.block_idx;                              // PLAIN, cacheable
+         while (idx < 0) idx = *(volatile int32_t*)&e.block_idx; // volatile only while waiting
+
+    A4   let mut idx = idx_atomic.load(Relaxed);                 // ATOMIC, bypasses L1
+         while idx < 0 { idx = idx_atomic.load(Relaxed); }
+
+The index is almost always already published, so the loop almost never runs.
+A3 pays a cached read on that common path and only pays the uncached one while
+actually waiting. A4 paid the uncached one **every time**. Same for the probe
+key, which A4 also read atomically where A3 reads it plainly.
+
+Both are the same mistake: reaching for the atomic because the location is
+shared, when the algorithm rather than the memory model already provides the
+guarantee. A stale value is harmless at both sites: a stale key costs one extra
+probe, and a stale -1 just enters the wait loop where the atomic load does
+observe the publication.
+
+### Result: the gap closes, and the profiler metrics reach parity
+
+After making both first reads plain, 320k points:
+
+| metric | A3 | A4 before | A4 after |
+|---|---|---|---|
+| L1 sector hit rate | 53.44% | 28.92% | **54.12%** |
+| L2 sectors | 568,128 | 964,189 | **552,775** |
+| long_scoreboard | 11.54 | 15.63 | **11.06** |
+| duration (ncu, single launch) | 43.55 us | 52.16 us | **42.18 us** |
+
+Every metric that identified the gap is now at parity or better, and under
+ncu's single-launch conditions A4 is *faster* than A3.
+
+Batched wall clock, which is the harness's regime and stays the headline:
+
+| points | A3 | A4 before | A4 after | before | after |
+|---|---|---|---|---|---|
+| 20,000 | 0.0050 | 0.0210 | 0.0165 | 4.12x | 3.30x |
+| 320,000 | 0.0273 | 0.0452 | 0.0368 | 1.64x | **1.35x** |
+| 1,280,000 | 0.0788 | 0.1205 | 0.0949 | 1.53x | **1.20x** |
+
+That removes 45% of the excess at 320k and 62% at 1.28M. Correctness is
+unchanged throughout: 1160 blocks, mean surface distance to A3 still
+0.000000000 m.
+
+The batched numbers close less than the single-launch ones because batching
+runs eight launches into eight volumes back to back, so the cache state differs
+from a cold profile. Both are reported rather than picking the flattering one.
+
+### What was NOT the cause, tested rather than assumed
+
+The `~{memory}` clobber my own cuda-oxide patch puts on every scoped atomic was
+the obvious suspect: it tells LLVM the asm may touch all memory, which in a spin
+loop would force unrelated values to reload every iteration. Removing it for
+relaxed accesses, which order nothing and therefore do not need it, moved the
+hit rate from 28.92% to 29.77% and the duration from 49.76 to 49.47 us. Noise.
+The change is kept because it is principled, but it is not the mechanism.
+
 ### Tested: the atomic key load is 35-42% of it, not all of it
 
 Changing A4's hot probe load from `DeviceAtomicI64::load(Relaxed)` to a plain
