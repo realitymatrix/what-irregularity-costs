@@ -95,9 +95,22 @@ SMs at all. This is the sharpest expressiveness result in the project, because
 the failure was invisible on a single device — one GPU reports 1.8 ms and looks
 reasonable.
 
-**Rust is at parity on update except on small synthetic scenes.** 1.00–1.02x on
-real TartanAir data and 0.97–1.02x on the largest synthetic cells; the 1.23x
-figure is the baseline sphere and is the exception, not the rule. The baseline gap tracks a 1.62x SASS instruction count, 504 against
+**Rust is within 1-5% of CUDA C++ on the full integrate path.** Total
+allocate + update, medians of three passes, both cards:
+
+| cell | A3 | A4 | ratio |
+|---|---|---|---|
+| TartanAir warm, 5070 Ti | 0.3878 | 0.3960 | **1.02x** |
+| TartanAir cold, 5070 Ti | 0.4726 | 0.4863 | **1.03x** |
+| TartanAir cold, 5060 | 0.9041 | 0.9154 | **1.01x** |
+| plane-320k, 5070 Ti | 0.3633 | 0.3791 | 1.04x |
+| pts-1280k, 5070 Ti | 0.9761 | 1.0254 | 1.05x |
+| baseline sphere, 5070 Ti | 0.2781 | 0.3077 | 1.11x |
+
+**This is after the L1 fix and supersedes every earlier figure.** The gap was
+1.05x to 1.27x before; it is 1.01x to 1.11x now, and the remaining spread is
+the small-synthetic-scene effect, not a language property. On real data Rust is
+within 1-3% of hand-written CUDA C++. The baseline gap tracks a 1.62x SASS instruction count, 504 against
 312, concentrated in LOP3, FFMA, FSETP and BRA. But the ratio falls to 0.97–1.02x
 on the largest cells, where Rust is at or slightly ahead of CUDA C++. That is
 consistent and worth stating plainly: instruction count sets the gap while the
@@ -106,13 +119,34 @@ memory-bound. Refuted along the way: register pressure (A4 uses *fewer*
 registers, 34 against 40, neither spills), `f32::clamp` NaN semantics (zero SASS
 change), and `read_volatile` on the hash key (byte-identical SASS).
 
-**Rust's allocate gap is NOT attributed, and the sweep made it harder.** It
-ranges 1.24x to 4.06x with the workload. The two kernels are at 1.02x
-instruction parity, 528 against 520, so instruction count explains the update
-gap and explicitly fails here. The surviving candidate was memory-ordering
-scope, six system-scope strongly-ordered loads against A3's two — but scope is a
-static property of the generated code and cannot vary with workload, so it
-cannot be the whole story. Confirming anything here needs GPU counters.
+**Rust's allocate gap IS attributed, and the mechanism is a language cost.**
+It took eleven hypotheses and a profiler. Instruction counts never explained it:
+the kernels are at 1.02x static parity and A4 issues 12% *fewer* dynamic
+compare-exchanges, with fewer branches, fewer memory operations and fewer
+registers, at identical occupancy.
+
+Hardware counters found it in one run. `long_scoreboard`, the wait for a
+long-latency memory operation, was the only stall reason that worsened, and it
+worsened by more than the whole gap. The cause was L1 residency: identical
+requests over identical sectors, but 1.70x the sectors pushed through to L2, and
+an L1 hit rate of 28.9% against 55.9%.
+
+Two loads. A4 read the probe key and the published block index with
+`DeviceAtomic*::load(Relaxed)`; A3 reads both plainly. **A GPU-scope atomic load
+must be coherent across SMs, and NVIDIA's L1 is not, so it bypasses L1 by
+construction.** The index is almost always already published, so A4 was paying
+an uncached load on the common path where A3 pays a cached one and reserves the
+uncached load for when it is actually waiting.
+
+Making both first reads plain, which is correct because the algorithm rather
+than the memory model provides the guarantee, restores every counter to parity
+(L1 hit rate 54.1%, L2 sectors 552,775 against A3's 568,128, `long_scoreboard`
+11.06 against 11.54) and takes allocate from 1.63x to 1.33x at the baseline cell
+and 1.51x to 1.21x at 1.28M points on the wide card.
+
+This is the paper's cleanest expressiveness result, because the safe-looking
+construct is the expensive one and nothing short of hardware counters would
+show it. The residual 1.1x to 1.3x on allocate is not attributed.
 
 Reporting a ratio without a mechanism is what makes most language comparisons
 unciteable. Three of these four have one; the fourth says so.
