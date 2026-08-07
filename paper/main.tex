@@ -917,7 +917,65 @@ cost be attributed to something the language does or does not let you say.
 \section{Conclusion}
 \label{sec:conclusion}
 
-% TODO.
+We implemented one irregular GPU kernel in three languages and measured it on a
+matrix of workloads across two GPUs. The result is a split rather than a
+leaderboard. On the regular stage the languages differ by a small factor; on the
+irregular stage Rust stays close to hand-written CUDA C++ and Triton is more than
+an order of magnitude behind. Language choice is nearly free on the work that is
+usually benchmarked and expensive on the work that is not, which is an argument
+for benchmarking the other work.
+
+Both gaps are attributable, and neither is attributable to code generation
+quality in the sense that phrase usually carries. Triton's cost follows from a
+probe loop that must run to a compile-time bound and from a compare-exchange that
+cannot be masked; the second forces a data structure with no counterpart in the
+CUDA implementation, whose bad settings also stop the kernel responding to
+additional hardware while still reporting a plausible single-device time. Rust's
+cost was invisible to every instruction count we could take, including counts
+that favoured Rust, and turned out to be that a GPU-scope atomic load cannot be
+served from L1 because coherence and caching are the same mechanism. The
+type-correct way to read shared state is the expensive one, and no artefact
+short of hardware counters shows it.
+
+If there is a single transferable claim, it is that one. \emph{On a GPU, making a
+read safe against concurrent writers and making it fast are in tension that no
+type system expresses.} Any language offering a scoped atomic load as the
+obvious way to read shared state inherits it, and the alternative is a plain load
+whose safety rests on an argument about the algorithm that a compiler cannot
+check. That is an uncomfortable place for a language whose appeal is that the
+compiler checks things.
+
+We also report the measurement discipline, because three of the errors caught
+during this work would have produced a reversed or null conclusion rather than a
+noisy one, and two survived until after the wrong number had been written down.
+All three were failures of comparability rather than precision: the two sides
+were not doing the same work, or were not on the same machine, or were not
+summarised by a statistic that survived repetition. None would have been caught
+by more repetitions or tighter error bars. We suggest that comparisons of this
+kind state how they established those three properties, because in our case each
+was something the harness had to verify rather than assume.
+
+Two results we would have preferred not to publish are included because omitting
+them would misrepresent how the work went. An earlier version of this paper
+reported Triton's allocate gap as $73\times$; correctly configured it is
+$17.9\times$, and most of the difference was our own badly-sized workaround
+rather than the language. And we previously attributed most of Rust's gap to the
+publication wait, on a measurement that removed that wait from one arm while
+leaving it in the other. The corrected figures are smaller and the corrected
+claims are narrower. They are also the ones that survived a symmetric test.
+
+\paragraph{Future work.} The load-factor regime where probe chains genuinely
+lengthen requires decoupling the table size from the pool capacity, and would
+test the sharpest prediction the Triton explanation makes. A second architecture
+would establish whether the magnitudes hold across a hardware generation; we
+expect the mechanisms to and the numbers not to. And the residual
+$1.12$--$1.33\times$ on Rust's allocate stage remains open, which we note with
+some caution, having been confidently wrong about this particular gap eleven
+times already.
+
+\paragraph{Artefacts.} The harness, all five implementations, the raw
+measurement CSVs, and the scripts that generate every table in this paper are
+available. No number here was transcribed by hand.
 
 \bibliographystyle{plain}
 \bibliography{refs}
