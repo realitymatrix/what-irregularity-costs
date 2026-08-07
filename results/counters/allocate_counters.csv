@@ -1,0 +1,15 @@
+metric,unit,cuda_cpp,rust_before,rust_after,favours,source
+static SASS instructions,count,520,528,528,parity,cuobjdump -sass
+branches (BRA/BSSY/BSYNC/BRX),count,72,63,63,rust,cuobjdump -sass
+global memory ops (LDG/STG),count,11,6,6,rust,cuobjdump -sass
+registers per thread,count,34,28,28,rust,cuobjdump -res-usage
+register spills,count,0,0,0,tie,cuobjdump -res-usage
+dynamic compare-exchange attempts,count,28558,25026,25026,rust,instrumented counter
+blocks built,count,1160,1160,1160,tie,harness
+achieved occupancy,percent,84.30,84.27,84.27,tie,ncu Occupancy
+active threads per warp,count,26.95,28.18,28.18,rust,ncu WarpStateStats
+warp cycles per issued instruction,cycle,19.73,23.21,,cuda,ncu WarpStateStats
+L1 sector hit rate,percent,55.86,28.92,54.12,,ncu MemoryWorkloadAnalysis
+L2 sectors,sector,568655,964189,552775,,ncu lts__t_sectors.sum
+long_scoreboard stall,ratio,12.020,15.630,11.06,,ncu smsp__average_warps_issue_stalled
+duration,us,44.96,52.16,42.18,,ncu gpu__time_duration.sum

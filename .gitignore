@@ -30,5 +30,12 @@ cpp/build/
 crates/tsdf-rust-cuda/target/
 
 results/
+# ...except the data the paper's tables are generated from. The availability
+# statement in paper/main.tex promises these; ignoring them would make it false.
+!results/counters/
+!results/counters/*.csv
+!results/sweep_20260807_124145/
+!results/sweep_20260807_124145/*.csv
+!results/sweep_20260807_124145/environment.txt
 data/tartanair/
 crates/tsdf-rust-cuda/target/

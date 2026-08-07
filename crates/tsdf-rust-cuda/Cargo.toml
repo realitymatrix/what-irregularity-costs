@@ -24,6 +24,9 @@ name = "tsdf-rust-cuda"
 path = "src/main.rs"
 
 [dependencies]
-cuda-device = { path = "/home/petr/.local/opt/cuda-oxide/crates/cuda-device" }
-cuda-host = { path = "/home/petr/.local/opt/cuda-oxide/crates/cuda-host" }
-cuda-core = { path = "/home/petr/.local/opt/cuda-oxide/crates/cuda-core" }
+# Point these at your cuda-oxide checkout. There is no crates.io release, so a
+# path dependency is the only option; see README for the required patched
+# backend (NVlabs/cuda-oxide#695).
+cuda-device = { path = "../../../cuda-oxide/crates/cuda-device" }
+cuda-host = { path = "../../../cuda-oxide/crates/cuda-host" }
+cuda-core = { path = "../../../cuda-oxide/crates/cuda-core" }
