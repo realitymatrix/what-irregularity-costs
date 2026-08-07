@@ -518,8 +518,156 @@ was a symptom rather than a finding.
 \section{Attribution}
 \label{sec:attribution}
 
-% TODO: Triton's two mechanisms; the scratch-region scaling failure; Rust's L1
-% residency finding and the eleven eliminated hypotheses.
+Reporting a ratio without a mechanism is what makes most language comparisons
+hard to cite. This section attributes both gaps, and reports the part of one that
+remains unattributed.
+
+\subsection{Triton: two costs that compound}
+
+\paragraph{The probe loop must run to a fixed bound.} Triton has no per-lane
+early exit. A lane that resolves on the first probe cannot leave the loop; it can
+only be masked out of subsequent work while the loop continues. The bound is a
+\texttt{tl.static\_range} trip count and therefore a compile-time constant, so
+every lane pays worst-case probe depth. Measured by varying the bound, the cost
+is linear in it: $8.38\times$ for an $8\times$ increase, confirmed again at a
+bound of 32.
+
+\paragraph{\texttt{tl.atomic\_cas} takes no mask.} Unlike
+\texttt{tl.atomic\_add}, the compare-exchange has no mask parameter, so lanes
+that have already resolved cannot be suppressed and still issue an exchange
+somewhere. They must be aimed at a scratch address holding a sentinel that can
+never satisfy the compare. This is a data structure with no counterpart in the
+CUDA implementation, and the programmer must size and index it.
+
+The two compound: the bound sets how many iterations run, and the mask
+restriction sets what each wasted iteration costs. Replacing the exchange with a
+plain load, as a control, leaves 0.090\,ms against 2.04\,ms, a factor of 113, so
+essentially the entire gap is on this path rather than in code generation or
+memory layout.
+
+\subsection{Triton: a failure invisible on one device}
+
+The scratch region was originally indexed by lane, giving 256 addresses. Since
+lane indices repeat across the grid, \emph{every} program used the same 256
+addresses: the number of contenders grows with the grid while the address set
+does not.
+
+The consequence was not primarily a slowdown. It was that the kernel stopped
+responding to hardware. Across a $2.33\times$ difference in streaming
+multiprocessor count, its allocate stage ran at $0.89$--$1.07\times$, and on some
+cells the \emph{narrower} card was faster, which is the signature of a
+serialising address set: fewer contenders is marginally better. The other two
+arms tracked the machine at $1.8$--$2.1\times$ over the same cells.
+
+Indexing the region per program instead restores scaling to
+$1.76$--$2.07\times$ and makes the kernel $3.5\times$ faster, from 1.812\,ms to
+0.524\,ms. Saturation occurs before every lane has a private address, so
+contention is relieved statistically rather than eliminated.
+
+This correction cost the headline. An earlier version of this work reported
+Triton's allocate gap as $73\times$; sized correctly it is $17.9\times$. Most of
+the difference was a badly-chosen parameter of the workaround, not the language.
+We report the smaller number as the stronger claim, because it is
+device-independent where the larger one halved between cards.
+
+The general lesson is the one a single-GPU benchmark cannot reach: the missing
+mask forces a structure whose bad settings are invisible in a throughput number.
+One GPU reports 1.8\,ms and looks reasonable.
+
+\subsection{Rust: eleven hypotheses and a profiler}
+
+\begin{table}[h]
+\centering
+\small
+\input{tables/counters}
+\caption{Allocate kernel counters, 320k points, RTX 5070 Ti. Every count above
+the rule favours Rust or ties, and Rust was slower. The counters below the rule
+are where the difference actually lives. ``Rust, fixed'' is after the change
+described in this section.}
+\label{tab:counters}
+\end{table}
+
+Rust's allocate gap resisted attribution longer than any other result here, and
+the reason is visible in Table~\ref{tab:counters}: it is not a
+\emph{quantity-of-work} problem. The Rust kernel issues fewer branches, fewer
+global memory operations, and fewer dynamic compare-exchanges, from a smaller
+register budget, at identical occupancy and with less warp divergence, producing
+an identical result. It does less work, more slowly.
+
+Eleven hypotheses were tested and eliminated: register pressure, \texttt{clamp}
+semantics, volatile qualification, static instruction count, dynamic
+compare-exchange count, memory-ordering scope, the shared block counter, the
+publication fence, the publication store, the publication wait, and host-side
+launch overhead. Several were eliminated by experiments that required
+substantial work, including one that needed a patch to the Rust compiler backend
+before it could be run at all (Section~\ref{sec:expressiveness}).
+
+Hardware counters located it in one run. Of the fourteen warp stall reasons,
+\texttt{long\_scoreboard}, the wait for a long-latency memory operation to
+return, was the \emph{only} one that worsened, and it worsened by more than the
+whole gap; every other reason favoured Rust. The cause was L1 residency:
+identical requests over identical sectors, but $1.70\times$ the sectors pushed
+through to L2, and an L1 hit rate of 28.9\% against 55.9\%.
+
+\paragraph{The mechanism.} Two loads. The Rust implementation read the probe key
+and the published block index with a scoped atomic load; the CUDA implementation
+reads both plainly. \textbf{A GPU-scope atomic load must be coherent across
+streaming multiprocessors, and no NVIDIA L1 cache is coherent across streaming
+multiprocessors, so such a load bypasses L1 by construction, on every call,
+however weak its ordering.} Relaxed removes ordering, not coherence.
+
+The block index is almost always already published, so the Rust version paid an
+uncached access on the common path where the CUDA version pays a cached one and
+reserves the uncached access for when it is genuinely waiting. Making both first
+reads plain restores every counter to parity (Table~\ref{tab:counters}) and takes
+allocate from $1.63\times$ to $1.33\times$ at the baseline cell.
+
+This is correct rather than a relaxation of correctness, and the distinction
+matters: the \emph{algorithm} provides the guarantee that the memory model was
+being asked for. A stale key costs one extra probe; a stale index merely enters
+the wait loop, where an atomic load does observe the publication.
+
+\paragraph{Why we think this generalises.} The construct that is safe, idiomatic,
+and type-correct is the expensive one, and nothing in the source, the generated
+PTX, the machine code, the instruction counts, or the occupancy reveals it. On a
+GPU, ``make this read safe against concurrent writers'' and ``make this read
+fast'' are in tension in a way no type system expresses, because coherence and
+caching are the same mechanism. Any language that offers a scoped atomic load as
+the natural way to read shared state inherits this.
+
+\subsection{Two design experiments that failed}
+
+Both are reported because they bound the space of fixes.
+
+\paragraph{Publishing key and index atomically.} The publication wait exists
+because a block's identity is known before insertion while its location is
+assigned by a counter and known only after winning. A 128-bit compare-exchange
+would publish both at once and remove the wait. The instruction works in
+isolation; the algorithm does not. The location must be reserved before the
+exchange, so a thread that loses the slot holds one it cannot use, and at kernel
+start every thread targeting a block observes the same empty slot before any
+exchange lands: 65{,}536 reservations against 1{,}160 real blocks. This rules out
+the entire family of fixes that make the location part of the published value.
+
+\paragraph{Deriving the location from the slot.} Setting the block index equal to
+the hash slot removes the circularity properly, and is correct. It makes CUDA C++
+21--35\% faster and Rust 29--32\% faster, at the cost of sizing the voxel pool to
+the table rather than to the block count. It does \emph{not} close the language
+gap: $1.64\times$ becomes $1.71\times$ at 320k points and $1.53\times$ becomes
+$1.39\times$ at 1.28M.
+
+That last result corrected an earlier claim of ours. Removing the wait from the
+Rust arm alone had appeared to recover 75--83\% of the gap, which we had reported
+as the wait being most of it. Removing it from both arms shows it is a large
+\emph{shared} cost. The asymmetric measurement was the error, and it is the kind
+that only a symmetric re-run detects.
+
+\subsection{The residual}
+
+After the fix, allocate is $1.12$--$1.33\times$ and that part is not attributed.
+We report it as unattributed rather than assigning it to the nearest available
+cause, which for most of this project would have been the wrong one eleven times
+running.
 
 \section{What each language cannot say}
 \label{sec:expressiveness}

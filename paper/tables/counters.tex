@@ -1,0 +1,21 @@
+\begin{tabular}{lrrr}
+\toprule
+Counter & CUDA C++ & Rust & Rust, fixed \\
+\midrule
+static SASS instructions & 520 & 528 & 528 \\
+branches (BRA/BSSY/BSYNC/BRX) & 72 & 63 & 63 \\
+global memory ops (LDG/STG) & 11 & 6 & 6 \\
+registers per thread & 34 & 28 & 28 \\
+register spills & 0 & 0 & 0 \\
+dynamic compare-exchange attempts & 28,558 & 25,026 & 25,026 \\
+blocks built & 1,160 & 1,160 & 1,160 \\
+achieved occupancy & 84.30 & 84.27 & 84.27 \\
+active threads per warp & 26.95 & 28.18 & 28.18 \\
+warp cycles per issued instruction & 19.73 & 23.21 & -- \\
+\addlinespace
+L1 sector hit rate & 55.86 & 28.92 & 54.12 \\
+L2 sectors & 568,655 & 964,189 & 552,775 \\
+long\_scoreboard stall & 12.02 & 15.63 & 11.06 \\
+duration & 44.96 & 52.16 & 42.18 \\
+\bottomrule
+\end{tabular}

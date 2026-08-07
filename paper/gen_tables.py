@@ -103,6 +103,32 @@ def table_cells(m, meta, out):
     (out / "cells.tex").write_text("\n".join(L) + "\n")
 
 
+def table_counters(out, src):
+    """Profiler and disassembly counters for the allocate kernel.
+
+    Kept as data rather than typed into the paper: these are the numbers that
+    make the argument, and every one of them contradicts the intuition that a
+    slower kernel is doing more work.
+    """
+    import csv as _csv
+    rows = list(_csv.DictReader(open(src)))
+    L = [r"\begin{tabular}{lrrr}", r"\toprule",
+         r"Counter & CUDA C++ & Rust & Rust, fixed \\", r"\midrule"]
+    for r in rows:
+        if r["metric"] == "L1 sector hit rate":
+            L.append(r"\addlinespace")
+        after = r["rust_after"] or "--"
+        def fmt(v):
+            if v in ("", "--"):
+                return "--"
+            f = float(v)
+            return f"{f:,.2f}" if "." in v else f"{int(f):,}"
+        L.append(f"{tex_escape(r['metric'])} & {fmt(r['cuda_cpp'])} & "
+                 f"{fmt(r['rust_before'])} & {fmt(after)} \\\\")
+    L += [r"\bottomrule", r"\end{tabular}"]
+    (out / "counters.tex").write_text("\n".join(L) + "\n")
+
+
 def main():
     if len(sys.argv) < 2:
         print(__doc__)
@@ -117,6 +143,9 @@ def main():
     n = table_totals(m, out)
     table_by_stage(m, out)
     table_cells(m, meta, out)
+    counters = src.parent.parent / "counters" / "allocate_counters.csv"
+    if counters.exists():
+        table_counters(out, counters)
     (out / "PROVENANCE.txt").write_text(
         f"Generated from {src}\nby paper/gen_tables.py. Do not edit by hand.\n")
     print(f"wrote {n} workload rows and the per-stage summary to {out}")
