@@ -91,7 +91,20 @@ Two deliberate choices:
 * `mir-lower` compiles, the emitted PTX assembles, and `cargo oxide build
   --materialize-cubin` succeeds on a kernel that previously failed the libNVVM
   verifier. Point the build at it with
-  `CUDA_OXIDE_BACKEND=<worktree>/crates/rustc-codegen-cuda/target/release/librustc_codegen_cuda.so`.
+  `CUDA_OXIDE_BACKEND=$HOME/Documents/cuda-oxide-scoped/crates/rustc-codegen-cuda/target/release/librustc_codegen_cuda.so`.
+
+  **Arm A4 cannot be rebuilt without that backend.** `DeviceAtomic::load` does
+  not compile on upstream `main`, so the env var is a hard dependency until
+  NVlabs/cuda-oxide#695 lands, not a convenience. If the `.so` is missing,
+  rebuild it with `cargo +nightly-2026-04-03 build --release` inside
+  `crates/rustc-codegen-cuda` of that worktree; it takes about 40 seconds.
+
+  The worktree lives at `~/Documents/cuda-oxide-scoped`, moved there from a
+  `/tmp` scratchpad on 2026-08-07 after the scratchpad was cleaned mid-session
+  and took the built backend with it. The branch itself was never at risk,
+  because a git worktree keeps its commits in the main repository
+  (`~/.local/opt/cuda-oxide`), so the loss was a `git worktree add` and a
+  rebuild rather than any work.
 * **The SASS carries GPU scope.** Arm A4's allocate kernel went from six
   `LDG.E(.64).STRONG.SYS` to zero, with all seven atomics already
   `STRONG.GPU`. Correctness is unchanged: 1160 blocks, mean surface distance to

@@ -31,3 +31,4 @@ crates/tsdf-rust-cuda/target/
 
 results/
 data/tartanair/
+crates/tsdf-rust-cuda/target/
