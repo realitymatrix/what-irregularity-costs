@@ -111,6 +111,11 @@ int32_t osn_tsdf_cuda_allocate_counting_cas(OsnTsdfCudaVolume* v, const float* d
                                             int32_t n_points, float cam_x, float cam_y,
                                             float cam_z, float radius_m);
 
+/// MEASUREMENT ONLY: probe and read, never insert. Mirrors arm A4's `-cas`.
+int32_t osn_tsdf_cuda_allocate_no_cas(OsnTsdfCudaVolume* v, const float* d_positions,
+                                      int32_t n_points, float cam_x, float cam_y, float cam_z,
+                                      float radius_m);
+
 int32_t osn_tsdf_cuda_block_count(const OsnTsdfCudaVolume* v);
 uint64_t osn_tsdf_cuda_drop_count(const OsnTsdfCudaVolume* v);
 void osn_tsdf_cuda_synchronize(const OsnTsdfCudaVolume* v);

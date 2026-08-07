@@ -51,7 +51,12 @@ __device__ int32_t d_find_block(const DeviceView& v, int32_t bx, int32_t by, int
 /// execute rather than how many exist. Arm A4 carries the identical switch.
 /// Safe to overload `drop_count` because the counted kernel is only ever
 /// launched on a pool large enough that no block is dropped.
-template <bool COUNT_CAS = false>
+/// `DO_CAS = false` stops at the first empty slot and never inserts, mirroring
+/// arm A4's `CAS=false` specialisation exactly. Both then leave the table empty,
+/// so every probe resolves at slot 0 and what remains is the geometry walk plus
+/// one hash and one load. That is the only way to compare the two arms' baseline
+/// per-thread cost, which is otherwise hidden behind the insert machinery.
+template <bool COUNT_CAS = false, bool DO_CAS = true>
 __device__ int32_t d_find_or_insert(const DeviceView& v, int32_t bx, int32_t by, int32_t bz) {
     const uint32_t size = v.hash_mask + 1;
     const uint32_t slot = d_hash(bx, by, bz, v.hash_mask);
@@ -68,6 +73,7 @@ __device__ int32_t d_find_or_insert(const DeviceView& v, int32_t bx, int32_t by,
             return idx;
         }
         if (key == kEmptyKey) {
+            if (!DO_CAS) return -1;
             // One CAS publishes the entire coordinate. Splitting it across
             // words lets a reader match a partially written slot, mismatch on
             // the rest, and probe onward; at GPU thread counts that becomes a
@@ -138,14 +144,14 @@ __device__ __forceinline__ void walk_band(const DeviceView& v, const float* pos,
     }
 }
 
-template <bool COUNT_CAS = false>
+template <bool COUNT_CAS = false, bool DO_CAS = true>
 __global__ void alloc_kernel(DeviceView v, const float* pos, int32_t n, float cam0, float cam1,
                              float cam2, float radius_sq) {
     const int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= n) return;
     const float cam[3] = {cam0, cam1, cam2};
     walk_band(v, pos, i, cam, radius_sq, [&](int32_t vx, int32_t vy, int32_t vz, float) {
-        d_find_or_insert<COUNT_CAS>(v, d_floor_div(vx, kBlockDim), d_floor_div(vy, kBlockDim),
+        d_find_or_insert<COUNT_CAS, DO_CAS>(v, d_floor_div(vx, kBlockDim), d_floor_div(vy, kBlockDim),
                          d_floor_div(vz, kBlockDim));
     });
 }
@@ -250,6 +256,17 @@ void CudaVolume::allocate_blocks_counting_cas(const PointBatch& b) {
     const float rsq = b.radius_m > 0.0f ? b.radius_m * b.radius_m : 0.0f;
     alloc_kernel<true><<<blocks, threads, 0, impl_->stream>>>(impl_->v, b.positions, b.n, b.cam[0],
                                                               b.cam[1], b.cam[2], rsq);
+}
+
+/// MEASUREMENT ONLY: probe and read, never insert. Mirrors arm A4's `-cas`
+/// variant so the two arms' baseline per-thread cost can be compared directly.
+void CudaVolume::allocate_blocks_no_cas(const PointBatch& b) {
+    if (!valid() || b.n <= 0) return;
+    const int threads = 256;
+    const int blocks = (b.n + threads - 1) / threads;
+    const float rsq = b.radius_m > 0.0f ? b.radius_m * b.radius_m : 0.0f;
+    alloc_kernel<false, false><<<blocks, threads, 0, impl_->stream>>>(
+        impl_->v, b.positions, b.n, b.cam[0], b.cam[1], b.cam[2], rsq);
 }
 
 void CudaVolume::update_voxels(const PointBatch& b) {

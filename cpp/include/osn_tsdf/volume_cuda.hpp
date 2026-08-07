@@ -48,6 +48,9 @@ public:
     /// drop counter. Used to compare the DYNAMIC instruction count against arm
     /// A4, which static SASS cannot show.
     void allocate_blocks_counting_cas(const PointBatch& batch);
+    /// MEASUREMENT ONLY: probe and read, never insert. Mirrors arm A4's `-cas`
+    /// variant so the baseline per-thread cost can be compared symmetrically.
+    void allocate_blocks_no_cas(const PointBatch& batch);
 
     /// `out.posnor` / `out.rgb` are HOST buffers; the mesh is copied back.
     /// Returns the vertex count, or -1 on overflow.

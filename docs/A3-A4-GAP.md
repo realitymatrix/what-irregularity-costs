@@ -238,6 +238,73 @@ Distinguishing them needs either a device-side counter of CAS attempts added to
 both arms, or `ncu`'s warp stall reasons. The counter is the cheaper experiment
 and does not need root.
 
+## CORRECTION: the bisect above was run at too small a workload
+
+Giving A3 the same probe-only specialisation, so the two arms' baseline paths
+can be compared like with like, changes the conclusion. The `pts-20k` cell used
+for the first bisect is dominated by a fixed floor, and the components rank
+differently once the workload is large enough for that floor to be irrelevant.
+
+Probe-only, both arms, three sizes:
+
+| points | A3 probe-only | A4 probe-only | ratio |
+|---|---|---|---|
+| 20,000 | 0.0020 | 0.0062 | 3.10x |
+| 320,000 | 0.0146 | 0.0207 | 1.42x |
+| 1,280,000 | 0.0573 | 0.0684 | **1.19x** |
+
+The ratio collapses with size, which is the fixed-floor signature again. **A4's
+steady-state disadvantage on the geometry walk and probe is 1.19x, not 3.1x.**
+The 3.1x was the floor, and quoting it would have been wrong.
+
+The same applies to the headline. A4's allocate is 5.9x A3 at 20k points and
+**1.52x at 1.28M**, which matches the sweep's 1.51x for that cell. The 5.9x is a
+small-workload artefact and must not be quoted as the gap.
+
+### The ranking inverts: at realistic sizes it is the spin, not the CAS
+
+| component | share of excess at 20k | share at 320k | share at 1.28M |
+|---|---|---|---|
+| publication spin | 32% | **75%** | **83%** |
+| shared counter | 4% | 5% | 5% |
+| `threadfence` | 7% | 16% | 13% |
+
+At 20k points the compare-exchange dominated and the spin looked secondary. At
+realistic sizes that reverses: the spin is 75% to 83% of the whole gap. The
+reason is contention. All these cells are the same R=0.5 sphere with about 1,160
+blocks, so raising the point count raises the number of threads racing for the
+same blocks, and every thread that loses a race waits for the winner to publish
+`block_idx`.
+
+Splitting the remaining excess at 1.28M by path:
+
+| path | A3 | A4 | A4/A3 | share of excess |
+|---|---|---|---|---|
+| geometry walk and probe | 0.0573 | 0.0684 | 1.19x | 27% |
+| insert machinery | 0.0214 | 0.0511 | **2.39x** | 73% |
+
+So roughly a quarter of the gap is a mildly slower baseline path and three
+quarters is the insert machinery, almost all of it the spin.
+
+### What this makes actionable
+
+The spin exists to cover a window: a reader can see a published key before the
+winner has published the matching `block_idx`, and must wait rather than read
+`-1`. Both arms have that window and both pay for it, but A4 pays far more.
+
+Two fixes worth trying, neither of which needs a profiler:
+
+1. **Close the window.** Publish the key and the block index in one 128-bit
+   compare-exchange so a reader never observes a half-built entry, which removes
+   the spin entirely rather than making it cheaper. The entry is already 16 bytes
+   and 16-byte aligned, so this is a layout question, not a redesign.
+2. **Do not wait.** Have a loser re-probe from the top instead of spinning on one
+   address, converting a serialised wait into more parallel work.
+
+Note that the `recovered` column in the probe output is defined against A3's
+FULL kernel, so with A3's probe-only variant present it can exceed 100%. Read
+the absolute times, not that column, until it is redefined.
+
 ## Instruction counts, static and dynamic: every one favours A4
 
 Measured 2026-08-07 with `bench/probe_cas_count.cu` and `cuobjdump`, at
