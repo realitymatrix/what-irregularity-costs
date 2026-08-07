@@ -170,10 +170,48 @@ rather than on the memory model: the probe visits a different slot each
 iteration so nothing can be hoisted, and a stale key costs at most one extra
 probe.
 
-That is the mechanism. Ten hypotheses died because they were all about
-instruction counts, and the answer was never about instruction counts: it is one
-load, correctly typed for what the language offers, whose coherence guarantee
-forbids the cache that the CUDA version relies on.
+### Tested: the atomic key load is 35-42% of it, not all of it
+
+Changing A4's hot probe load from `DeviceAtomicI64::load(Relaxed)` to a plain
+`read()`, which is correct for the reason A3 relies on and is what A3 does:
+
+| | A3 | A4 atomic load | A4 plain read |
+|---|---|---|---|
+| duration | 45.57 us | 52.16 us | **49.76 us** |
+| L2 sectors | 599,257 | 964,189 | **858,084** |
+| long_scoreboard | 11.39 | 15.63 | 15.46 |
+
+It removes 137k of A4's 396k L2-sector excess, about **35%**, and about **42%**
+of the duration excess. Correctness is unchanged, 1160 blocks and
+0.000000000 m mean surface distance, and the change is kept because a plain read
+is both correct and cheaper here.
+
+So the mechanism is established and one contributing site is quantified, but the
+decomposition is incomplete: A4 still pushes 1.43x A3's sectors to L2 with a
+*lower* request count (425,547 against 446,028), and `long_scoreboard` barely
+moved. Something else in A4 is still bypassing or missing L1.
+
+The remaining candidates, none yet tested: the `block_idx` spin, which is still a
+GPU-scope atomic load re-reading one address (though A3's `volatile` equivalent
+should bypass L1 too, so this may be a wash); the atomics themselves, which are
+performed at L2 by definition; and the baseline geometry path, which the
+probe-only comparison already showed at 1.19x with no inserts at all.
+
+### What this does and does not establish
+
+Established: the gap is **exposed memory latency**, not instruction count, not
+occupancy, not divergence, not scope, and not any of the insert-path components
+priced earlier. A4 issues the same or fewer memory requests and gets far worse
+L1 residency, and `long_scoreboard` is the only stall reason that worsens.
+
+Established: one concrete language-level cause, worth 35-42% of it. Rust's
+scoped atomic load carries a coherence guarantee that forbids L1 caching, and
+the CUDA version sidesteps it by using a plain load and relying on the
+algorithm. That is a real expressiveness cost and exactly the kind the paper is
+about: the safe-looking construct is the expensive one.
+
+Not established: the remaining 58-65%. It should not be attributed to the same
+cause without measuring it.
 
 ### ncu is blocked on this machine
 

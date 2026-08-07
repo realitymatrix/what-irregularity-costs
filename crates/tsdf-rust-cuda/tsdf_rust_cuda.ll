@@ -2046,7 +2046,7 @@ bb4:
   br i1 %v46, label %bb6, label %bb5
 bb5:
   %v47 = bitcast ptr %v40 to ptr
-  %v48 = load atomic i32, ptr %v47 syncscope("device") monotonic, align 4
+  %v48 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v47)
   br label %bb7
 bb6:
   %v49 = add i32 %v32, 1
@@ -2057,7 +2057,7 @@ bb7:
   %v52 = xor i1 %v51, 1
   br i1 %v52, label %bb10, label %bb8
 bb8:
-  %v53 = load atomic i32, ptr %v47 syncscope("device") monotonic, align 4
+  %v53 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v47)
   br label %bb9
 bb9:
   br label %bb7
@@ -2193,7 +2193,7 @@ bb2:
   br i1 %v54, label %bb10, label %bb3
 bb3:
   %v55 = bitcast ptr %v48 to ptr
-  %v56 = load atomic i32, ptr %v55 syncscope("device") monotonic, align 4
+  %v56 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v55)
   br label %bb4
 bb4:
   br label %bb5
@@ -2203,7 +2203,7 @@ bb5:
   %v59 = xor i1 %v58, 1
   br i1 %v59, label %bb8, label %bb6
 bb6:
-  %v60 = load atomic i32, ptr %v55 syncscope("device") monotonic, align 4
+  %v60 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v55)
   br label %bb7
 bb7:
   br label %bb5
@@ -2280,7 +2280,7 @@ bb30:
   br label %bb42
 bb31:
   %v83 = bitcast ptr %v48 to ptr
-  %v84 = load atomic i32, ptr %v83 syncscope("device") monotonic, align 4
+  %v84 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v83)
   br label %bb32
 bb32:
   br label %bb33
@@ -2290,7 +2290,7 @@ bb33:
   %v87 = xor i1 %v86, 1
   br i1 %v87, label %bb36, label %bb34
 bb34:
-  %v88 = load atomic i32, ptr %v83 syncscope("device") monotonic, align 4
+  %v88 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v83)
   br label %bb35
 bb35:
   br label %bb33
@@ -2409,7 +2409,7 @@ bb2:
   br i1 %v54, label %bb10, label %bb3
 bb3:
   %v55 = bitcast ptr %v48 to ptr
-  %v56 = load atomic i32, ptr %v55 syncscope("device") monotonic, align 4
+  %v56 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v55)
   br label %bb4
 bb4:
   br label %bb5
@@ -2419,7 +2419,7 @@ bb5:
   %v59 = xor i1 %v58, 1
   br i1 %v59, label %bb8, label %bb6
 bb6:
-  %v60 = load atomic i32, ptr %v55 syncscope("device") monotonic, align 4
+  %v60 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v55)
   br label %bb7
 bb7:
   br label %bb5
@@ -2510,7 +2510,7 @@ bb2:
   br i1 %v54, label %bb6, label %bb3
 bb3:
   %v55 = bitcast ptr %v48 to ptr
-  %v56 = load atomic i32, ptr %v55 syncscope("device") monotonic, align 4
+  %v56 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v55)
   br label %bb4
 bb4:
   br label %bb5
@@ -2567,7 +2567,7 @@ bb22:
   br label %bb30
 bb23:
   %v72 = bitcast ptr %v48 to ptr
-  %v73 = load atomic i32, ptr %v72 syncscope("device") monotonic, align 4
+  %v73 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v72)
   br label %bb24
 bb24:
   br label %bb25
@@ -2675,7 +2675,7 @@ bb2:
   %v45 = mul i64 %v44, 2
   %v46 = getelementptr inbounds i64, ptr %v8, i64 %v45
   %v47 = bitcast ptr %v46 to ptr
-  %v48 = load atomic i64, ptr %v47 syncscope("device") monotonic, align 8
+  %v48 = call i64 asm sideeffect "ld.relaxed.gpu.b64 $0, [$1];", "=l,l,~{memory}"(ptr %v47)
   br label %bb3
 bb3:
   %v49 = icmp eq i64 %v48, %v29
@@ -2824,7 +2824,7 @@ bb2:
   br i1 %v54, label %bb10, label %bb3
 bb3:
   %v55 = bitcast ptr %v48 to ptr
-  %v56 = load atomic i32, ptr %v55 syncscope("device") monotonic, align 4
+  %v56 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v55)
   br label %bb4
 bb4:
   br label %bb5
@@ -2834,7 +2834,7 @@ bb5:
   %v59 = xor i1 %v58, 1
   br i1 %v59, label %bb8, label %bb6
 bb6:
-  %v60 = load atomic i32, ptr %v55 syncscope("device") monotonic, align 4
+  %v60 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v55)
   br label %bb7
 bb7:
   br label %bb5
@@ -2917,7 +2917,7 @@ bb32:
   br label %bb44
 bb33:
   %v85 = bitcast ptr %v48 to ptr
-  %v86 = load atomic i32, ptr %v85 syncscope("device") monotonic, align 4
+  %v86 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v85)
   br label %bb34
 bb34:
   br label %bb35
@@ -2927,7 +2927,7 @@ bb35:
   %v89 = xor i1 %v88, 1
   br i1 %v89, label %bb38, label %bb36
 bb36:
-  %v90 = load atomic i32, ptr %v85 syncscope("device") monotonic, align 4
+  %v90 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v85)
   br label %bb37
 bb37:
   br label %bb35
@@ -3040,7 +3040,7 @@ bb2:
   %v49 = getelementptr inbounds i64, ptr %v48, i64 1
   %v50 = bitcast ptr %v49 to ptr
   %v51 = bitcast ptr %v48 to ptr
-  %v52 = load atomic i64, ptr %v51 syncscope("device") acquire, align 8
+  %v52 = call i64 asm sideeffect "ld.acquire.gpu.b64 $0, [$1];", "=l,l,~{memory}"(ptr %v51)
   br label %bb3
 bb3:
   %v53 = icmp eq i64 %v52, %v29
@@ -3048,7 +3048,7 @@ bb3:
   br i1 %v54, label %bb6, label %bb4
 bb4:
   %v55 = bitcast ptr %v49 to ptr
-  %v56 = load atomic i32, ptr %v55 syncscope("device") monotonic, align 4
+  %v56 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v55)
   br label %bb5
 bb5:
   br label %bb26
@@ -3235,7 +3235,7 @@ bb2:
   br i1 %v54, label %bb10, label %bb3
 bb3:
   %v55 = bitcast ptr %v48 to ptr
-  %v56 = load atomic i32, ptr %v55 syncscope("device") monotonic, align 4
+  %v56 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v55)
   br label %bb4
 bb4:
   br label %bb5
@@ -3245,7 +3245,7 @@ bb5:
   %v59 = xor i1 %v58, 1
   br i1 %v59, label %bb8, label %bb6
 bb6:
-  %v60 = load atomic i32, ptr %v55 syncscope("device") monotonic, align 4
+  %v60 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v55)
   br label %bb7
 bb7:
   br label %bb5
@@ -3329,7 +3329,7 @@ bb32:
   br label %bb44
 bb33:
   %v86 = bitcast ptr %v48 to ptr
-  %v87 = load atomic i32, ptr %v86 syncscope("device") monotonic, align 4
+  %v87 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v86)
   br label %bb34
 bb34:
   br label %bb35
@@ -3339,7 +3339,7 @@ bb35:
   %v90 = xor i1 %v89, 1
   br i1 %v90, label %bb38, label %bb36
 bb36:
-  %v91 = load atomic i32, ptr %v86 syncscope("device") monotonic, align 4
+  %v91 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v86)
   br label %bb37
 bb37:
   br label %bb35
@@ -3473,7 +3473,7 @@ bb2:
   br i1 %v54, label %bb10, label %bb3
 bb3:
   %v55 = bitcast ptr %v48 to ptr
-  %v56 = load atomic i32, ptr %v55 syncscope("device") monotonic, align 4
+  %v56 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v55)
   br label %bb4
 bb4:
   br label %bb5
@@ -3483,7 +3483,7 @@ bb5:
   %v59 = xor i1 %v58, 1
   br i1 %v59, label %bb8, label %bb6
 bb6:
-  %v60 = load atomic i32, ptr %v55 syncscope("device") monotonic, align 4
+  %v60 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v55)
   br label %bb7
 bb7:
   br label %bb5
@@ -3572,7 +3572,7 @@ bb34:
   br label %bb46
 bb35:
   %v87 = bitcast ptr %v48 to ptr
-  %v88 = load atomic i32, ptr %v87 syncscope("device") monotonic, align 4
+  %v88 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v87)
   br label %bb36
 bb36:
   br label %bb37
@@ -3582,7 +3582,7 @@ bb37:
   %v91 = xor i1 %v90, 1
   br i1 %v91, label %bb40, label %bb38
 bb38:
-  %v92 = load atomic i32, ptr %v87 syncscope("device") monotonic, align 4
+  %v92 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v87)
   br label %bb39
 bb39:
   br label %bb37
@@ -3701,7 +3701,7 @@ bb2:
   br i1 %v54, label %bb6, label %bb3
 bb3:
   %v55 = bitcast ptr %v48 to ptr
-  %v56 = load atomic i32, ptr %v55 syncscope("device") monotonic, align 4
+  %v56 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v55)
   br label %bb4
 bb4:
   br label %bb5
@@ -3782,7 +3782,7 @@ bb28:
   br label %bb36
 bb29:
   %v81 = bitcast ptr %v48 to ptr
-  %v82 = load atomic i32, ptr %v81 syncscope("device") monotonic, align 4
+  %v82 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v81)
   br label %bb30
 bb30:
   br label %bb31
