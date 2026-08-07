@@ -125,9 +125,145 @@ costs are, and why.
 \section{The workload}
 \label{sec:workload}
 
-% TODO: hash layout, packed 64-bit key, the publication protocol, why the
-% integrate path splits into allocate and update, and why extraction is
-% excluded (docs/ARM-SCOPE.md).
+A truncated signed distance function (TSDF) volume stores, at each voxel, the
+signed distance to the nearest observed surface, truncated to a band around it.
+Fusing a depth image means walking that band along each point's view ray and
+accumulating a weighted average. The surface is later recovered as the zero
+crossing. It is the representation underneath KinectFusion and most real-time
+reconstruction systems since.
+
+A dense volume is unaffordable at useful resolution, so implementations store
+only the blocks a surface actually touches, indexed by a spatial hash. That
+choice is what makes the kernel irregular, and it is why this workload is the
+vehicle for this paper rather than an application of it.
+
+\subsection{Structure}
+
+The volume is divided into blocks of $8^3 = 512$ voxels. A hash table maps block
+coordinates to indices in a flat pool of voxel data; five parallel float arrays
+hold the truncated distance, the accumulated weight, and three colour channels.
+The table is open-addressed with linear probing and sized to the next power of
+two above twice the pool capacity, so an occupied table is at most half full.
+
+Each entry is 16 bytes: a 64-bit key and a 32-bit block index, with four bytes
+of padding. The key packs the three block coordinates into one word, each axis
+biased by $2^{20}$ into 21 bits:
+%
+\begin{equation*}
+\mathrm{key}(x,y,z) = (x + 2^{20}) \ll 42 \;\vert\; (y + 2^{20}) \ll 21 \;\vert\; (z + 2^{20}).
+\end{equation*}
+%
+Packing is not a space optimisation. It is what allows a single compare-exchange
+to publish an entire coordinate. An earlier layout stored the three axes
+separately and published them with a compare-exchange on the first followed by
+plain stores to the other two; a reader could then match the first word,
+mismatch on the rest, and probe onward, which at GPU thread counts degenerates
+into a full-table scan per lookup. The 64-bit key removes that failure by
+construction, and every arm inherits it.
+
+\subsection{Two passes, and why}
+
+Integration runs as two kernels over the same points.
+
+\textbf{Allocate} walks the truncation band for each point, computes the block
+coordinate of each voxel it touches, and ensures a block exists for it. This is
+the irregular stage: threads probe for a data-dependent number of steps, race
+for the same slots, and must observe one another's insertions.
+
+\textbf{Update} walks the same band and accumulates into blocks that now exist.
+This is the regular stage: a lookup that almost always hits on the first probe,
+followed by five atomic additions per voxel.
+
+Accumulation stores weighted \emph{sums} rather than running means. A running
+mean requires reading the current value, combining, and writing back, which no
+single atomic can make safe across five arrays; sums commute, so plain atomic
+additions suffice and the arms need not agree on a locking scheme. The mean is
+recovered at extraction.
+
+Both passes apply the same occlusion test. Applying it in only one leaves blocks
+that are allocated but never receive a contribution, which does not change the
+extracted surface but does change the block count, and the block count is one of
+the cross-arm correctness checks.
+
+\subsection{The insert protocol}
+
+Listing~\ref{lst:insert} is the CUDA C++ insert, and is the shape every arm
+implements.
+
+\begin{lstlisting}[caption={The insert protocol. Both the probe loop and the
+publication window shape the comparison in Section~\ref{sec:attribution}.},
+label={lst:insert}]
+for (probe = 0; probe < size; ++probe) {
+    entry = table[(slot + probe) & mask];
+    key   = entry.key;                      // plain, cacheable load
+    if (key == want) {                      // block already exists
+        idx = entry.block_idx;
+        while (idx < 0)                     // wait for the winner to publish
+            idx = *(volatile int*)&entry.block_idx;
+        return idx;
+    }
+    if (key == EMPTY) {
+        prev = atomicCAS(&entry.key, EMPTY, want);
+        if (prev == EMPTY) {                // we won the slot
+            idx = atomicAdd(block_count, 1);
+            block_coord[idx] = {bx, by, bz};
+            __threadfence();                // coords visible before the index
+            atomicExch(&entry.block_idx, idx);
+            return idx;
+        }
+        // lost the race; fall through and re-examine this slot
+    }
+}
+\end{lstlisting}
+
+Two features of this protocol drive everything that follows.
+
+\paragraph{The probe is unbounded.} It runs until it finds the key or an empty
+slot, so its trip count is data-dependent and varies per lane. Section
+\ref{sec:expressiveness} shows this is not expressible in Triton at any price.
+
+\paragraph{Publication is two steps.} The key is published by a compare-exchange
+and the index by a later store, so a reader can observe a key whose index is
+still absent and must wait. The window exists because a block's \emph{identity}
+is known before insertion while its \emph{location} is assigned by a counter and
+known only after winning. Publishing both atomically would need the location
+first; the location is only yours if the exchange succeeds. That circularity, and
+two attempts to remove it, are discussed in Section~\ref{sec:attribution}.
+
+\subsection{What is excluded, and why}
+
+Surface extraction is not part of the comparison. It exists once, in CUDA C++,
+and all three GPU arms call it, so measuring it three times compares nothing.
+Making it a real comparison would mean writing marching tetrahedra twice more,
+and that work would not extend the argument: it is a regular kernel, and the
+comparison already contains one in the update stage.
+
+Investigating the decision also corrected a number. The extraction stage had been
+reported at 1.825\,ms and as several times the cost of the whole integrate path.
+Splitting the call showed that 82\% of that measurement on one GPU and 97\% on the
+other was a device-to-host transfer over PCIe links of differing width, not
+compute. The kernel and its allocation are 0.319\,ms, comparable to integrate
+rather than several times it, and the striking cross-device difference was the
+motherboard.
+
+\subsection{Why this workload}
+
+The properties that make TSDF fusion awkward are exactly the ones absent from
+the benchmarks these languages are usually compared on:
+
+\begin{itemize}
+  \item work per thread is data-dependent and not known at launch;
+  \item threads in a warp diverge on both probe depth and outcome;
+  \item correctness depends on compare-exchange and on one thread observing
+        another's publication;
+  \item the access pattern is a scatter through a hash, with no tile structure
+        to exploit.
+\end{itemize}
+
+None of this is exotic. It is what any GPU hash table, sparse structure builder,
+free-list allocator, or dynamic work queue looks like. The results in
+Section~\ref{sec:results} should be read as applying to that class, not to
+reconstruction specifically.
 
 \section{Implementations}
 \label{sec:impl}
