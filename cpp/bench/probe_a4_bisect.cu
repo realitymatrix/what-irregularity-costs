@@ -111,6 +111,7 @@ int main(int argc, char** argv) {
     } arms[] = {
         {"A3 cuda", nullptr, "reference, full insert"},
         {"A3 -cas", nullptr, "probe and read, never insert"},
+        {"A3 slotidx", nullptr, "CORRECT: block index = hash slot"},
         {"A4 full", a4_allocate_blocks, "baseline, correct"},
         {"A4 -spin", a4_allocate_nospin, "no wait for a peer's block_idx"},
         {"A4 -cas", a4_allocate_nocas, "probe and read, never insert"},
@@ -121,12 +122,12 @@ int main(int argc, char** argv) {
     };
 
     Timer t;
-    std::vector<double> samples[9];
+    std::vector<double> samples[10];
     // Interleave, as the main harness does: a per-arm block would let clock ramp
     // masquerade as a difference between variants.
     for (int i = 0; i < reps + 5; ++i) {
-        for (int k = 0; k < 9; ++k) {
-            const int a = (i + k) % 9;
+        for (int k = 0; k < 10; ++k) {
+            const int a = (i + k) % 10;
             for (int j = 0; j < BATCH; ++j) osn_tsdf_cuda_reset(vols[j]);
             cudaDeviceSynchronize();
             t.start();
@@ -135,6 +136,8 @@ int main(int argc, char** argv) {
                     arms[a].fn(&dvs[j], (uint64_t)d_pts, n, 0, 0, 0, 0);
                 else if (a == 1)
                     osn_tsdf_cuda_allocate_no_cas(vols[j], d_pts, n, 0, 0, 0, 0);
+                else if (a == 2)
+                    osn_tsdf_cuda_allocate_slot_index(vols[j], d_pts, n, 0, 0, 0, 0);
                 else
                     osn_tsdf_cuda_allocate_blocks(vols[j], d_pts, n, 0, 0, 0, 0);
             }
@@ -144,15 +147,15 @@ int main(int argc, char** argv) {
     }
 
     const double a3 = median(samples[0]);
-    const double a4 = median(samples[2]);
+    const double a4 = median(samples[3]);
     std::printf("  %-11s %-32s %9s %8s %s\n", "arm", "what", "p50 ms", "x/A3", "recovered");
     std::printf("  ------------------------------------------------------------------------------\n");
-    for (int a = 0; a < 9; ++a) {
+    for (int a = 0; a < 10; ++a) {
         const double m = median(samples[a]);
         // How much of the A4-minus-A3 excess this variant gives back.
         const double recovered = (a4 - a3) > 0 ? 100.0 * (a4 - m) / (a4 - a3) : 0.0;
         char rec[32] = "";
-        if (a >= 3) std::snprintf(rec, sizeof(rec), "%.0f%%", recovered);
+        if (a >= 4) std::snprintf(rec, sizeof(rec), "%.0f%%", recovered);
         std::printf("  %-11s %-32s %9.4f %8.2f %s\n", arms[a].name, arms[a].what, m, m / a3, rec);
     }
 

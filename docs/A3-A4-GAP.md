@@ -384,13 +384,44 @@ maximum: `-spin` is what the kernel costs with the wait deleted and correctness
 abandoned, and slot-indexing reaches the same time while staying correct. At
 realistic point counts it takes A4 from 1.52x to **1.09x** of A3.
 
-**Two caveats, both important.**
+### Applied to A3 as well: the gap does NOT close
 
-The comparison is A4-with-the-fix against A3-without-it. A3 pays the same spin
-for the same reason, so a fair language comparison needs A3 given the same
-treatment; the 1.09x is not a claim that Rust is now within 9% on equal terms.
-It is a claim that the design change is worth about 40% of A4's allocate time,
-and it should help A3 as well.
+A3 given the identical treatment, so both arms drop the spin. Allocate, p50 ms:
+
+| points | A3 spin | A3 slot-idx | A3 gain | A4 spin | A4 slot-idx | A4 gain | **A4/A3 spin** | **A4/A3 slot-idx** |
+|---|---|---|---|---|---|---|---|---|
+| 320,000 | 0.0275 | 0.0179 | 35% | 0.0452 | 0.0306 | 32% | 1.64x | **1.71x** |
+| 1,280,000 | 0.0786 | 0.0617 | 21% | 0.1205 | 0.0860 | 29% | 1.53x | **1.39x** |
+
+Both correct: 1,160 blocks and zero drops for both slot-index variants.
+
+**The design change is a real optimisation and a poor explanation.** It makes
+CUDA C++ 21% to 35% faster and Rust 29% to 32% faster, which is worth having on
+its own terms. It does not close the language gap: 1.64x becomes 1.71x at 320k
+and 1.53x becomes 1.39x at 1.28M. The ratio moves within its existing range and
+in both directions.
+
+**This corrects the earlier claim in this document.** "The spin is 75% to 83% of
+the gap" was measured by removing A4's spin while A3 kept paying its own. That
+is a valid statement about the excess *as measured against an unmodified A3*, and
+an invalid one about where the language difference comes from. The spin is a
+large shared cost, not a Rust-specific one, and both arms shed roughly the same
+fraction of it.
+
+So the allocate gap remains 1.4x to 1.7x and remains unattributed. The list of
+eliminated mechanisms now reads: register pressure, `f32::clamp`,
+`read_volatile`, static instruction count, dynamic compare-exchange count,
+memory-ordering scope, the shared counter, the fence, the publication store, and
+the publication spin.
+
+**Remaining caveat on the design itself.** Every table slot needs voxel storage,
+so the pool must be sized to the table rather than to the expected block count.
+This experiment avoids reallocating by masking the hash to `pool_capacity`
+instead of `hash_mask`, leaving half the allocated table unused and doubling the
+effective load factor. A real implementation pays roughly 2x voxel memory, which
+at 10,240 bytes per block is the dominant allocation. It is also not drop-in:
+the different mask means the shared update kernel cannot locate the blocks, so
+adopting it changes the shared data structure for every arm.
 
 The price is memory. Every table slot now needs voxel storage, so the pool must
 be sized to the table rather than to the expected block count. This experiment

@@ -144,6 +144,71 @@ __device__ __forceinline__ void walk_band(const DeviceView& v, const float* pos,
     }
 }
 
+/// Find or insert with the block index DERIVED FROM THE SLOT.
+///
+/// A hash entry holds two logically different things: the block's identity, the
+/// packed coordinate, known before insertion; and its location in the voxel
+/// pool, handed out by a counter and known only after winning the slot.
+/// Publishing both atomically needs the location first, but the location is
+/// only yours if the exchange succeeds. That circularity is why the production
+/// path publishes the key and then the index, which leaves a window in which a
+/// reader sees a key whose index is still -1 and must spin.
+///
+/// Setting `block_idx = slot` removes the circularity: the location is implied
+/// by the identity's position, so there is one value to publish, and a reader
+/// that matches a key knows the index immediately. No publication store, no
+/// fence, no wait.
+///
+/// The price is that every table slot needs voxel storage. This mirrors arm
+/// A4's variant exactly, including how that is arranged without reallocating:
+/// the hash is masked to `pool_capacity` rather than to `hash_mask`, so the
+/// effective table is the pool and half the allocated table goes unused. A real
+/// implementation would size the pool to the table and pay ~2x voxel memory.
+///
+/// The counter is still bumped once per successful insert so the host can check
+/// the block count. Nothing reads it and no thread waits on it.
+__device__ int32_t d_find_or_insert_slotidx(const DeviceView& v, int32_t bx, int32_t by,
+                                            int32_t bz) {
+    const uint32_t mask = (uint32_t)v.pool_capacity - 1u;
+    const int64_t want = d_pack(bx, by, bz);
+    const uint32_t start = d_hash(bx, by, bz, mask);
+    for (uint32_t probe = 0; probe <= mask; ++probe) {
+        const uint32_t slot = (start + probe) & mask;
+        HashEntry& e = v.table[slot];
+        const int64_t key = e.key;
+        // A matching key means the index IS this slot. Nothing to wait for.
+        if (key == want) return (int32_t)slot;
+        if (key == kEmptyKey) {
+            const int64_t prev = (int64_t)atomicCAS((unsigned long long*)&e.key,
+                                                    (unsigned long long)kEmptyKey,
+                                                    (unsigned long long)want);
+            if (prev == kEmptyKey) {
+                v.block_coord[slot] = BlockCoord{bx, by, bz};
+                atomicAdd(v.block_count, 1);
+                return (int32_t)slot;
+            }
+            // Lost the race, but if the winner wanted the same block the slot
+            // is still the answer.
+            if (prev == want) return (int32_t)slot;
+        }
+    }
+    atomicAdd(v.drop_count, 1ULL);
+    return -1;
+}
+
+/// Pass 1 with the block index derived from the hash slot. See
+/// `d_find_or_insert_slotidx`.
+__global__ void alloc_kernel_slotidx(DeviceView v, const float* pos, int32_t n, float cam0,
+                                     float cam1, float cam2, float radius_sq) {
+    const int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+    const float cam[3] = {cam0, cam1, cam2};
+    walk_band(v, pos, i, cam, radius_sq, [&](int32_t vx, int32_t vy, int32_t vz, float) {
+        d_find_or_insert_slotidx(v, d_floor_div(vx, kBlockDim), d_floor_div(vy, kBlockDim),
+                                 d_floor_div(vz, kBlockDim));
+    });
+}
+
 template <bool COUNT_CAS = false, bool DO_CAS = true>
 __global__ void alloc_kernel(DeviceView v, const float* pos, int32_t n, float cam0, float cam1,
                              float cam2, float radius_sq) {
@@ -266,6 +331,16 @@ void CudaVolume::allocate_blocks_no_cas(const PointBatch& b) {
     const int blocks = (b.n + threads - 1) / threads;
     const float rsq = b.radius_m > 0.0f ? b.radius_m * b.radius_m : 0.0f;
     alloc_kernel<false, false><<<blocks, threads, 0, impl_->stream>>>(
+        impl_->v, b.positions, b.n, b.cam[0], b.cam[1], b.cam[2], rsq);
+}
+
+/// MEASUREMENT ONLY: allocate with the block index derived from the hash slot.
+void CudaVolume::allocate_blocks_slot_index(const PointBatch& b) {
+    if (!valid() || b.n <= 0) return;
+    const int threads = 256;
+    const int blocks = (b.n + threads - 1) / threads;
+    const float rsq = b.radius_m > 0.0f ? b.radius_m * b.radius_m : 0.0f;
+    alloc_kernel_slotidx<<<blocks, threads, 0, impl_->stream>>>(
         impl_->v, b.positions, b.n, b.cam[0], b.cam[1], b.cam[2], rsq);
 }
 

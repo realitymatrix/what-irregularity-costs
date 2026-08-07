@@ -94,6 +94,14 @@ int32_t osn_tsdf_cuda_allocate_no_cas(OsnTsdfCudaVolume* v, const float* d_posit
     return 0;
 }
 
+int32_t osn_tsdf_cuda_allocate_slot_index(OsnTsdfCudaVolume* v, const float* d_positions,
+                                      int32_t n_points, float cam_x, float cam_y, float cam_z,
+                                      float radius_m) {
+    if (!v || !d_positions || n_points <= 0) return 1;
+    v->vol.allocate_blocks_slot_index(batch(d_positions, n_points, cam_x, cam_y, cam_z, radius_m));
+    return 0;
+}
+
 int32_t osn_tsdf_cuda_update_voxels(OsnTsdfCudaVolume* v, const float* d_positions,
                                     int32_t n_points, float cam_x, float cam_y, float cam_z,
                                     float radius_m) {
