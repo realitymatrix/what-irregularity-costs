@@ -138,14 +138,27 @@ grows 3.7x because the loop is statically unrolled.
   load factor all prior numbers were taken at, and removed by raising the bound.
 * **Established:** probe exhaustion has no drop accounting, unlike pool
   exhaustion.
-* **Not yet done:** the missing `drop_count` increment on probe exhaustion.
-  Once added, an over-probed cell becomes reportable-with-caveat instead of
-  invalid, and the loss becomes a measured quantity rather than an inferred one.
+* **Fixed:** A5 now increments `drop_count` on probe exhaustion, matching how
+  the CUDA arm reports its own equivalent failure. Costs 2% cubin size and no
+  registers. The correctness gate still passes at 0.000015 m mean radius error
+  and 0.000000019 m mean surface distance to A3.
 
-Until that is fixed, `loadfactor` cells above roughly 0.05 are marked INVALID at
-`MAX_PROBE = 8` and excluded from the CSV, which is the correct behaviour: an
-arm that builds fewer blocks is doing less work, and timing it against arms that
-did all the work would report the bug as a speedup.
+The counter turns out to be far more sensitive than the block-count comparison,
+because a drop is one lost point-voxel **contribution** rather than one lost
+block, and many points probe toward the same block:
+
+| load factor | drops reported | blocks missing |
+|---|---|---|
+| 0.018 | 0 | 0 |
+| 0.071 | 155 | 1 |
+| 0.142 | 155 | 1 |
+| 0.283 | 26,940 | 13 |
+
+`loadfactor` cells above roughly 0.05 are still marked INVALID at
+`MAX_PROBE = 8` and excluded from the CSV, which remains correct: an arm that
+builds fewer blocks is doing less work, and timing it against arms that did all
+the work would report the bug as a speedup. The difference is that the loss is
+now a measured quantity rather than a silent divergence.
 
 ## Second finding: the load-factor prediction FAILED
 

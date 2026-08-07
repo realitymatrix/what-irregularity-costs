@@ -52,6 +52,13 @@ Batched, interleaved, exclusive GPU, p50 ms, 320k points at 0.01 m voxel:
 | A4 Rust / cuda-oxide | 0.046 | 0.303 |
 | A5 Triton | 2.040 | 0.352 |
 
+**Superseded in scope by docs/WORKLOAD-SWEEP.md.** Those are one cell of a
+13-cell, 2-device sweep. The ratios are not constants: A4/A3 on allocate ranges
+1.03x to 4.07x with the workload, and A5/A3 ranges 24x to 103x and halves again
+on a narrower card. Every ratio quoted in the paper must name its workload and
+its device. The findings below survive; their headline numbers are now the
+baseline cell rather than the result.
+
 Three findings, at three different levels of explanation.
 
 **Triton's 73x on allocate is fully attributed, and it is a language cost.**
@@ -133,15 +140,25 @@ need real depth to be compared.
 
 ## What this framing still needs
 
-1. **More than one workload.** Every number comes from one sphere at 320k
-   points. The comparison needs varied point counts and scene shapes, and at
-   least one real TartanAir sequence, before a ratio is a property of the
-   languages rather than of one scene.
+1. ~~**More than one workload.**~~ **Done**, docs/WORKLOAD-SWEEP.md: 13 cells
+   across four axes, on both local cards. It changed the conclusions rather
+   than confirming them, and produced the strongest single result in the
+   project (Triton's allocate does not scale with SM count at all, while the
+   other two arms track the machine). Still missing: one real TartanAir
+   sequence, so every scene remains synthetic.
 2. **The allocate gap attributed.** Needs GPU performance counters, which need
-   root: `NVreg_RestrictProfilingToAdminUsers=0` and a reboot.
-3. **A second architecture.** One GPU makes every number a property of sm_120.
-   A cloud L4 pass is the cheapest way to show the ranking is not an accident
-   of one chip.
+   root: `NVreg_RestrictProfilingToAdminUsers=0` and a reboot. The sweep
+   weakened the surviving hypothesis: the gap varies with workload, and
+   memory-ordering scope is a static property of the generated code that does
+   not.
+3. **A second architecture.** Both local cards are sm_120, so the device axis
+   varies machine width at fixed codegen and is explicitly not this. A cloud L4
+   (sm_89) is the cheapest way to show the ranking is not an accident of one
+   chip.
 4. **Extraction measured properly, or explicitly excluded.** It is 1.825 ms,
    6.6x the whole integrate path, and currently shared and unoptimised. Either
    it joins the comparison or the paper says plainly that it does not.
+5. **The scratch-region hypothesis tested.** The proposed mechanism for
+   Triton's failure to scale is collision on 256 scratch addresses. Varying
+   `kScratchSlots` should move it. Until run, the mechanism is proposed, not
+   established.
