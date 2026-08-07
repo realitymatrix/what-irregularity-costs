@@ -816,12 +816,55 @@ language.
 \section{Related work}
 \label{sec:related}
 
-% TODO: Triton (Tillet et al., MAPL 2019); GPU language comparisons; TSDF
-% fusion (KinectFusion, Voxel Hashing); Rust on GPU.
+\paragraph{GPU programming model comparisons.} Performance-portability studies
+compare CUDA, HIP, SYCL, Kokkos, RAJA and OpenMP across vendors, typically using
+proxy applications drawn from scientific computing~\cite{sivaraman2024portability}.
+Those proxies are dense and structured: stencils, particle updates, linear
+algebra. Our contribution is orthogonal rather than competing. We hold the
+architecture and the algorithm fixed and vary only the source language, and we
+choose a workload whose defining property is that the work per thread is not
+known at launch. To our knowledge no existing comparison targets that regime,
+which is also the regime in which we find the differences to be an order of
+magnitude rather than a few percent.
+
+\paragraph{Triton.} Triton~\cite{tillet2019triton} is built around tiles, and its
+central design decision is that the programmer describes what data a block needs
+while the compiler chooses how that data maps to lanes. Section
+\ref{sec:expressiveness} argues that the restrictions we encounter follow from
+that decision rather than from oversight, and that the workload we measure sits
+as far from its target as a GPU kernel can while remaining a GPU kernel. We
+intend the result as a boundary measurement for a tool that is very good inside
+its boundary, not as a criticism of the design.
+
+\paragraph{Volumetric fusion.} The truncated signed distance
+representation~\cite{curless1996volumetric} and its real-time
+use~\cite{newcombe2011kinectfusion} are long established, and the spatial hash
+that makes it affordable at scale is due to Nie{\ss}ner et
+al.~\cite{niessner2013voxelhashing}. We take the data structure from that line of
+work and contribute nothing to it; the reconstruction literature supplies our
+workload rather than our question. Open3D~\cite{zhou2018open3d} provides the
+third-party implementation used as an external correctness reference, and the
+evaluation data are TartanAir V2 sequences, from the dataset introduced
+in~\cite{wang2020tartanair}.
+
+\paragraph{Rust on GPUs.} \texttt{cuda-oxide}~\cite{cudaoxide} compiles Rust to
+PTX through libNVVM. Published comparisons against CUDA C++ are, as far as we can
+determine, absent: the project's own comparison appendix is a placeholder. This
+paper is intended partly to fill that gap, and Section~\ref{sec:expressiveness}
+reports a defect we found and fixed in the process.
+
+\paragraph{Positioning.} The closest work to ours in spirit is the
+performance-portability literature, which asks whether one source can run well
+everywhere. We ask a narrower question on harder ground: given one architecture
+and one algorithm, what does the choice of source language cost, and can that
+cost be attributed to something the language does or does not let you say.
 
 \section{Conclusion}
 \label{sec:conclusion}
 
 % TODO.
+
+\bibliographystyle{plain}
+\bibliography{refs}
 
 \end{document}
