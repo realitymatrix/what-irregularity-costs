@@ -105,6 +105,26 @@ the patch: the experiment was impossible to run before, and it is now cheap to
 run. The defect is worth reporting upstream on its own merits.
 * **Submitted upstream as NVlabs/cuda-oxide#695** (draft), 2026-08-07:
   https://github.com/NVlabs/cuda-oxide/pull/695
+* Rebased onto upstream `main` after it moved 65 commits ahead. The conflict
+  was two sets of tests appended to the same end-of-file; resolving it by
+  concatenating both sides of each hunk produced a file that did not compile,
+  because one hunk had split an upstream test in half. Taking upstream's file
+  wholesale and re-appending the two new tests is the correct resolution and
+  the one to reach for whenever a conflict is append-versus-append.
+* Reviewing the change against CONTRIBUTING.md found three things worth
+  recording, because none of them would have failed locally:
+  - The new example carried an **NVIDIA copyright header** copied from
+    `vecadd`. CONTRIBUTING says to name a copyright holder only when you are
+    one or are authorised to; the file now carries the SPDX licence identifier
+    alone.
+  - The example needed registering in `NVVM_VERIFY_EXAMPLES` in
+    `scripts/smoketest.sh`. That array is what runs an example through the real
+    libNVVM verifier in compile-only mode, which is the only CI lane that has
+    no GPU. Without the entry the example still runs, but the regression this
+    whole change exists to prevent would be invisible on exactly the runners
+    most likely to catch it.
+  - Their process asks for an **issue before the PR**. Not done; the PR is
+    otherwise complete.
 * Scope grew by one during the work. The shipped `atomics` example turned out
   not to build under `--materialize-cubin` either, failing first on
   `fence syncscope("block") release` -> "Illegal instruction: fence" in
