@@ -1,0 +1,6 @@
+# Tectonic build products. The PDF is regenerated from main.tex and the
+# generated tables; committing it would be a second source of truth.
+main.pdf
+*.aux
+*.log
+*.out

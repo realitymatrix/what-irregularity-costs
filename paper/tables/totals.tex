@@ -1,0 +1,18 @@
+\begin{tabular}{llrrrrr}
+\toprule
+Workload & GPU & CUDA C++ & \multicolumn{2}{c}{Rust} & \multicolumn{2}{c}{Triton} \\
+\cmidrule(lr){4-5}\cmidrule(lr){6-7}
+ & & ms & ms & $\times$ & ms & $\times$ \\
+\midrule
+TartanAir, warm volume & RTX 5070 Ti & 0.388 & 0.396 & 1.02 & 1.133 & 2.92 \\
+TartanAir, warm volume & RTX 5060 & 0.763 & 0.768 & 1.01 & 2.229 & 2.92 \\
+TartanAir, cold volume & RTX 5070 Ti & 0.473 & 0.486 & 1.03 & 1.215 & 2.57 \\
+TartanAir, cold volume & RTX 5060 & 0.904 & 0.915 & 1.01 & 2.334 & 2.58 \\
+Plane, 320k points & RTX 5070 Ti & 0.363 & 0.379 & 1.04 & 0.877 & 2.41 \\
+Plane, 320k points & RTX 5060 & 0.673 & 0.686 & 1.02 & 1.665 & 2.47 \\
+Sphere, 1.28M points & RTX 5070 Ti & 0.976 & 1.025 & 1.05 & 2.986 & 3.06 \\
+Sphere, 1.28M points & RTX 5060 & 1.710 & 1.735 & 1.01 & 5.709 & 3.34 \\
+Sphere, 320k points & RTX 5070 Ti & 0.278 & 0.308 & 1.11 & 0.828 & 2.98 \\
+Sphere, 320k points & RTX 5060 & 0.511 & 0.538 & 1.05 & 1.526 & 2.99 \\
+\bottomrule
+\end{tabular}

@@ -1,0 +1,202 @@
+% What Irregularity Costs.
+%
+% Build:  tectonic paper/main.tex
+% Tables: paper/gen_tables.py results/sweep_YYYYmmdd_HHMMSS/sweep.csv
+%
+% No number in this paper is typed by hand. Every table under paper/tables/ is
+% generated from the raw sweep CSVs, because five published figures in this
+% project were later corrected and a hand-copied table would have preserved all
+% of them.
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  breaklines=true,
+  frame=single,
+  framesep=4pt,
+  rulecolor=\color{gray!40},
+  columns=fullflexible,
+}
+
+\title{What Irregularity Costs:\\
+CUDA C++, Rust, and Triton on a Hash-Blocked GPU Workload}
+
+\author{Petr Korolev}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+GPU language comparisons are almost always run on tiled dense linear algebra,
+where every toolchain is good and the differences are small. We implement the
+same hash-blocked TSDF fusion kernel five times, in CUDA C++, in Rust through
+NVIDIA's \texttt{cuda-oxide}, and in Triton, and measure it on a workload with
+the opposite character: an open-addressed hash table with compare-exchange
+insertion, data-dependent per-lane probe depth, and contended scatter.
+
+The result is a split. On the regular stage, which walks a truncation band and
+accumulates, all three languages land within a small factor of each other. On
+the irregular stage, which probes and inserts, Rust stays close to hand-written
+CUDA C++ while Triton is more than an order of magnitude slower. Language choice
+is nearly free on the work that is usually benchmarked and expensive on the work
+that is not.
+
+We attribute both gaps to specific things the languages cannot express, rather
+than reporting ratios. Triton's cost follows from a probe loop that must run to a
+compile-time bound and from \texttt{tl.atomic\_cas} taking no mask, which forces
+a scratch structure with no counterpart in the CUDA implementation; sizing that
+structure badly also silently destroys the kernel's ability to use additional
+streaming multiprocessors, a failure invisible on a single device. Rust's cost
+was not visible in any instruction count: the Rust kernel issues fewer
+instructions, fewer compare-exchanges, and fewer registers at identical
+occupancy, and was still slower. Hardware counters located it in L1 residency. A
+GPU-scope atomic load must be coherent across SMs, no NVIDIA L1 is coherent
+across SMs, and so the type-correct way to read a shared location bypasses the
+cache on every access. Replacing two such reads with plain loads, correct because
+the algorithm rather than the memory model provides the guarantee, closes most of
+the gap.
+
+We report the measurement discipline as a result in its own right. Roughly a
+dozen errors were caught during this work, three of which would have produced a
+reversed or null conclusion rather than a wrong magnitude, and two of which were
+caught only after the wrong number had been written down. We also report a
+defect found and fixed in \texttt{cuda-oxide} itself: its scoped atomic load and
+store could not be called at all in the build mode that produces real kernels.
+\end{abstract}
+
+\section{Introduction}
+
+Pick up almost any comparison of GPU programming languages and the benchmark
+will be a matrix multiply, a convolution, a stencil, or a reduction. These are
+reasonable choices. They are also the workloads every toolchain has been tuned
+for, and they share a property that makes them easy: the work per thread is
+known before the kernel launches.
+
+This paper measures the other case. A hash-blocked truncated signed distance
+function (TSDF) volume, the data structure underneath most real-time 3D
+reconstruction systems, is built by a kernel with none of that regularity. Each
+point walks a band of voxels, hashes each one to a block coordinate, probes an
+open-addressed table for a variable number of steps, and either finds an existing
+block or claims one with a compare-exchange. Threads in the same warp do
+different amounts of work, contend for the same table slots, and must observe one
+another's insertions.
+
+We implement this kernel five times. Two of the implementations are CPU and
+third-party baselines used to establish correctness; three are the comparison
+proper: CUDA C++, Rust compiled through NVIDIA's \texttt{cuda-oxide}, and
+Triton. All three operate on identical device memory with an identical hash
+layout, so the comparison measures how each language expresses the algorithm
+rather than which algorithm each language made convenient.
+
+\paragraph{Contributions.}
+\begin{enumerate}
+  \item A measured split between regular and irregular work
+        (Section~\ref{sec:results}): the three languages are close on the stage
+        that walks and accumulates, and separated by more than an order of
+        magnitude on the stage that probes and inserts.
+  \item Attribution of both gaps to language-level causes
+        (Section~\ref{sec:attribution}), including one that no instruction count
+        reveals and that required hardware performance counters to find.
+  \item A catalogue of what each language cannot say
+        (Section~\ref{sec:expressiveness}), each item encountered while
+        implementing the algorithm rather than constructed to make a point.
+  \item A measurement methodology and its failure modes
+        (Section~\ref{sec:method}), reported because three of the errors it
+        caught would have produced a confidently wrong conclusion rather than a
+        noisy one.
+\end{enumerate}
+
+\paragraph{What this paper is not.} It is not a claim that one language is
+better. Rust lands within a few percent of hand-written CUDA C++ on real data
+once a single idiom is corrected, and Triton's cost is concentrated in one stage
+that a practitioner could write in something else. It is a claim about where the
+costs are, and why.
+
+\section{The workload}
+\label{sec:workload}
+
+% TODO: hash layout, packed 64-bit key, the publication protocol, why the
+% integrate path splits into allocate and update, and why extraction is
+% excluded (docs/ARM-SCOPE.md).
+
+\section{Implementations}
+\label{sec:impl}
+
+% TODO: the five arms, the shared C ABI, the analytic correctness gate, and the
+% rule that no code was reused between arms.
+
+\section{Methodology}
+\label{sec:method}
+
+% TODO: batched launches, interleaved arm order, exclusivity guard, three passes
+% and medians, the validity gates, and the dozen caught errors with the three
+% that would have reversed a conclusion.
+
+\section{Results}
+\label{sec:results}
+
+Table~\ref{tab:stage} is the paper in one table.
+
+\begin{table}[h]
+\centering
+\input{tables/by_stage}
+\caption{Ratio to hand-written CUDA C++ by stage, across every recorded cell of
+the sweep and both GPUs. The regular stage separates the languages by a small
+factor; the irregular stage separates them by more than an order of magnitude.
+The wide ends of both ranges are the smallest cell, where the kernel is short
+enough that launch effects dominate; see Section~\ref{sec:results}.}
+\label{tab:stage}
+\end{table}
+
+\begin{table}[h]
+\centering
+\small
+\input{tables/totals}
+\caption{Full integrate path, allocate plus update, median of three passes.
+Real depth data (TartanAir) and synthetic scenes, on two GPUs differing
+$2.33\times$ in streaming multiprocessor count.}
+\label{tab:totals}
+\end{table}
+
+% TODO: prose for the results, the workload sweep axes, and the device axis.
+
+\section{Attribution}
+\label{sec:attribution}
+
+% TODO: Triton's two mechanisms; the scratch-region scaling failure; Rust's L1
+% residency finding and the eleven eliminated hypotheses.
+
+\section{What each language cannot say}
+\label{sec:expressiveness}
+
+% TODO: per-lane early exit, mask on atomic_cas, unbounded probe inexpressible,
+% scoped atomic load versus caching, and the compiler defect found upstream.
+
+\section{Threats to validity}
+\label{sec:threats}
+
+% TODO: one architecture (sm_120), the load-factor cap at 0.283, the
+% unattributed residual, one real sequence.
+
+\section{Related work}
+\label{sec:related}
+
+% TODO: Triton (Tillet et al., MAPL 2019); GPU language comparisons; TSDF
+% fusion (KinectFusion, Voxel Hashing); Rust on GPU.
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+% TODO.
+
+\end{document}
