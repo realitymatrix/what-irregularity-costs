@@ -336,6 +336,76 @@ current 2x table-to-pool ratio doubles voxel memory. That is the experiment to
 run next, and it is a change to the shared data structure, so it would apply to
 every arm.
 
+### SOLVED: derive the block index from the hash slot
+
+The root cause is a circular dependency, and naming it is what produced the fix.
+
+A hash entry holds two logically different things. The block's **identity**, the
+packed coordinate, is known before insertion. Its **location**, the index into
+the voxel pool, is handed out by a global counter and is only known after
+winning the slot. Publishing both atomically needs the location before the
+exchange; the location is only yours if the exchange succeeds.
+
+That circularity admits exactly two workarounds, and both arms and both earlier
+attempts are instances of one or the other:
+
+1. Publish identity, then location. Creates a window in which a reader sees a
+   key whose index is still -1, so readers must wait. This is the spin, and it
+   is 75% to 83% of the gap.
+2. Reserve the location speculatively. Leaks under contention, because at kernel
+   start every thread targeting a block observes the same empty slot before any
+   exchange lands. This is the 128-bit attempt, and it saturated the pool.
+
+Setting `block_idx = slot` removes the circularity rather than working around
+it. The location is then implied by the identity's position, so there is only
+one value to publish, a 64-bit exchange suffices, and a reader that matches a
+key knows the index immediately. No counter dependency, no publication store, no
+fence, no wait.
+
+Correct, and it matches A3 exactly:
+
+| arm | blocks | dropped points |
+|---|---|---|
+| A3 CUDA C++ | 1,160 | 0 |
+| A4 production | 1,160 | 0 |
+| A4 128-bit CAS | 65,536 | 2,273,655 |
+| **A4 slot-index** | **1,160** | **0** |
+
+Allocate, p50 ms:
+
+| points | A3 | A4 production | A4 `-spin` (incorrect) | A4 slot-index |
+|---|---|---|---|---|
+| 20,000 | 0.0051 | 0.0210 (4.12x) | 0.0157 | 0.0156 (3.05x) |
+| 320,000 | 0.0274 | 0.0453 (1.65x) | 0.0314 | **0.0305 (1.11x)** |
+| 1,280,000 | 0.0791 | 0.1203 (1.52x) | 0.0866 | **0.0864 (1.09x)** |
+
+It lands on top of the `-spin` variant at every size, which is the theoretical
+maximum: `-spin` is what the kernel costs with the wait deleted and correctness
+abandoned, and slot-indexing reaches the same time while staying correct. At
+realistic point counts it takes A4 from 1.52x to **1.09x** of A3.
+
+**Two caveats, both important.**
+
+The comparison is A4-with-the-fix against A3-without-it. A3 pays the same spin
+for the same reason, so a fair language comparison needs A3 given the same
+treatment; the 1.09x is not a claim that Rust is now within 9% on equal terms.
+It is a claim that the design change is worth about 40% of A4's allocate time,
+and it should help A3 as well.
+
+The price is memory. Every table slot now needs voxel storage, so the pool must
+be sized to the table rather than to the expected block count. This experiment
+avoids reallocating by masking the hash to `pool_capacity` instead of
+`hash_mask`, which leaves half the allocated table unused and doubles the
+effective load factor. A real implementation sizes the pool to the table and
+pays roughly 2x the voxel memory, which at 10,240 bytes per block is the
+dominant allocation. Whether that trade is worth 40% of the allocate stage
+depends on the deployment, and on an 8 GiB card it may not be.
+
+Also note the slot-index variant is not drop-in: it hashes with a different
+mask, so the shared update kernel cannot locate its blocks. Adopting it means
+changing the shared data structure, which is why it is filed as a design finding
+rather than a patch.
+
 ### What this makes actionable
 
 The spin exists to cover a window: a reader can see a published key before the

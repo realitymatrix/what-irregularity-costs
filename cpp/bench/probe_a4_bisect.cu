@@ -42,6 +42,7 @@ int32_t a4_allocate_nocount(const OsnTsdfDeviceView*, uint64_t, int32_t, float, 
 int32_t a4_allocate_nofence(const OsnTsdfDeviceView*, uint64_t, int32_t, float, float, float, float);
 int32_t a4_allocate_nopublish(const OsnTsdfDeviceView*, uint64_t, int32_t, float, float, float, float);
 int32_t a4_allocate_cas128(const OsnTsdfDeviceView*, uint64_t, int32_t, float, float, float, float);
+int32_t a4_allocate_slotidx(const OsnTsdfDeviceView*, uint64_t, int32_t, float, float, float, float);
 }
 
 namespace {
@@ -116,7 +117,7 @@ int main(int argc, char** argv) {
         {"A4 -count", a4_allocate_nocount, "no shared counter atomicAdd"},
         {"A4 -fence", a4_allocate_nofence, "no threadfence before publishing idx"},
         {"A4 -publish", a4_allocate_nopublish, "CAS + counter, but never publish (no spin)"},
-        {"A4 cas128", a4_allocate_cas128, "CORRECT: publish key+idx in one 128b CAS"},
+        {"A4 slotidx", a4_allocate_slotidx, "CORRECT: block index = hash slot"},
     };
 
     Timer t;

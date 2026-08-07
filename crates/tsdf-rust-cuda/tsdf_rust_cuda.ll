@@ -778,6 +778,181 @@ bb27:
   br i1 %v132, label %bb17, label %bb12
 }
 
+define void @alloc_kernel_slotidx(ptr %v0, i64 %v1, ptr %v2, i64 %v3, ptr %v4, i64 %v5, ptr %v6, i64 %v7, ptr %v8, i64 %v9, i32 %v10, i32 %v11, i32 %v12, float %v13, float %v14, float %v15, float %v16, float %v17, float %v18) #0 {
+entry:
+  %v19 = insertvalue { ptr, i64 } undef, ptr %v0, 0
+  %v20 = insertvalue { ptr, i64 } %v19, i64 %v1, 1
+  %v21 = insertvalue { ptr, i64 } undef, ptr %v2, 0
+  %v22 = insertvalue { ptr, i64 } %v21, i64 %v3, 1
+  %v23 = insertvalue { ptr, i64 } undef, ptr %v4, 0
+  %v24 = insertvalue { ptr, i64 } %v23, i64 %v5, 1
+  %v25 = insertvalue { ptr, i64 } undef, ptr %v6, 0
+  %v26 = insertvalue { ptr, i64 } %v25, i64 %v7, 1
+  %v27 = insertvalue { ptr, i64 } undef, ptr %v8, 0
+  %v28 = insertvalue { ptr, i64 } %v27, i64 %v9, 1
+  br label %bb0
+bb0:
+  %v29 = phi { ptr, i64 } [ %v20, %entry ]
+  %v30 = phi { ptr, i64 } [ %v22, %entry ]
+  %v31 = phi { ptr, i64 } [ %v24, %entry ]
+  %v32 = phi { ptr, i64 } [ %v26, %entry ]
+  %v33 = phi { ptr, i64 } [ %v28, %entry ]
+  %v34 = phi i32 [ %v10, %entry ]
+  %v35 = phi i32 [ %v11, %entry ]
+  %v36 = phi i32 [ %v12, %entry ]
+  %v37 = phi float [ %v13, %entry ]
+  %v38 = phi float [ %v14, %entry ]
+  %v39 = phi float [ %v15, %entry ]
+  %v40 = phi float [ %v16, %entry ]
+  %v41 = phi float [ %v17, %entry ]
+  %v42 = phi float [ %v18, %entry ]
+  %v43 = alloca {  }, align 1
+  %v44 = bitcast ptr %v43 to ptr
+  %v45 = call i64 @_RINvNtNtCscaYDm7YuRWO_11cuda_device6thread10___internal8index_1dNtB2_13UnknownDomainNtB2_17NativeCoordinatesECshAQQRahQDk9_14tsdf_rust_cuda(ptr %v44) #0
+  br label %bb1
+bb1:
+  %v46 = trunc i64 %v45 to i32
+  %v47 = icmp sge i32 %v46, %v34
+  %v48 = xor i1 %v47, 1
+  br i1 %v48, label %bb3, label %bb2
+bb2:
+  br label %bb21
+bb3:
+  %v49 = extractvalue { ptr, i64 } %v29, 0
+  %v50 = mul i32 %v46, 3
+  %v51 = sext i32 %v50 to i64
+  %v52 = getelementptr inbounds float, ptr %v49, i64 %v51
+  %v53 = load float, ptr %v52, align 4
+  %v54 = getelementptr inbounds float, ptr %v52, i64 1
+  %v55 = load float, ptr %v54, align 4
+  %v56 = getelementptr inbounds float, ptr %v52, i64 2
+  %v57 = load float, ptr %v56, align 4
+  %v58 = fsub contract float %v53, %v39
+  %v59 = fsub contract float %v55, %v40
+  %v60 = fsub contract float %v57, %v41
+  %v61 = fmul contract float %v58, %v58
+  %v62 = fmul contract float %v59, %v59
+  %v63 = fadd contract float %v61, %v62
+  %v64 = fmul contract float %v60, %v60
+  %v65 = fadd contract float %v63, %v64
+  %v66 = fcmp ogt float %v42, 0.0
+  %v67 = xor i1 %v66, 1
+  br i1 %v67, label %bb6, label %bb4
+bb4:
+  %v68 = fcmp ogt float %v65, %v42
+  %v69 = xor i1 %v68, 1
+  br i1 %v69, label %bb6, label %bb5
+bb5:
+  br label %bb20
+bb6:
+  %v70 = call float @__nv_sqrtf(float %v65) #0
+  br label %bb22
+bb7:
+  %v71 = fdiv contract float %v58, %v70
+  %v72 = fdiv contract float %v59, %v70
+  %v73 = fdiv contract float %v60, %v70
+  %v74 = fdiv contract float 1.0, %v37
+  %v75 = fmul contract float %v38, %v74
+  %v76 = call float @__nv_ceilf(float %v75) #0
+  br label %bb23
+bb8:
+  br label %bb20
+bb9:
+  %v77 = sub i32 0, %v99
+  br label %bb10
+bb10:
+  %v78 = phi i32 [ %v77, %bb9 ], [ %v95, %bb18 ]
+  %v79 = icmp sle i32 %v78, %v99
+  %v80 = xor i1 %v79, 1
+  br i1 %v80, label %bb19, label %bb11
+bb11:
+  %v81 = sitofp i32 %v78 to float
+  %v82 = fmul contract float %v81, %v37
+  %v83 = fmul contract float %v71, %v82
+  %v84 = fadd contract float %v53, %v83
+  %v85 = fmul contract float %v84, %v74
+  %v86 = call float @__nv_floorf(float %v85) #0
+  br label %bb24
+bb12:
+  %v87 = extractvalue { ptr, i64 } %v30, 0
+  %v88 = extractvalue { ptr, i64 } %v31, 0
+  %v89 = extractvalue { ptr, i64 } %v33, 0
+  %v90 = extractvalue { ptr, i64 } %v32, 0
+  %v91 = call i32 @tsdf_rust_cuda__kernels__floor_div(i32 %v100, i32 8) #0
+  br label %bb13
+bb13:
+  %v92 = call i32 @tsdf_rust_cuda__kernels__floor_div(i32 %v105, i32 8) #0
+  br label %bb14
+bb14:
+  %v93 = call i32 @tsdf_rust_cuda__kernels__floor_div(i32 %v110, i32 8) #0
+  br label %bb15
+bb15:
+  %v94 = call i32 @tsdf_rust_cuda__kernels__find_or_insert_slotidx(ptr %v87, i32 %v35, ptr %v88, ptr %v89, ptr %v90, i32 %v91, i32 %v92, i32 %v93) #0
+  br label %bb16
+bb16:
+  br label %bb18
+bb17:
+  br label %bb18
+bb18:
+  %v95 = add i32 %v78, 1
+  br label %bb10
+bb19:
+  br label %bb21
+bb20:
+  br label %bb21
+bb21:
+  ret void
+bb22:
+  %v96 = fcmp ogt float %v70, 0.0000009999999974752427
+  %v97 = xor i1 %v96, 1
+  br i1 %v97, label %bb8, label %bb7
+bb23:
+  %v98 = call i32 @llvm.fptosi.sat.i32.f32(float %v76) #0
+  %v99 = call i32 @_RNvYlNtNtCsiQ4CSjCKWVc_4core3cmp3Ord3maxCshAQQRahQDk9_14tsdf_rust_cuda(i32 %v98, i32 1) #0
+  br label %bb9
+bb24:
+  %v100 = call i32 @llvm.fptosi.sat.i32.f32(float %v86) #0
+  %v101 = fmul contract float %v72, %v82
+  %v102 = fadd contract float %v55, %v101
+  %v103 = fmul contract float %v102, %v74
+  %v104 = call float @__nv_floorf(float %v103) #0
+  br label %bb25
+bb25:
+  %v105 = call i32 @llvm.fptosi.sat.i32.f32(float %v104) #0
+  %v106 = fmul contract float %v73, %v82
+  %v107 = fadd contract float %v57, %v106
+  %v108 = fmul contract float %v107, %v74
+  %v109 = call float @__nv_floorf(float %v108) #0
+  br label %bb26
+bb26:
+  %v110 = call i32 @llvm.fptosi.sat.i32.f32(float %v109) #0
+  %v111 = sitofp i32 %v100 to float
+  %v112 = fadd contract float %v111, 0.5
+  %v113 = fmul contract float %v112, %v37
+  %v114 = sitofp i32 %v105 to float
+  %v115 = fadd contract float %v114, 0.5
+  %v116 = fmul contract float %v115, %v37
+  %v117 = sitofp i32 %v110 to float
+  %v118 = fadd contract float %v117, 0.5
+  %v119 = fmul contract float %v118, %v37
+  %v120 = fsub contract float %v113, %v39
+  %v121 = fsub contract float %v116, %v40
+  %v122 = fsub contract float %v119, %v41
+  %v123 = fmul contract float %v120, %v120
+  %v124 = fmul contract float %v121, %v121
+  %v125 = fadd contract float %v123, %v124
+  %v126 = fmul contract float %v122, %v122
+  %v127 = fadd contract float %v125, %v126
+  %v128 = call float @__nv_sqrtf(float %v127) #0
+  br label %bb27
+bb27:
+  %v129 = fsub contract float %v70, %v128
+  %v130 = fneg float %v38
+  %v131 = fcmp oge float %v129, %v130
+  %v132 = xor i1 %v131, 1
+  br i1 %v132, label %bb17, label %bb12
+}
+
 define void @alloc_kernel(ptr %v0, i64 %v1, ptr %v2, i64 %v3, ptr %v4, i64 %v5, ptr %v6, i64 %v7, ptr %v8, i64 %v9, i32 %v10, i32 %v11, i32 %v12, float %v13, float %v14, float %v15, float %v16, float %v17, float %v18) #0 {
 entry:
   %v19 = insertvalue { ptr, i64 } undef, ptr %v0, 0
@@ -2455,6 +2630,144 @@ bb40:
   br i1 %v96, label %bb12, label %bb11
 }
 
+define i32 @tsdf_rust_cuda__kernels__find_or_insert_slotidx(ptr %v0, i32 %v1, ptr %v2, ptr %v3, ptr %v4, i32 %v5, i32 %v6, i32 %v7) #0 {
+entry:
+  br label %bb0
+bb0:
+  %v8 = phi ptr [ %v0, %entry ]
+  %v9 = phi i32 [ %v1, %entry ]
+  %v10 = phi ptr [ %v2, %entry ]
+  %v11 = phi ptr [ %v3, %entry ]
+  %v12 = phi ptr [ %v4, %entry ]
+  %v13 = phi i32 [ %v5, %entry ]
+  %v14 = phi i32 [ %v6, %entry ]
+  %v15 = phi i32 [ %v7, %entry ]
+  %v16 = bitcast i32 %v9 to i32
+  %v17 = sub i32 %v16, 1
+  %v18 = sext i32 %v13 to i64
+  %v19 = add i64 %v18, 1048576
+  %v20 = and i64 42, 63
+  %v21 = shl i64 %v19, %v20
+  %v22 = sext i32 %v14 to i64
+  %v23 = add i64 %v22, 1048576
+  %v24 = and i64 21, 63
+  %v25 = shl i64 %v23, %v24
+  %v26 = or i64 %v21, %v25
+  %v27 = sext i32 %v15 to i64
+  %v28 = add i64 %v27, 1048576
+  %v29 = or i64 %v26, %v28
+  %v30 = bitcast i32 %v13 to i32
+  %v31 = mul i32 %v30, 73856093
+  %v32 = bitcast i32 %v14 to i32
+  %v33 = mul i32 %v32, 19349663
+  %v34 = xor i32 %v31, %v33
+  %v35 = bitcast i32 %v15 to i32
+  %v36 = mul i32 %v35, 83492791
+  %v37 = xor i32 %v34, %v36
+  %v38 = and i32 %v37, %v17
+  br label %bb1
+bb1:
+  %v39 = phi i32 [ 0, %bb0 ], [ %v67, %bb13 ]
+  %v40 = icmp ule i32 %v39, %v17
+  %v41 = xor i1 %v40, 1
+  br i1 %v41, label %bb14, label %bb2
+bb2:
+  %v42 = add i32 %v38, %v39
+  %v43 = and i32 %v42, %v17
+  %v44 = zext i32 %v43 to i64
+  %v45 = mul i64 %v44, 2
+  %v46 = getelementptr inbounds i64, ptr %v8, i64 %v45
+  %v47 = bitcast ptr %v46 to ptr
+  %v48 = call i64 asm sideeffect "ld.relaxed.gpu.b64 $0, [$1];", "=l,l,~{memory}"(ptr %v47)
+  br label %bb3
+bb3:
+  %v49 = icmp eq i64 %v48, %v29
+  %v50 = xor i1 %v49, 1
+  br i1 %v50, label %bb5, label %bb4
+bb4:
+  %v51 = trunc i64 %v44 to i32
+  br label %bb17
+bb5:
+  %v52 = icmp eq i64 %v48, 18446744073709551615
+  br i1 %v52, label %bb6, label %bb13
+bb6:
+  %v53 = cmpxchg ptr %v47, i64 18446744073709551615, i64 %v29 syncscope("device") monotonic monotonic
+  %v54 = extractvalue { i64, i1 } %v53, 0
+  br label %bb19
+bb7:
+  unreachable
+bb8:
+  %v55 = extractvalue { i64, i64 } %v85, 1
+  %v56 = icmp eq i64 %v55, %v29
+  %v57 = xor i1 %v56, 1
+  br i1 %v57, label %bb12, label %bb11
+bb9:
+  %v58 = mul i64 %v44, 3
+  %v59 = getelementptr inbounds i32, ptr %v12, i64 %v58
+  store i32 %v13, ptr %v59, align 4
+  %v60 = getelementptr inbounds i32, ptr %v59, i64 1
+  store i32 %v14, ptr %v60, align 4
+  %v61 = getelementptr inbounds i32, ptr %v59, i64 2
+  store i32 %v15, ptr %v61, align 4
+  %v62 = bitcast ptr %v10 to ptr
+  %v63 = atomicrmw add ptr %v62, i32 1 syncscope("device") monotonic
+  br label %bb10
+bb10:
+  %v64 = trunc i64 %v44 to i32
+  br label %bb16
+bb11:
+  %v65 = extractvalue { i64, i64 } %v85, 1
+  %v66 = trunc i64 %v44 to i32
+  br label %bb16
+bb12:
+  br label %bb13
+bb13:
+  %v67 = add i32 %v39, 1
+  br label %bb1
+bb14:
+  %v68 = bitcast ptr %v11 to ptr
+  %v69 = atomicrmw add ptr %v68, i64 1 syncscope("device") monotonic
+  br label %bb15
+bb15:
+  br label %bb18
+bb16:
+  %v70 = phi i32 [ %v64, %bb10 ], [ %v66, %bb11 ]
+  br label %bb17
+bb17:
+  %v71 = phi i32 [ %v51, %bb4 ], [ %v70, %bb16 ]
+  br label %bb18
+bb18:
+  %v72 = phi i32 [ 4294967295, %bb15 ], [ %v71, %bb17 ]
+  ret i32 %v72
+bb19:
+  %v73 = icmp eq i64 %v54, 18446744073709551615
+  br i1 %v73, label %bb20, label %bb21
+bb20:
+  %v74 = insertvalue { i64, i64 } undef, i64 0, 0
+  %v75 = insertvalue { i64, i64 } %v74, i64 %v54, 1
+  %v76 = extractvalue { i64, i64 } %v75, 0
+  %v77 = extractvalue { i64, i64 } %v75, 1
+  br label %bb22
+bb21:
+  %v78 = insertvalue { i64, i64 } undef, i64 1, 0
+  %v79 = insertvalue { i64, i64 } %v78, i64 %v54, 1
+  %v80 = extractvalue { i64, i64 } %v79, 0
+  %v81 = extractvalue { i64, i64 } %v79, 1
+  br label %bb22
+bb22:
+  %v82 = phi i64 [ %v76, %bb20 ], [ %v80, %bb21 ]
+  %v83 = phi i64 [ %v77, %bb20 ], [ %v81, %bb21 ]
+  %v84 = insertvalue { i64, i64 } undef, i64 %v82, 0
+  %v85 = insertvalue { i64, i64 } %v84, i64 %v83, 1
+  %v86 = extractvalue { i64, i64 } %v85, 0
+  %v87 = bitcast i64 %v86 to i64
+  %v88 = icmp eq i64 %v87, 0
+  br i1 %v88, label %bb9, label %bb23
+bb23:
+  %v89 = icmp eq i64 %v87, 1
+  br i1 %v89, label %bb8, label %bb7
+}
+
 declare void @llvm.nvvm.membar.gl()
 
 define i32 @_RINvNtCshAQQRahQDk9_14tsdf_rust_cuda7kernels14find_or_insertKb1_KBX_KBX_KBX_KBX_Kb0_EB4_(ptr %v0, i32 %v1, ptr %v2, i32 %v3, ptr %v4, ptr %v5, i32 %v6, i32 %v7, i32 %v8) alwaysinline #0 {
@@ -3621,7 +3934,7 @@ bb0:
 }
 
 
-@llvm.used = appending global [10 x ptr] [ptr @alloc_kernel, ptr @alloc_kernel_cas128, ptr @alloc_kernel_countcas, ptr @alloc_kernel_nocas, ptr @alloc_kernel_nocount, ptr @alloc_kernel_nofence, ptr @alloc_kernel_nopublish, ptr @alloc_kernel_nospin, ptr @cas128_selftest, ptr @update_kernel], section "llvm.metadata"
+@llvm.used = appending global [11 x ptr] [ptr @alloc_kernel, ptr @alloc_kernel_cas128, ptr @alloc_kernel_countcas, ptr @alloc_kernel_nocas, ptr @alloc_kernel_nocount, ptr @alloc_kernel_nofence, ptr @alloc_kernel_nopublish, ptr @alloc_kernel_nospin, ptr @alloc_kernel_slotidx, ptr @cas128_selftest, ptr @update_kernel], section "llvm.metadata"
 
 attributes #0 = { convergent }
 
@@ -3629,13 +3942,14 @@ attributes #0 = { convergent }
 !1 = !{ptr @alloc_kernel_nofence, !"kernel", i32 1}
 !2 = !{ptr @alloc_kernel_nocas, !"kernel", i32 1}
 !3 = !{ptr @alloc_kernel_nopublish, !"kernel", i32 1}
-!4 = !{ptr @alloc_kernel, !"kernel", i32 1}
-!5 = !{ptr @alloc_kernel_cas128, !"kernel", i32 1}
-!6 = !{ptr @alloc_kernel_nocount, !"kernel", i32 1}
-!7 = !{ptr @cas128_selftest, !"kernel", i32 1}
-!8 = !{ptr @alloc_kernel_countcas, !"kernel", i32 1}
-!9 = !{ptr @alloc_kernel_nospin, !"kernel", i32 1}
-!nvvm.annotations = !{!0, !1, !2, !3, !4, !5, !6, !7, !8, !9}
+!4 = !{ptr @alloc_kernel_slotidx, !"kernel", i32 1}
+!5 = !{ptr @alloc_kernel, !"kernel", i32 1}
+!6 = !{ptr @alloc_kernel_cas128, !"kernel", i32 1}
+!7 = !{ptr @alloc_kernel_nocount, !"kernel", i32 1}
+!8 = !{ptr @cas128_selftest, !"kernel", i32 1}
+!9 = !{ptr @alloc_kernel_countcas, !"kernel", i32 1}
+!10 = !{ptr @alloc_kernel_nospin, !"kernel", i32 1}
+!nvvm.annotations = !{!0, !1, !2, !3, !4, !5, !6, !7, !8, !9, !10}
 
-!nvvmir.version = !{!10}
-!10 = !{i32 2, i32 0, i32 3, i32 2}
+!nvvmir.version = !{!11}
+!11 = !{i32 2, i32 0, i32 3, i32 2}

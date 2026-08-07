@@ -476,6 +476,90 @@ mod kernels {
         }
     }
 
+    /// Find or insert with the block index DERIVED FROM THE SLOT.
+    ///
+    /// The spin exists because a hash entry holds two logically different
+    /// things: the block's identity, known before insertion, and its location
+    /// in the voxel pool, assigned by a counter and known only after winning
+    /// the slot. Publishing both atomically needs the location first;
+    /// the location is only yours if the exchange succeeds. That circularity is
+    /// the whole problem, and it has exactly two escapes: publish identity then
+    /// location and make readers wait (what both arms do), or reserve the
+    /// location speculatively and leak it under contention (tried, and it
+    /// saturates the pool).
+    ///
+    /// Setting `block_idx = slot` removes the circularity instead of working
+    /// around it. There is then only one value to publish, a 64-bit exchange
+    /// suffices, and a reader that matches a key knows the index immediately.
+    /// No counter, no publication store, no fence, and no wait.
+    ///
+    /// The price is that the voxel pool must have an entry per table slot. Here
+    /// that is arranged without changing any allocation by masking the hash to
+    /// `pool_capacity` rather than to `hash_mask`, so the effective table is the
+    /// pool. Since the allocated table is twice the pool, half of it goes
+    /// unused and the effective load factor doubles. A real implementation would
+    /// size the pool to the table instead and pay roughly 2x the voxel memory.
+    ///
+    /// `counters` is still incremented once per successful insert, but only so
+    /// the host can check the block count. Nothing reads it, and no thread waits
+    /// on it.
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn find_or_insert_slotidx(
+        table: *mut i64,
+        pool_capacity: i32,
+        counters: *mut i32,
+        drop_count: *mut i64,
+        block_coord: *mut i32,
+        bx: i32,
+        by: i32,
+        bz: i32,
+    ) -> i32 {
+        unsafe {
+            // Effective table = the pool, so every slot has voxel storage.
+            let mask = (pool_capacity as u32).wrapping_sub(1);
+            let want = pack(bx, by, bz);
+            let start = hash_block(bx, by, bz, mask);
+            let mut probe: u32 = 0;
+            while probe <= mask {
+                let slot = ((start + probe) & mask) as usize;
+                let key_ptr = table.add(slot * 2);
+                let key_atomic = DeviceAtomicI64::from_ptr(key_ptr);
+                let key = key_atomic.load(AtomicOrdering::Relaxed);
+
+                // A matching key means the block is ours to use, and its index
+                // IS this slot. Nothing to wait for.
+                if key == want {
+                    return slot as i32;
+                }
+                if key == EMPTY_KEY {
+                    match key_atomic.compare_exchange(
+                        EMPTY_KEY,
+                        want,
+                        AtomicOrdering::Relaxed,
+                        AtomicOrdering::Relaxed,
+                    ) {
+                        Ok(_) => {
+                            let bc = block_coord.add((slot * 3) as usize);
+                            bc.write(bx);
+                            bc.add(1).write(by);
+                            bc.add(2).write(bz);
+                            DeviceAtomicI32::from_ptr(counters)
+                                .fetch_add(1, AtomicOrdering::Relaxed);
+                            return slot as i32;
+                        }
+                        // Lost the race for this slot. If the winner wanted the
+                        // same block, the slot is still the answer.
+                        Err(actual) if actual == want => return slot as i32,
+                        Err(_) => {}
+                    }
+                }
+                probe += 1;
+            }
+            DeviceAtomicI64::from_ptr(drop_count).fetch_add(1, AtomicOrdering::Relaxed);
+            -1
+        }
+    }
+
     /// Pass 1: allocate every block the batch's truncation band touches.
     #[kernel]
     pub fn alloc_kernel(
@@ -535,6 +619,78 @@ mod kernels {
                         hash_mask,
                         counters.as_ptr() as *mut i32,
                         pool_capacity,
+                        drop_count.as_ptr() as *mut i64,
+                        block_coord.as_ptr() as *mut i32,
+                        floor_div(vx, BLOCK_DIM),
+                        floor_div(vy, BLOCK_DIM),
+                        floor_div(vz, BLOCK_DIM),
+                    );
+                }
+                s += 1;
+            }
+        }
+    }
+
+    /// Pass 1 with the block index derived from the hash slot: no counter
+    /// dependency, no publication store, no fence, and no wait. See
+    /// `find_or_insert_slotidx`.
+    #[kernel]
+    pub fn alloc_kernel_slotidx(
+        positions: &[f32],
+        table: &[i64],
+        counters: &[i32],
+        block_coord: &[i32],
+        drop_count: &[i64],
+        n_points: i32,
+        pool_capacity: i32,
+        hash_mask: u32,
+        voxel_size: f32,
+        trunc: f32,
+        cam_x: f32,
+        cam_y: f32,
+        cam_z: f32,
+        radius_sq: f32,
+    ) {
+        let i = thread::index_1d().get() as i32;
+        if i >= n_points {
+            return;
+        }
+        unsafe {
+            let p = positions.as_ptr().add((i * 3) as usize);
+            let (px, py, pz) = (*p, *p.add(1), *p.add(2));
+            let (dx, dy, dz) = (px - cam_x, py - cam_y, pz - cam_z);
+            let d2 = dx * dx + dy * dy + dz * dz;
+            if radius_sq > 0.0 && d2 > radius_sq {
+                return;
+            }
+            let dist = d2.sqrt();
+            if !(dist > 1e-6) {
+                return;
+            }
+            let (ux, uy, uz) = (dx / dist, dy / dist, dz / dist);
+            let inv_voxel = 1.0f32 / voxel_size;
+            let steps = ((trunc * inv_voxel).ceil() as i32).max(1);
+
+            let mut s = -steps;
+            while s <= steps {
+                let t = (s as f32) * voxel_size;
+                let vx = ((px + ux * t) * inv_voxel).floor() as i32;
+                let vy = ((py + uy * t) * inv_voxel).floor() as i32;
+                let vz = ((pz + uz * t) * inv_voxel).floor() as i32;
+
+                // Same occlusion cull as the update pass. Allocation must apply
+                // exactly the same gate, or the pool fills with blocks that
+                // never receive a contribution and the block count diverges
+                // from the other arms while the meshes still match.
+                let cx = ((vx as f32) + 0.5) * voxel_size;
+                let cy = ((vy as f32) + 0.5) * voxel_size;
+                let cz = ((vz as f32) + 0.5) * voxel_size;
+                let (ex, ey, ez) = (cx - cam_x, cy - cam_y, cz - cam_z);
+                if dist - (ex * ex + ey * ey + ez * ez).sqrt() >= -trunc {
+                    find_or_insert_slotidx(
+                        table.as_ptr() as *mut i64,
+                        pool_capacity,
+                        counters.as_ptr() as *mut i32,
                         drop_count.as_ptr() as *mut i64,
                         block_coord.as_ptr() as *mut i32,
                         floor_div(vx, BLOCK_DIM),
@@ -1404,6 +1560,62 @@ pub unsafe extern "C" fn a4_allocate_nospin(
     // SAFETY: shapes and buffer extents match the kernel's accesses.
     let res = unsafe {
         m.module.alloc_kernel_nospin(
+            &stream,
+            cfg_for(n_points),
+            pos.get(),
+            table.get(),
+            counters.get(),
+            coords.get(),
+            drops.get(),
+            n_points,
+            v.pool_capacity,
+            v.hash_mask,
+            v.voxel_size_m,
+            v.trunc_m,
+            cam_x,
+            cam_y,
+            cam_z,
+            rsq,
+        )
+    };
+    if res.is_ok() { 0 } else { 3 }
+}
+
+/// Correct alternative implementation: the block index is the hash slot,
+/// so there is no counter dependency, no publication and no wait.
+///
+/// # Safety
+/// See `a4_allocate_blocks`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn a4_allocate_slotidx(
+    view: *const DeviceViewC,
+    d_positions: u64,
+    n_points: i32,
+    cam_x: f32,
+    cam_y: f32,
+    cam_z: f32,
+    radius_m: f32,
+) -> i32 {
+    let Some(m) = module() else { return 1 };
+    if view.is_null() || n_points <= 0 {
+        return 2;
+    }
+    let v = unsafe { &*view };
+    let n = n_points as usize;
+    let pool = v.pool_capacity as usize;
+    let table_len = ((v.hash_mask as usize) + 1) * 2; // 2 i64 words per slot
+
+    let pos = unsafe { Borrowed::<f32>::new(d_positions, n * 3, m.ctx.clone()) };
+    let table = unsafe { Borrowed::<i64>::new(v.table, table_len, m.ctx.clone()) };
+    let counters = unsafe { Borrowed::<i32>::new(v.block_count, 1, m.ctx.clone()) };
+    let coords = unsafe { Borrowed::<i32>::new(v.block_coord, pool * 3, m.ctx.clone()) };
+    let drops = unsafe { Borrowed::<i64>::new(v.drop_count, 1, m.ctx.clone()) };
+
+    let rsq = if radius_m > 0.0 { radius_m * radius_m } else { 0.0 };
+    let stream = m.ctx.default_stream();
+    // SAFETY: shapes and buffer extents match the kernel's accesses.
+    let res = unsafe {
+        m.module.alloc_kernel_slotidx(
             &stream,
             cfg_for(n_points),
             pos.get(),
