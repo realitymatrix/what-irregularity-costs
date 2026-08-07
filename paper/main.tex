@@ -672,8 +672,140 @@ running.
 \section{What each language cannot say}
 \label{sec:expressiveness}
 
-% TODO: per-lane early exit, mask on atomic_cas, unbounded probe inexpressible,
-% scoped atomic load versus caching, and the compiler defect found upstream.
+Section~\ref{sec:attribution} priced what the languages cost. This section
+describes what they cannot say, which is what those prices are made of. Every
+item below was encountered while implementing the algorithm rather than
+constructed to make a point, and we separate genuine expressive limits from one
+defect that is merely a bug.
+
+\subsection{Triton: the probe loop}
+
+Listing~\ref{lst:triton} is the Triton probe, against the CUDA C++ of
+Listing~\ref{lst:insert}.
+
+\begin{lstlisting}[caption={The same probe in Triton. Both differences from
+Listing~\ref{lst:insert} are forced.}, label={lst:triton}]
+done = ~active
+for p in tl.static_range(0, MAX_PROBE):   # fixed trip count, no early exit
+    slot = (start + p) & hash_mask
+    eff  = tl.where(done, my_scratch, slot)   # resolved lanes aimed elsewhere
+    key  = tl.load(table_i64 + eff * 2)
+    ...
+    eff_cas = tl.where(empty, slot, my_scratch)
+    old = tl.atomic_cas(table_i64 + eff_cas * 2, cmp, want)  # no mask parameter
+    done = done | won | hit
+\end{lstlisting}
+
+Two things are forced.
+
+\paragraph{There is no per-lane early exit.} Triton programs operate on blocks of
+lanes and the compiler owns the mapping from tensor elements to lanes. Allowing
+one element to leave a loop would tie control flow to that mapping and forfeit
+the compiler's freedom to choose it, which is the freedom Triton's performance on
+tiled workloads comes from. The restriction is principled. It is also why the
+loop above runs to a bound with a \texttt{done} mask.
+
+The masks are being used outside their design. A \texttt{mask} on
+\texttt{tl.load} exists for ragged tile boundaries, where it suppresses a handful
+of lanes on one block out of many and its cost is negligible by construction.
+Carrying a \texttt{done} mask through a probe loop suppresses most lanes on most
+blocks for most iterations, and nothing in the cost model was built to make that
+cheap.
+
+\paragraph{\texttt{tl.atomic\_cas} takes no mask, and \texttt{tl.atomic\_add}
+does.} This asymmetry looks like drift rather than design: if masking an atomic
+were impossible, neither would have it. The consequence is that resolved lanes
+must be given somewhere harmless to write, so the programmer acquires a scratch
+region, its sizing, and its indexing, none of which appear in the CUDA version.
+Section~\ref{sec:attribution} measured the cost of getting that sizing wrong at a
+factor of twenty, with the worst setting also destroying the kernel's ability to
+use additional hardware.
+
+\subsection{Triton: an unbounded probe is inexpressible at any price}
+
+The bound is a \texttt{tl.static\_range} trip count, so it must be a compile-time
+constant and the loop is unrolled. Raising it is not a workaround. Moving from 8
+to 32 took roughly twenty minutes to compile against seconds, and produced a
+$3.7\times$ larger cubin.
+
+The consequence is a correctness one. A bound small enough to compile is small
+enough to lose data: at a load factor of 0.283 the Triton arm silently dropped 13
+blocks of 1{,}160, and at the 0.035 of our original single-scene benchmark it
+dropped none. The loss is monotonic in load factor and invisible in a sparse
+benchmark.
+
+It was also unreported. The implementation counted blocks lost to pool
+exhaustion, as the other arms do, but had no equivalent accounting for probe
+exhaustion, because the CUDA and Rust arms cannot exhaust a probe: they scan
+until they find a slot. We added the accounting, and note that its absence was
+the natural consequence of porting an algorithm whose failure mode does not exist
+in the original.
+
+So the honest statement is stronger than a throughput ratio. \emph{Triton cannot
+express an unbounded probe. The programmer must pick a bound. A bound small
+enough to compile is small enough to lose data at load factors CUDA C++ handles
+exactly, and the loss is silent, load-dependent, and absent from sparse
+benchmarks.}
+
+\subsection{Triton: diagnostics}
+
+Issuing an atomic on a scalar pointer rather than a tensor of pointers aborts the
+compiler with an MLIR assertion, \texttt{only integers and floats have a
+bitwidth}, and no source location. A compiler crash without a location is
+materially worse than a type error: it reports that something failed, not what
+the programmer did. We mention it because it is the kind of cost that never
+appears in a performance table and dominates the experience of writing the code.
+
+\subsection{Rust: the safe construct is the expensive one}
+
+Rust's limit is not that something is inexpressible. It is that the natural,
+idiomatic, type-correct way to read a location another thread writes carries a
+guarantee stronger than the algorithm needs, and that guarantee has a fixed
+hardware cost.
+
+A scoped atomic load is coherent at its scope. No NVIDIA L1 is coherent across
+streaming multiprocessors. Therefore the access cannot be served from L1, on
+every call, regardless of ordering: relaxed removes ordering, not coherence.
+Section~\ref{sec:attribution} measured that at 26 points of L1 hit rate and
+$1.70\times$ the traffic to L2.
+
+Nothing warns the programmer. The source looks correct, the generated PTX looks
+correct, the machine code looks correct, and the instruction counts favour the
+slower version. The cost is visible only in where the data is permitted to live.
+
+The corresponding CUDA C++ is a plain load whose safety rests on an argument
+about the algorithm rather than on the type system: a stale key costs one extra
+probe, and a stale index enters a wait loop. That argument is not checkable by a
+compiler, which is exactly why the safer-looking construct is the one a
+conscientious programmer reaches for.
+
+\subsection{A defect, which is not the same thing}
+
+We separate the following from the above because it is a bug, and it has been
+fixed.
+
+In the version of \texttt{cuda-oxide} used for this work, the scoped atomic load
+and store could not be called at all. Both lowered to LLVM IR forms that libNVVM
+rejects, so every call failed the backend verifier in the build mode that
+produces real kernels, with an error naming an LLVM basic block rather than the
+offending line of Rust. Any \texttt{AcqRel} or \texttt{SeqCst} ordering failed
+the same way through a rejected LLVM fence. The project's own atomics example
+does not build in that mode.
+
+The underlying PTX instructions have existed since sm\_70, so this is a lowering
+gap rather than a hardware limit. We contributed a fix that lowers the three
+operations to those instructions, along with tests, a regression example, and the
+continuous-integration registration whose absence had allowed the defect to
+survive: the example that exercises these APIs was only ever run in the build
+mode where the problem does not appear.
+
+This correction also revises a claim we made in an earlier draft. We had written
+that libNVVM's restrictions force Rust back onto volatile reads and an explicit
+fence, and that this weakens the safety argument for Rust on GPUs. That is wrong.
+The scoped API exists precisely so callers need not do that; it was simply
+unusable. The distinction matters, because a design limitation and a bug support
+very different conclusions, and only one of them is an argument about the
+language.
 
 \section{Threats to validity}
 \label{sec:threats}
