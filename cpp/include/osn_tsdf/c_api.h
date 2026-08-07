@@ -105,6 +105,12 @@ int32_t osn_tsdf_cuda_extract_mesh(OsnTsdfCudaVolume* v, float* buffer_posnor, u
 /// the table plus the counters, which is untimed between repetitions.
 int32_t osn_tsdf_cuda_reset(OsnTsdfCudaVolume* v);
 
+/// MEASUREMENT ONLY: allocate, counting compare-exchange ATTEMPTS into the
+/// drop counter. Only valid on a pool large enough that nothing is dropped.
+int32_t osn_tsdf_cuda_allocate_counting_cas(OsnTsdfCudaVolume* v, const float* d_positions,
+                                            int32_t n_points, float cam_x, float cam_y,
+                                            float cam_z, float radius_m);
+
 int32_t osn_tsdf_cuda_block_count(const OsnTsdfCudaVolume* v);
 uint64_t osn_tsdf_cuda_drop_count(const OsnTsdfCudaVolume* v);
 void osn_tsdf_cuda_synchronize(const OsnTsdfCudaVolume* v);

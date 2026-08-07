@@ -238,6 +238,53 @@ Distinguishing them needs either a device-side counter of CAS attempts added to
 both arms, or `ncu`'s warp stall reasons. The counter is the cheaper experiment
 and does not need root.
 
+## Instruction counts, static and dynamic: every one favours A4
+
+Measured 2026-08-07 with `bench/probe_cas_count.cu` and `cuobjdump`, at
+`pts-20k`. Both arms carry an identical compile-time switch that tallies every
+compare-exchange ATTEMPT into `drop_count`, so the dynamic counts are directly
+comparable.
+
+| metric | A3 CUDA C++ | A4 Rust | favours |
+|---|---|---|---|
+| static SASS instructions | 520 | 528 | parity, 1.02x |
+| branches (BRA/BSSY/BSYNC/BRX) | 72 | 63 | **A4** |
+| global memory ops (LDG/STG) | 11 | 6 | **A4** |
+| atomics, static (ATOMG/RED) | 10 | 7 | **A4** |
+| registers | 34 | 28 | **A4** |
+| stack / local / spills | 0 | 0 | tie |
+| **dynamic CAS attempts** | **28,558** | **25,026** | **A4, 12% fewer** |
+| blocks built | 1,104 | 1,104 | identical |
+| **runtime** | **0.0035 ms** | **0.0207 ms** | **A3, 5.9x** |
+
+There is no instruction-count explanation left. A4 executes fewer
+compare-exchanges, from a smaller register budget, with fewer branches and
+fewer memory operations, over the same input, producing the same output, and
+takes six times as long.
+
+This also kills the second of the two hypotheses the bisect left open. It is
+not that A4 attempts more compare-exchanges; it attempts fewer. So the same
+instruction, at the same scope, in the same quantity or less, is costing more
+each time.
+
+The opcode deltas that remain are real but explain nothing on their own: A4
+trades 28 IMAD and 18 FMUL for 23 SEL, 23 LOP3 and 19 FSETP, and moves 27
+operands into constant-bank loads that A3 does not use. That is a different
+instruction mix for the same arithmetic, not more work.
+
+What is left is the throughput and latency of the atomics themselves: how the
+compare-exchange is scheduled, and whether its latency is hidden by other warps.
+Nothing measurable without root distinguishes "the CAS issues but stalls longer"
+from "the CAS is issued in a more contended pattern", because both present as
+the same wall-clock with the same instruction counts. `ncu`'s warp stall
+reasons answer it in one run.
+
+One asymmetry to close first, and it is cheap: A4's probe-only variant (0.0062
+ms) was compared against A3's *full* kernel (0.0035 ms), because A3 has no
+probe-only build. Giving A3 the same `CAS=false` specialisation would make the
+probe-path comparison symmetric and would say whether A4's disadvantage starts
+before the first compare-exchange or only at it.
+
 ## What this does and does not license saying
 
 Established: A4 is slower on both stages under batched timing; it is not a

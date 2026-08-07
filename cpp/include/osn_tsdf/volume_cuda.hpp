@@ -44,6 +44,10 @@ public:
     void integrate(const PointBatch& batch);
     void allocate_blocks(const PointBatch& batch);
     void update_voxels(const PointBatch& batch);
+    /// MEASUREMENT ONLY: allocate, tallying compare-exchange ATTEMPTS into the
+    /// drop counter. Used to compare the DYNAMIC instruction count against arm
+    /// A4, which static SASS cannot show.
+    void allocate_blocks_counting_cas(const PointBatch& batch);
 
     /// `out.posnor` / `out.rgb` are HOST buffers; the mesh is copied back.
     /// Returns the vertex count, or -1 on overflow.

@@ -88,6 +88,11 @@ if(OSN_TSDF_CUDA)
         target_include_directories(probe_a4_tail PRIVATE tests)
         target_link_libraries(probe_a4_tail PRIVATE osn_tsdf ${A4_LIB} CUDA::cuda_driver dl pthread)
 
+        # Dynamic CAS attempt count, both arms, identical switch.
+        add_executable(probe_cas_count bench/probe_cas_count.cu)
+        target_include_directories(probe_cas_count PRIVATE tests)
+        target_link_libraries(probe_cas_count PRIVATE osn_tsdf ${A4_LIB} CUDA::cuda_driver dl pthread)
+
         # Prices the three components of A4's allocate path one at a time.
         add_executable(probe_a4_bisect bench/probe_a4_bisect.cu)
         target_include_directories(probe_a4_bisect PRIVATE tests)
