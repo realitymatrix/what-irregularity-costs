@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What Irregularity Costs</title>
+<meta name="description" content="CUDA C++, Rust, and Triton on a hash-blocked GPU workload. Language choice is nearly free on tiled work and expensive on irregular work.">
+<style>
+:root{
+  --bg:#fbfaf8; --fg:#14171c; --muted:#5a6472; --rule:#dfe1e6; --rule-hard:#c4c8cf;
+  --accent:#1a5fb4; --code-bg:#f2f2ef;
+  --cuda:#4a7318; --rust:#a63a0c; --triton:#5f4390;
+}
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#14161a; --fg:#e4e7ea; --muted:#98a1ac; --rule:#282d34; --rule-hard:#3a414a;
+         --accent:#82adea; --code-bg:#1a1d23;
+         --cuda:#8fc44a; --rust:#e08050; --triton:#a98ada; }
+}
+:root[data-theme=light]{
+  --bg:#fbfaf8; --fg:#14171c; --muted:#5a6472; --rule:#dfe1e6; --rule-hard:#c4c8cf;
+  --accent:#1a5fb4; --code-bg:#f2f2ef;
+  --cuda:#4a7318; --rust:#a63a0c; --triton:#5f4390;
+}
+:root[data-theme=dark]{
+  --bg:#14161a; --fg:#e4e7ea; --muted:#98a1ac; --rule:#282d34; --rule-hard:#3a414a;
+  --accent:#82adea; --code-bg:#1a1d23;
+  --cuda:#8fc44a; --rust:#e08050; --triton:#a98ada;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--fg);
+  font:17px/1.62 Charter,"Bitstream Charter",Georgia,"Times New Roman",serif;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+}
+.sans{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+.mono,code,pre,td.n,th.n{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace}
+.wrap{max-width:760px; margin:0 auto; padding:0 24px 96px}
+header{text-align:center; padding:72px 0 8px}
+h1{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+   font-size:2.1rem; line-height:1.22; margin:0 0 6px; letter-spacing:-.025em; font-weight:640}
+h1 .sub{display:block; font-size:1.08rem; font-weight:400; color:var(--muted); margin-top:12px;
+        letter-spacing:0; font-family:Charter,Georgia,serif; font-style:italic}
+.authors{margin:22px 0 4px; font-size:1.05rem}
+.affil{color:var(--muted); font-size:.95rem; margin:2px 0}
+.venue{color:var(--muted); margin-top:12px; font-size:.76rem; letter-spacing:.14em;
+       text-transform:uppercase; font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.btns{display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin:30px 0 8px}
+.btn{
+  display:inline-flex; align-items:center; padding:8px 15px; border-radius:2px;
+  border:1px solid var(--rule-hard); color:var(--fg); text-decoration:none;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.8rem; letter-spacing:.02em;
+  background:transparent; transition:border-color .15s,color .15s;
+}
+.btn:hover,.btn:focus-visible{border-color:var(--accent); color:var(--accent)}
+.btn:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+hr{border:0; border-top:1px solid var(--rule); margin:56px 0}
+@media (prefers-reduced-motion:reduce){*{transition:none!important; animation:none!important}}
+h2{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+   font-size:1.28rem; margin:0 0 18px; letter-spacing:-.015em; font-weight:620; text-wrap:balance}
+h3{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+   font-size:.97rem; margin:32px 0 8px; font-weight:620; letter-spacing:-.005em}
+p{margin:0 0 16px}
+a{color:var(--accent)}
+.lede{font-size:1.06rem}
+.finding{
+  margin:32px 0; padding-top:20px; border-top:1px solid var(--rule-hard);
+  font-size:1.22rem; line-height:1.48; letter-spacing:-.01em; text-wrap:balance;
+}
+.split{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:26px 0}
+@media(max-width:620px){ .split{grid-template-columns:1fr} }
+.card{border-top:2px solid var(--rule-hard); padding:14px 0 0}
+.card .lbl{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.72rem;
+           color:var(--muted); letter-spacing:.1em; text-transform:uppercase}
+.card .big{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:1.5rem;
+           font-weight:600; margin:10px 0 4px; letter-spacing:-.03em;
+           font-variant-numeric:tabular-nums; display:flex; gap:14px; flex-wrap:wrap}
+.card .note{font-size:.88rem; color:var(--muted); line-height:1.45}
+.rust{color:var(--rust)} .triton{color:var(--triton)} .cuda{color:var(--cuda)}
+.tablewrap{overflow-x:auto; margin:20px 0 8px; -webkit-overflow-scrolling:touch}
+table{border-collapse:collapse; width:100%; font-size:.86rem; min-width:540px}
+th,td{padding:7px 12px; text-align:left; border-bottom:1px solid var(--rule); white-space:nowrap}
+thead th{
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-weight:500; font-size:.7rem;
+  color:var(--muted); letter-spacing:.09em; text-transform:uppercase;
+  border-bottom:1px solid var(--rule-hard);
+}
+tbody tr:last-child td{border-bottom:1px solid var(--rule-hard)}
+td.n,th.n{text-align:right; font-variant-numeric:tabular-nums}
+td.r{font-weight:600}
+td.g{color:var(--muted)}
+tr.sep td{border-top:1px solid var(--rule-hard)}
+caption{caption-side:bottom; text-align:left; color:var(--muted); font-size:.87rem;
+         padding-top:14px; line-height:1.5; max-width:64ch}
+code{font-size:.86em; background:var(--code-bg); padding:.1em .34em; border-radius:2px}
+pre{background:var(--code-bg); border:1px solid var(--rule); border-radius:2px;
+    padding:16px 18px; overflow-x:auto; font-size:.82rem; line-height:1.55}
+pre code{background:none; padding:0}
+ul{padding-left:20px; margin:0 0 16px} li{margin:6px 0}
+footer{color:var(--muted); font-size:.83rem; text-align:center; margin-top:64px;
+        padding-top:24px; border-top:1px solid var(--rule); line-height:1.6}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>What Irregularity Costs
+    <span class="sub">CUDA C++, Rust, and Triton on a Hash-Blocked GPU Workload</span>
+  </h1>
+  <div class="authors">Petr Korolev</div>
+  <div class="affil">Independent</div>
+  <div class="venue">Preprint &middot; 2026</div>
+
+  <div class="btns">
+    <a class="btn" href="../paper/main.pdf">Paper (PDF)</a>
+    <a class="btn" href="#bibtex">BibTeX</a>
+    <a class="btn" href="https://github.com/realitymatrix/what-irregularity-costs">Code</a>
+    <a class="btn" href="https://github.com/realitymatrix/what-irregularity-costs/tree/main/results">Raw data</a>
+    <a class="btn" href="https://github.com/NVlabs/cuda-oxide/pull/695">Upstream fix</a>
+  </div>
+</header>
+
+<hr>
+
+<h2>The result</h2>
+
+<p class="lede">GPU language comparisons are almost always run on tiled dense linear
+algebra, where every toolchain is good and the differences are small. We implement the
+same hash-blocked TSDF fusion kernel five times and measure it on a workload with the
+opposite character: an open-addressed hash table with compare-exchange insertion,
+data-dependent per-lane probe depth, and contended scatter.</p>
+
+<div class="split">
+  <div class="card">
+    <div class="lbl">Regular stage &mdash; walk and accumulate</div>
+    <div class="big"><span class="rust">{{UPD_RUST}}</span> <span class="triton">{{UPD_TRITON}}</span></div>
+    <div class="note">Rust and Triton, relative to CUDA C++</div>
+  </div>
+  <div class="card">
+    <div class="lbl">Irregular stage &mdash; probe and insert</div>
+    <div class="big"><span class="rust">{{ALLOC_RUST}}</span> <span class="triton">{{ALLOC_TRITON}}</span></div>
+    <div class="note">Same kernel, same memory, same algorithm</div>
+  </div>
+</div>
+
+<div class="finding">Language choice is nearly free on the work that is usually
+benchmarked, and expensive on the work that is not.</div>
+
+<hr>
+
+<h2>Full integrate path</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr>
+    <th>Workload</th><th>GPU</th>
+    <th class="n">CUDA C++</th><th class="n">Rust</th><th class="n">&times;</th>
+    <th class="n">Triton</th><th class="n">&times;</th>
+  </tr></thead>
+  <tbody>{{TOTALS}}</tbody>
+  <caption>Allocate plus update, milliseconds, median of three passes on each of two GPUs.
+  Allocate is roughly a tenth of the work, so the totals are dominated by the regular
+  stage. On real depth data Rust is within 1&ndash;3% of hand-written CUDA C++.</caption>
+</table>
+</div>
+
+<hr>
+
+<h2>Why, not just how much</h2>
+
+<h3>Triton: two costs that compound</h3>
+<p>There is no per-lane early exit, so a probe loop runs to a compile-time bound and
+every lane pays worst-case depth. And <code>tl.atomic_cas</code> takes no mask, unlike
+<code>tl.atomic_add</code>, so lanes that have already resolved must be aimed at a
+scratch address. That scratch structure has no counterpart in the CUDA implementation,
+and sizing it badly costs a factor of twenty &mdash; while also silently destroying the
+kernel's ability to use additional streaming multiprocessors, a failure invisible on a
+single GPU.</p>
+
+<p>Stronger than any ratio: <strong>Triton cannot express an unbounded probe at all.</strong>
+The bound must be a compile-time constant, and a bound small enough to compile is small
+enough to silently lose data at load factors CUDA C++ handles exactly.</p>
+
+<h3>Rust: the safe construct is the expensive one</h3>
+<p>Rust's gap was invisible to every instruction count we could take. The Rust kernel
+issues fewer branches, fewer memory operations and 12% fewer dynamic compare-exchanges,
+from a smaller register budget, at identical occupancy &mdash; and was still slower. It
+does less work, more slowly.</p>
+
+<p>Hardware counters found it in L1 residency: identical requests, but 1.70&times; the
+sectors pushed to L2 and an L1 hit rate of 28.9% against 55.9%.</p>
+
+<div class="finding">A GPU-scope atomic load must be coherent across SMs. No NVIDIA L1
+is coherent across SMs. So the type-correct way to read a shared location bypasses the
+cache on every access &mdash; relaxed removes ordering, not coherence.</div>
+
+<p>Replacing two such reads with plain loads, correct because the algorithm rather than
+the memory model provides the guarantee, restores every counter to parity. Nothing in
+the source, the PTX, the machine code or the occupancy reveals this; it is visible only
+in where the data is permitted to live.</p>
+
+<hr>
+
+<h2>The sweep</h2>
+
+<p>Two of the four axes were chosen as opposite levers, and they move the Triton ratio
+in opposite directions &mdash; the strongest evidence that the mechanism above is the
+right one. Raising point count over fixed geometry raises contention and Triton rises;
+spreading the same points over more blocks lowers contention and Triton falls.</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr>
+    <th>Cell</th><th>Axis</th><th class="n">Points</th><th class="n">Load</th>
+    <th class="n">Rust</th><th class="n">Triton</th>
+  </tr></thead>
+  <tbody>{{CELLS}}</tbody>
+  <caption>Allocate ratio to CUDA C++ per cell, RTX 5070 Ti. The widest Rust value is the
+  smallest cell, where the kernel is short enough that launch effects dominate. The
+  highest Triton value is the warm real-data cell &mdash; the regime a live pipeline is
+  in for every frame after the first.</caption>
+</table>
+</div>
+
+<hr>
+
+<h2>What we got wrong</h2>
+
+<p>Roughly a dozen measurement errors were caught during this work. Three would have
+produced a reversed or null conclusion rather than a wrong magnitude, and two survived
+long enough to be written up:</p>
+
+<ul>
+  <li>A 40% workload asymmetry made the slower arm look 2&times; faster.</li>
+  <li>A device axis was silently fake: one arm's loader pinned device zero for the whole
+      process, so a two-GPU sweep reported a clean null while the second card sat idle at
+      8&nbsp;W. Nothing in the timings looked anomalous.</li>
+  <li>A single measurement pass was not reproducible, and no within-pass statistic
+      separates that case from ordinary variance.</li>
+</ul>
+
+<p>All three were failures of <em>comparability</em>, not precision. None would have been
+caught by more repetitions or tighter error bars. Two published figures were also
+corrected: Triton's gap from 73&times; to 17.9&times;, mostly our own badly-sized
+workaround rather than the language.</p>
+
+<hr>
+
+<h2>A defect found along the way</h2>
+
+<p>In the version of <code>cuda-oxide</code> used here, the scoped atomic load and store
+<strong>could not be called at all</strong>. Both lowered to LLVM IR that libNVVM rejects,
+so every call failed the backend verifier in the build mode that produces real kernels
+&mdash; with an error naming an LLVM basic block rather than the offending line of Rust.
+The project's own atomics example does not build in that mode.</p>
+
+<p>The underlying PTX instructions have existed since sm_70. Fix contributed upstream as
+<a href="https://github.com/NVlabs/cuda-oxide/pull/695">NVlabs/cuda-oxide#695</a>, with
+tests, a regression example, and the CI registration whose absence let the defect
+survive.</p>
+
+<hr>
+
+<h2 id="bibtex">BibTeX</h2>
+<pre><code>@misc{korolev2026irregularity,
+  author = {Korolev, Petr},
+  title  = {What Irregularity Costs: {CUDA} {C++}, {Rust}, and {Triton}
+            on a Hash-Blocked {GPU} Workload},
+  year   = {2026},
+  note   = {Preprint},
+}</code></pre>
+
+<footer>
+  Every figure on this page is generated from
+  <code>results/{{SOURCE}}</code> by <code>tools/gen_page.py</code>,
+  the same data behind the paper's tables. No number here was transcribed by hand.
+</footer>
+
+</div>
+</body>
+</html>
