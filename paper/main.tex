@@ -1,5 +1,13 @@
 % What Irregularity Costs.
 %
+% Intended arXiv classification:
+%   primary   cs.PL  (Programming Languages)
+%   secondary cs.DC  (Distributed, Parallel, and Cluster Computing)
+%             cs.PF  (Performance)
+% NOT cs.CV. An earlier plan for this project targeted computer vision, which
+% was correct when the paper was a latency-budget study for reconstruction. It
+% is now a language and compiler comparison and belongs in cs.PL.
+%
 % Build:  tectonic paper/main.tex
 % Tables: paper/gen_tables.py results/sweep_YYYYmmdd_HHMMSS/sweep.csv
 %
@@ -1043,6 +1051,34 @@ times already.
 \paragraph{Artefacts.} The harness, all five implementations, the raw
 measurement CSVs, and the scripts that generate every table in this paper are
 available. No number here was transcribed by hand.
+
+\section*{Availability}
+
+The harness, all five implementations, the raw measurement CSVs from every sweep,
+and the scripts that generate each table in this paper are available with the
+source. Every table is produced from the CSVs by script; no measurement in this
+paper was transcribed by hand.
+
+\section*{Disclosure of AI assistance}
+
+This work was carried out with substantial assistance from a large language
+model (Claude Opus 5, Anthropic). Specifically, the model wrote the five
+implementations, the measurement harness and the analysis scripts, executed the
+measurements, and produced the first draft of this manuscript, working
+interactively under the author's direction across a single extended session.
+
+The author defined the study, directed the investigation, and made the
+decisions that shaped it: which hypotheses to pursue, when to stop measuring and
+publish, what to exclude, and how to interpret the results. All measurements were
+run on the author's hardware and the raw data are published so that any claim
+here can be checked independently of how it was produced. The author has reviewed
+the manuscript and is responsible for its content.
+
+We note this workflow is visible in the paper's record of corrections. Several
+figures reported in earlier drafts were later found to be wrong and are corrected
+in place rather than removed, including two in the conclusion. Those corrections
+came from measurement rather than from review, which is an argument for the
+methodology in Section~\ref{sec:method} and not for the workflow.
 
 \bibliographystyle{plain}
 \bibliography{refs}

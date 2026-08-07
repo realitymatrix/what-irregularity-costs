@@ -526,8 +526,13 @@ Full matrix: 2 depth arms x 5 fusion arms x 2 resolutions x 2 architectures (L4 
 local sm_120) x {GT depth, FS depth}. Ablate host-device transfer and stream overlap
 explicitly; that is likely the second finding, and it is on-brand given the 300%
 throughput result came partly from removing CPU/GPU roundtrips. Publish harness and raw
-CSVs. arXiv cs.CV first, then a CVPR/ICCV/ECCV workshop (Embedded Vision, Efficient Deep
-Learning for CV).
+CSVs. **Venue revised 2026-08-07: arXiv cs.PL** (primary), cs.DC and cs.PF secondary, then a
+compiler or parallel-computing workshop (CGO, PPoPP, LCPC). The cs.CV plan below predates the
+reframing and was right when this was a latency-budget study for reconstruction; it is now a
+language and compiler comparison and a vision venue is the wrong audience for it.
+
+~~arXiv cs.CV first, then a CVPR/ICCV/ECCV workshop (Embedded Vision, Efficient Deep
+Learning for CV).~~
 
 **Total: 9 to 12 weeks part-time.**
 
