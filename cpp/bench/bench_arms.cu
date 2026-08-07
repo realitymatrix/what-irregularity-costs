@@ -590,7 +590,9 @@ bool run_cell(const Cell& cell, const ArmHandles& arms, int reps, int warmup, in
         proto.load_factor = lf;
         proto.batch = batch;
         proto.gpu = gpu_state();
-        const char* stage_name[3] = {"allocate", "update", "extract"};
+        // "extract-a3-only", not "extract": the stage is shared, so the row is
+        // arm A3's number regardless of which arm the row is filed under.
+        const char* stage_name[3] = {"allocate", "update", "extract-a3-only"};
         for (int arm = 0; arm < 3; ++arm) {
             if (smp[arm][0].empty()) continue;
             for (int st = 0; st < 3; ++st)
@@ -625,7 +627,12 @@ int main(int argc, char** argv) {
     int reps = 30, warmup = 5, batch = 8;
     float voxel = 0.01f;
     std::string only_cells, only_axis, csv_path;
-    bool want_cpu = false, want_extract = true;
+    bool want_cpu = false;
+    // Extraction is EXCLUDED from the comparison (docs/ARM-SCOPE.md): it exists
+    // once, in CUDA C++, and all three GPU arms call it, so measuring it three
+    // times compares nothing. Off by default so a CSV cannot be misread; the
+    // rows it emits when enabled are labelled to say whose number it is.
+    bool want_extract = false;
 
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
@@ -649,7 +656,8 @@ int main(int argc, char** argv) {
         else if (a == "--axis") only_axis = next();
         else if (a == "--csv") csv_path = next();
         else if (a == "--cpu") want_cpu = true;
-        else if (a == "--no-extract") want_extract = false;
+        else if (a == "--extract") want_extract = true;
+        else if (a == "--no-extract") want_extract = false;  // accepted, now the default
         else if (a == "--list") {
             for (const auto& c : kDefaultCells) std::printf("%-12s %s\n", c.name, c.axis);
             return 0;

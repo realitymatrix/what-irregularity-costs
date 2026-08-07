@@ -190,7 +190,12 @@ Two things this does NOT invalidate:
 These are worth measuring before the framing is finalised, not because they are
 likely to rescue the crossover but because they bound it:
 
-* **Extraction, not integrate.** Extraction is 1.825 ms, 6.6x the whole
+* **Extraction, not integrate.** CORRECTED 2026-08-07, see docs/ARM-SCOPE.md:
+  the 1.825 ms below is 82% device-to-host readback, and the kernel with its
+  allocation is 0.319 ms, comparable to integrate rather than several times it.
+  The original text follows.
+
+  Extraction is 1.825 ms, 6.6x the whole
   integrate path. Over a sequence it runs once rather than per frame, but on a
   budget where fusion totals 2 ms it dominates the fusion side.
 * **Scene growth.** Fusion cost scales with points and allocated blocks; depth

@@ -210,11 +210,20 @@ need real depth to be compared.
    varies machine width at fixed codegen and is explicitly not this. A cloud L4
    (sm_89) is the cheapest way to show the ranking is not an accident of one
    chip.
-4. **Extraction measured properly, or explicitly excluded.** It is 1.85 ms on
-   the 5070 Ti, 6.6x the whole integrate path, shared and unoptimised. The sweep
-   added a reason to decide rather than defer: it costs 12.72 ms on the 5060, a
-   6.9x device difference against a 2.33x SM ratio, which is nothing like how
-   the integrate stages behave and is unexplained.
+4. ~~**Extraction measured properly, or explicitly excluded.**~~ **Decided:
+   EXCLUDED**, docs/ARM-SCOPE.md. It exists once, in CUDA C++, and all three GPU
+   arms call it, so every extraction number was arm A3 measured three times.
+   Bringing it in means writing marching tets in Rust and Triton, and that work
+   would not extend the thesis: it is a regular kernel, and the comparison
+   already has one in the update stage.
+
+   Investigating it also corrected two published statements. The 6.9x device
+   difference was PCIe topology, not compute: 82% of the measurement on the
+   5070 Ti and 97% on the 5060 was the device-to-host readback, over links that
+   are gen2 x16 and gen1 x2 respectively. Kernel plus allocation is 0.319 ms and
+   0.396 ms, a 1.24x difference. So "extraction is 1.825 ms" was a transfer
+   time, and "6.6x the whole integrate path" was wrong: at 0.319 ms against
+   roughly 0.28 ms it is comparable to integrate.
 5. ~~**The scratch-region hypothesis tested.**~~ **Done and confirmed**,
    docs/SCRATCH-HYPOTHESIS.md, and the full sweep re-run at 65,536 slots. It
    cost the headline ratio: 73x became 18.9x. Still open: the `MAX_PROBE = 32`
