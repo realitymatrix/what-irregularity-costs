@@ -220,13 +220,21 @@ Stats summarize(std::vector<double> v) {
     return s;
 }
 
+/// CUDA ordinal used for cudaSetDevice.
 int g_device = 0;
+/// PHYSICAL index used for nvidia-smi and for the CSV.
+///
+/// These differ whenever the process is masked with CUDA_VISIBLE_DEVICES, which
+/// is how tools/sweep.sh selects a device: inside the process the GPU is always
+/// ordinal 0, but nvidia-smi still addresses it by its real index, and the CSV
+/// must record which physical card produced the row.
+int g_label = -1;
 
 std::string nvsmi(const char* query) {
     char cmd[512];
     std::snprintf(cmd, sizeof(cmd),
                   "nvidia-smi --query-gpu=%s --format=csv,noheader,nounits -i %d 2>/dev/null",
-                  query, g_device);
+                  query, g_label);
     FILE* p = popen(cmd, "r");
     if (!p) return "n/a";
     char buf[256] = {0};
@@ -256,7 +264,7 @@ long other_process_mib() {
     std::snprintf(cmd, sizeof(cmd),
                   "nvidia-smi --query-compute-apps=pid,used_memory "
                   "--format=csv,noheader,nounits -i %d 2>/dev/null",
-                  g_device);
+                  g_label);
     FILE* p = popen(cmd, "r");
     if (!p) return 0;
     char line[512];
@@ -600,6 +608,7 @@ int main(int argc, char** argv) {
         const std::string a = argv[i];
         auto next = [&]() -> const char* { return i + 1 < argc ? argv[++i] : ""; };
         if (a == "--device") g_device = std::atoi(next());
+        else if (a == "--device-label") g_label = std::atoi(next());
         else if (a == "--reps") reps = std::atoi(next());
         else if (a == "--warmup") warmup = std::atoi(next());
         else if (a == "--batch") batch = std::atoi(next());
@@ -619,6 +628,8 @@ int main(int argc, char** argv) {
             return 1;
         }
     }
+
+    if (g_label < 0) g_label = g_device;
 
     // Spin rather than yield while waiting on the device.
     //
@@ -642,8 +653,9 @@ int main(int argc, char** argv) {
     cudaDeviceProp prop{};
     cudaGetDeviceProperties(&prop, g_device);
     std::printf("=== TSDF fusion arm sweep ===\n");
-    std::printf("  device %d: %s sm_%d%d | %d SMs | %.1f GiB\n", g_device, prop.name, prop.major,
-                prop.minor, prop.multiProcessorCount, prop.totalGlobalMem / 1073741824.0);
+    std::printf("  device %d (cuda ordinal %d): %s sm_%d%d | %d SMs | %.1f GiB\n", g_label,
+                g_device, prop.name, prop.major, prop.minor, prop.multiProcessorCount,
+                prop.totalGlobalMem / 1073741824.0);
     std::printf("  reps %d (warmup %d discarded) | batch %d | voxel %.3f m\n", reps, warmup, batch,
                 voxel);
     std::printf("  clocks/thermals are LOGGED, not pinned: nvidia-smi -lgc needs root\n");
@@ -676,8 +688,36 @@ int main(int argc, char** argv) {
                                    OSN_TRITON_ALLOC_NAME);
     arms.have_a5 = (arms.k_upd && arms.k_alloc);
 #endif
-    std::printf("  arms: A3 yes | A4 %s | A5 %s\n\n", arms.have_a4 ? "yes" : "NO",
+    std::printf("  arms: A3 yes | A4 %s | A5 %s\n", arms.have_a4 ? "yes" : "NO",
                 arms.have_a5 ? "yes" : "NO");
+
+    // Verify the arms did not move the context to another device.
+    //
+    // This guard exists because the failure it catches actually happened and
+    // produced a full sweep of plausible, wrong numbers. Arm A4's loader calls
+    // `CudaContext::new(0)` (crates/tsdf-rust-cuda/src/lib.rs), which hardcodes
+    // device 0 and, being a driver-API context creation, becomes current for
+    // the whole process. Every arm afterwards therefore ran on device 0 while
+    // the harness printed device 1's name and SM count in the header. The
+    // resulting table showed a 2.33x SM difference producing a 1.00x speedup,
+    // which reads as a finding rather than as a bug.
+    //
+    // `cuCtxGetDevice` reports the context actually in force, unlike
+    // `cudaGetDevice` which reports the runtime's intent. The robust fix is to
+    // select the device with CUDA_VISIBLE_DEVICES so the process sees only one
+    // GPU and a hardcoded ordinal 0 is correct by construction; tools/sweep.sh
+    // does that. This check is the backstop.
+    CUdevice ctx_dev = -1;
+    if (cuCtxGetDevice(&ctx_dev) == CUDA_SUCCESS && (int)ctx_dev != g_device) {
+        std::printf("\n  REFUSING TO RUN: asked for device %d, but the current CUDA context\n",
+                    g_device);
+        std::printf("  is on device %d. An arm's loader has hijacked the context.\n",
+                    (int)ctx_dev);
+        std::printf("  Select the device with CUDA_VISIBLE_DEVICES=%d and pass --device 0.\n",
+                    g_device);
+        return 5;
+    }
+    std::printf("  context device verified: %d\n\n", (int)ctx_dev);
 
     // Cell selection.
     std::vector<Cell> cells;
@@ -773,7 +813,7 @@ int main(int argc, char** argv) {
                 fprintf(f,
                         "%d,\"%s\",%d%d,%d,%s,%s,%d,%.6f,%d,%d,%.6f,%d,%s,%s,"
                         "%.6f,%.6f,%.6f,%.6f,%.6f,%d,\"%s\"\n",
-                        g_device, prop.name, prop.major, prop.minor, prop.multiProcessorCount,
+                        g_label, prop.name, prop.major, prop.minor, prop.multiProcessorCount,
                         r.cell.c_str(), r.axis.c_str(), r.points, voxel, r.pool, r.blocks,
                         r.load_factor, r.batch, r.arm.c_str(), r.stage.c_str(), r.s.p50, r.s.p95,
                         r.s.p99, r.s.min, r.s.mean, r.s.n, r.gpu.c_str());

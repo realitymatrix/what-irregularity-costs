@@ -197,13 +197,104 @@ predicted from it, and the honest position is:
 > occupancy range in this design is too narrow for CUDA's early exit to matter.
 > The prediction remains untested rather than refuted.
 
+## Fourth finding: Triton's allocate does not scale with SM count. At all.
+
+The device axis, run properly (see the measurement bug below), is the sharpest
+result in the sweep. Allocate, p50 ms, narrow = RTX 5060 (30 SMs), wide =
+RTX 5070 Ti (70 SMs), SM ratio 2.33x:
+
+| cell | A3 cuda | A4 rust | A5 triton |
+|---|---|---|---|
+| pts-20k | 1.60x | 1.02x | 1.03x |
+| pts-80k | 1.80x | 1.35x | 1.07x |
+| base | 1.91x | 1.68x | 0.99x |
+| pts-720k | 1.93x | 1.72x | 0.98x |
+| pts-1280k | 2.08x | 1.80x | 0.98x |
+| r-0.25 | 1.84x | 1.49x | 0.98x |
+| r-1.0 | 1.85x | 1.64x | 0.89x |
+| r-2.0 | 1.45x | 1.64x | 0.89x |
+| plane-320k | 1.85x | 1.67x | 0.99x |
+
+A3 and A4 track the machine, reaching 1.8x to 2.1x of a possible 2.33x. **A5 is
+flat, and on three cells is slightly faster on the smaller card.** Adding 40 SMs
+buys Triton's allocate nothing.
+
+The contrast with the *update* stage is what makes this interpretable. There all
+three arms scale together, 1.5x to 1.8x, A5 included. So this is not "Triton
+does not scale"; it is specific to the irregular kernel.
+
+### This inverts the prediction made before the run
+
+The stated expectation was the reverse: that Triton's allocate is issue-bound,
+because it executes `MAX_PROBE` iterations regardless of data, and would
+therefore track SM count; and that CUDA's allocate is contention-bound, because
+it exits early and leaves only atomics on hot slots, and would therefore not.
+
+Measured, both halves are wrong. CUDA scales nearly linearly with the machine;
+Triton does not scale at all.
+
+### Mechanism, proposed and testable
+
+The leading candidate is the scratch region. Because `tl.atomic_cas` takes no
+mask, every resolved lane still issues a CAS, aimed at one of
+`kScratchSlots = 256` addresses. The total number of atomic operations is fixed
+by point count and probe bound, and they collide on 256 addresses regardless of
+how many SMs issue them. Serialisation at those addresses would then set the
+runtime, and more SMs would add contenders without adding throughput, which is
+exactly the observed shape.
+
+This predicts that varying `kScratchSlots` moves the device-scaling behaviour,
+and that a large enough region restores scaling. That experiment has not been
+run and the mechanism should not be stated as established until it has.
+
+### It also changes how the headline ratio must be quoted
+
+A5/A3 on allocate is about 72x on the 5070 Ti and about 37x on the 5060. The
+gap halves on the smaller card, **but not because Triton improved**: Triton is
+unchanged and CUDA C++ got slower. Any quoted ratio must name the device, and
+the write-up should quote the wide card, because that is where the language
+choice costs the most and because it is the less favourable number for the
+argument being made.
+
+## Fifth finding, methodological: the device axis was silently fake
+
+The first full sweep reported both devices and produced a clean null result:
+every arm at 1.00x speedup across a 2.33x SM difference. It was wrong. Device 1
+was idle throughout, at 9.3 W falling to 8.3 W with clocks at 180 MHz, while
+the harness printed its name and SM count in the header.
+
+Arm A4's loader calls `CudaContext::new(0)`
+(`crates/tsdf-rust-cuda/src/lib.rs:497`), which hardcodes device 0 and, being a
+driver-API context creation, becomes current for the entire process. `a4_init()`
+runs before the first cell, so every arm afterwards ran on device 0 while
+`cudaSetDevice(1)` sat ignored.
+
+What makes this worth recording is that the wrong answer was *publishable*.
+"Identical performance across a 2.33x SM difference" is a striking result with a
+ready-made explanation: latency-bound, contention-bound, pick one. Nothing in
+the timings looked anomalous. It was caught only because the null result was
+surprising enough to check the power draw, and the correct instinct there is
+that a surprising result is a reason to verify the instrument first.
+
+Two fixes, both kept:
+
+* `tools/sweep.sh` selects the device with `CUDA_VISIBLE_DEVICES` rather than
+  `--device`, so the process sees one GPU and a hardcoded ordinal 0 is correct
+  by construction, whatever any dependency does.
+* `bench_arms` calls `cuCtxGetDevice` after loading the arms and refuses to run
+  if the context is not on the requested device. `cudaGetDevice` would not have
+  caught this: it reports the runtime's intent, not the context in force.
+
 ## Third finding: the A4 allocate ratio is workload-dependent
 
-A4/A3 on allocate ranges 1.60x to 2.03x across the load-factor axis alone, a
-spread of 1.27x. The single previously published figure was 1.64x.
+A4/A3 on allocate ranges 1.03x to 4.07x across the full sweep on the 5070 Ti,
+and 1.32x to 2.60x on the 5060. The single previously published figure was
+1.64x. The extremes are the small-scene cells, where 20k points leave the
+kernel too short to amortise anything, and `r-2.0`, where the surface spreads
+over enough blocks that both arms are memory-bound and converge to 1.03x.
 
-That number should therefore be reported as a range with the workload stated,
-not as a constant. It also raises the bar on attributing it: an unattributed
+That number should therefore be reported as a range with the workload and the
+device stated, not as a constant. It also raises the bar on attributing it: an unattributed
 gap that is also workload-dependent cannot be explained by a static property of
 the generated code alone, which weakens the memory-ordering-scope hypothesis
 somewhat, since instruction scope does not vary with load factor.

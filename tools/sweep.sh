@@ -64,7 +64,22 @@ for d in "${DEVICES[@]}"; do
     # First device writes the header, the rest append.
     if [[ "$d" == "${DEVICES[0]}" ]]; then unset OSN_BENCH_CSV_APPEND
     else export OSN_BENCH_CSV_APPEND=1; fi
-    ( cd "$BUILD" && "$BIN_ABS" --device "$d" --csv "$CSV_ABS" "$@" ) 2>&1 | tee "$LOG"
+    # Select the device with CUDA_VISIBLE_DEVICES, not --device.
+    #
+    # Arm A4's loader calls CudaContext::new(0), which hardcodes device 0 and
+    # makes that context current for the whole process, so --device alone is
+    # silently ignored by every arm: an earlier sweep reported device 1's name
+    # and SM count in the header while running everything on device 0, and the
+    # resulting 1.00x "device scaling" looked like a result. Masking the process
+    # down to one visible GPU makes ordinal 0 correct by construction, whatever
+    # any dependency hardcodes. bench_arms verifies with cuCtxGetDevice and
+    # refuses to run on a mismatch.
+    #
+    # `|| true` on the pipeline, because `set -e` with `pipefail` would abort
+    # the whole sweep before PIPESTATUS is ever read. rc 4 means some cells were
+    # invalid, which is an expected outcome worth continuing past, not a fault.
+    ( cd "$BUILD" && CUDA_VISIBLE_DEVICES="$d" "$BIN_ABS" --device 0 --device-label "$d" \
+        --csv "$CSV_ABS" "$@" ) 2>&1 | tee "$LOG" || true
     rc="${PIPESTATUS[0]}"
     # rc 4 means some cells were invalid or skipped, which is reported in the
     # log and is not a reason to abandon the remaining devices.
