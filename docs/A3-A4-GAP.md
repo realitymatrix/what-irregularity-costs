@@ -86,6 +86,20 @@ allocate gap. Something else dominates there. Candidates not yet tested:
 * **Warp divergence.** A4 has +8 branches in allocate; if they sit inside the
   probe loop the cost is multiplied by probe depth.
 
+### Running ncu once counters are enabled
+
+`tools/ncu_alloc_gap.sh` profiles both arms' allocate kernels in one process and
+dumps warp stall reasons, speed-of-light, memory workload and occupancy. It
+refuses to run rather than emit an empty report if counters are unreadable,
+because a profiler that silently collects nothing is how a wrong conclusion gets
+published.
+
+The question it answers is narrow and is the only one left. If A4's warps wait
+on a *different* stall reason than A3's, that is the mechanism. If they wait on
+the *same* reason for longer, the gap is throughput rather than structure, and
+the honest paper text becomes "same work, same instructions, lower atomic
+throughput" with the cause left to NVIDIA.
+
 ### ncu is blocked on this machine
 
 `ncu` is installed but refuses with `ERR_NVGPUCTRPERM`: access to GPU
