@@ -252,19 +252,58 @@ the shared data structure. **It does not close the language gap**: 1.64x becomes
 that the publication spin was 75–83% of the gap — that measurement removed A4's
 spin while A3 kept paying its own. The spin is a large *shared* cost.
 
+## Scope: one architecture, stated rather than hedged
+
+**Everything here is measured on sm_120 (Blackwell), on two GPUs differing 2.33x
+in SM count and roughly 2x in memory bandwidth.** A second architecture was
+considered and deliberately not run. The limitation is real and belongs in the
+paper as a scope statement, not in a future-work list.
+
+What it does and does not cost:
+
+**The magnitudes are Blackwell figures.** Triton at 17–29x on allocate, Rust at
+1.01–1.03x on the full path with real data: those are measured on one
+architecture and should be quoted as such.
+
+**The mechanisms are not.** Every explanation in this paper follows from the
+languages' surface or from the CUDA memory model, neither of which is
+Blackwell-specific:
+
+* Triton has no per-lane early exit and no `mask` on `tl.atomic_cas`. Properties
+  of the language.
+* A `tl.static_range` probe bound is a compile-time constant, so an unbounded
+  probe is inexpressible. Property of the language.
+* A GPU-scope atomic load must be coherent across SMs, and **no** NVIDIA L1 is
+  coherent across SMs, so such a load bypasses L1 on every current architecture.
+  Property of the memory model and the cache hierarchy, not of one chip.
+
+So the defensible claim is that the *ranking and its causes* generalise while the
+*numbers* are sm_120. Nothing in the argument rests on a magnitude.
+
+**And the device axis is not nothing.** Two cards at fixed codegen, differing
+2.33x in width, produced ratios that agree closely per cell: Triton 17.9x on both
+cards at the baseline, Rust 1.01–1.03x on both with real data. That rules out the
+ratios being an artefact of one machine's balance, which is a weaker claim than
+architecture-independence but a measured one.
+
+Suggested wording: *measured on sm_120 across two GPUs differing 2.33x in SM
+count; the ratios are Blackwell figures, the mechanisms behind them follow from
+the CUDA memory model and the languages' surface rather than from this
+architecture, and whether the magnitudes hold on an earlier generation is
+untested.*
+
 ## What this framing still needs
 
-1. **A second architecture.** Both cards are sm_120, so the device axis varies
-   machine width at fixed codegen and is explicitly not this. A cloud L4 (sm_89)
-   is the cheapest way to show the ranking is not an accident of one chip. This
-   is now the largest open item.
-2. **The load-factor axis cannot exceed 0.283**, because the table is sized at
+None of these is load-bearing for the argument. The attribution work is done;
+what remains deepens results that are already defensible.
+
+1. **The load-factor axis cannot exceed 0.283**, because the table is sized at
    twice the pool. Reaching the 0.7–0.9 regime where probe chains blow up needs
    table size decoupled from pool capacity. Until then the sharpest prediction of
    the Triton explanation stays untested.
-3. **The residual allocate gap**, 1.12–1.33x, is not attributed.
-4. **`MAX_PROBE = 32` measurements were taken at 256 scratch slots** and are
+2. **The residual allocate gap**, 1.12–1.33x, is not attributed.
+3. **`MAX_PROBE = 32` measurements were taken at 256 scratch slots** and are
    therefore pessimistic by roughly 3.5x.
-5. **Real data is one sequence.** Two cells from TartanAir V2 RetroOffice P000.
+4. **Real data is one sequence.** Two cells from TartanAir V2 RetroOffice P000.
    They validated the synthetic sweep rather than contradicting it, but one
    environment is not a claim about real data in general.
