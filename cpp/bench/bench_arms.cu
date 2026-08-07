@@ -132,7 +132,42 @@ namespace {
 // Workload description
 // ---------------------------------------------------------------------------
 
-enum class Shape { Sphere, Plane };
+enum class Shape { Sphere, Plane, File };
+
+/// A scene: the points, and the camera they were seen from.
+///
+/// The camera matters. Both integrate kernels cull along the view ray and sign
+/// the SDF against it, so a scene whose camera is wrong is not the same
+/// workload. The synthetic scenes use the origin, which is correct for a sphere
+/// observed from inside; a real frame carries its own.
+struct Scene {
+    std::vector<float> pts;
+    float cam[3] = {0, 0, 0};
+};
+
+/// Read a cloud written by tools/tartanair_points.py.
+///
+/// Deliberately a flat format with a magic and a version rather than anything
+/// needing a parser: the point of the real-data cell is the point DISTRIBUTION,
+/// and a dependency on a serialisation library would be a poor trade for that.
+bool read_osnp(const char* path, Scene& out) {
+    FILE* f = fopen(path, "rb");
+    if (!f) { std::printf("  cannot open %s\n", path); return false; }
+    char magic[4] = {0};
+    int32_t version = 0, n = 0;
+    bool ok = fread(magic, 1, 4, f) == 4 && fread(&version, 4, 1, f) == 1 &&
+              fread(&n, 4, 1, f) == 1 && fread(out.cam, 4, 3, f) == 3;
+    if (!ok || std::strncmp(magic, "OSNP", 4) != 0 || version != 1 || n <= 0) {
+        std::printf("  %s: bad header (magic %.4s version %d n %d)\n", path, magic, version, n);
+        fclose(f);
+        return false;
+    }
+    out.pts.resize((size_t)n * 3);
+    ok = fread(out.pts.data(), sizeof(float), out.pts.size(), f) == out.pts.size();
+    fclose(f);
+    if (!ok) { std::printf("  %s: truncated\n", path); return false; }
+    return true;
+}
 
 /// One cell of the sweep.
 ///
@@ -148,14 +183,25 @@ struct Cell {
     int a, b;          // sphere: n_theta, n_phi. plane: n, unused.
     int32_t pool_blocks;
     float pool_factor;
+    /// Real-data cells only: the frame to integrate, and optionally a cloud of
+    /// preceding frames used to put the volume in a realistic state before the
+    /// timed window. A live pipeline never integrates into an empty volume
+    /// after the first frame, and mostly-hit is a different regime from
+    /// mostly-insert for exactly the code under test.
+    const char* path = nullptr;
+    const char* warm_path = nullptr;
 };
 
-std::vector<float> make_points(const Cell& c) {
-    if (c.shape == Shape::Sphere) return scenes::sphere(c.extent, c.a, c.b);
-    return scenes::plane(0.5f, c.extent, c.a);
+bool make_scene(const Cell& c, Scene& out) {
+    if (c.shape == Shape::File) return read_osnp(c.path, out);
+    out.pts = (c.shape == Shape::Sphere) ? scenes::sphere(c.extent, c.a, c.b)
+                                         : scenes::plane(0.5f, c.extent, c.a);
+    return true;
 }
 
-const char* shape_name(Shape s) { return s == Shape::Sphere ? "sphere" : "plane"; }
+const char* shape_name(Shape s) {
+    return s == Shape::Sphere ? "sphere" : (s == Shape::Plane ? "plane" : "tartanair");
+}
 
 /// The default matrix.
 ///
@@ -190,6 +236,20 @@ const std::vector<Cell> kDefaultCells = {
     // 4. Shape. 566^2 = 320k points, matching the baseline's count, so the
     //    comparison is shape and not size.
     {"plane-320k", "shape",      Shape::Plane,  1.0f,  566,    0, 1 << 14, 0},
+
+    // 5. Real data. TartanAir V2 RetroOffice P000, frame 8, unprojected from
+    //    ground-truth depth at full resolution: 407,444 points, close to the
+    //    baseline's count so the comparison is distribution and not size.
+    //    Every other cell has uniform density over a single convex surface,
+    //    which is the opposite of what a room looks like.
+    {"tartan-cold", "real",      Shape::File,   0.0f,    0,    0, 1 << 16, 0,
+     "../data/tartanair/retro_p000_f008.bin", nullptr},
+    // The same frame into a volume already holding frames 0-7. A live pipeline
+    // is in this state for every frame but the first, and it is a genuinely
+    // different regime: most probes hit rather than insert.
+    {"tartan-warm", "real",      Shape::File,   0.0f,    0,    0, 1 << 16, 0,
+     "../data/tartanair/retro_p000_f008.bin",
+     "../data/tartanair/retro_p000_f008_warm.bin"},
 };
 
 // ---------------------------------------------------------------------------
@@ -374,8 +434,22 @@ struct ArmHandles {
 /// or failed a validity gate, which is reported rather than silently dropped.
 bool run_cell(const Cell& cell, const ArmHandles& arms, int reps, int warmup, int batch_req,
               float voxel, std::vector<Row>& rows, bool want_extract) {
-    const auto pts = make_points(cell);
+    Scene scene;
+    if (!make_scene(cell, scene)) {
+        std::printf("=== cell %s (axis %s) ===\n  SKIPPED: scene unavailable\n\n", cell.name,
+                    cell.axis);
+        return false;
+    }
+    const auto& pts = scene.pts;
     const int32_t n = (int32_t)(pts.size() / 3);
+    const float cx = scene.cam[0], cy = scene.cam[1], cz = scene.cam[2];
+
+    Scene warm;
+    const bool has_warm = cell.warm_path != nullptr;
+    if (has_warm && !read_osnp(cell.warm_path, warm)) {
+        std::printf("=== cell %s ===\n  SKIPPED: warm cloud unavailable\n\n", cell.name);
+        return false;
+    }
 
     // Pool sizing. Fixed cells state their own; load-factor cells measure the
     // block count first with a generous pool, then size from it. Measuring
@@ -392,7 +466,7 @@ bool run_cell(const Cell& cell, const ArmHandles& arms, int reps, int warmup, in
         float* dp = nullptr;
         cudaMalloc(&dp, pts.size() * sizeof(float));
         cudaMemcpy(dp, pts.data(), pts.size() * sizeof(float), cudaMemcpyHostToDevice);
-        osn_tsdf_cuda_allocate_blocks(probe, dp, n, 0, 0, 0, 0);
+        osn_tsdf_cuda_allocate_blocks(probe, dp, n, cx, cy, cz, 0);
         osn_tsdf_cuda_synchronize(probe);
         const int32_t nb = osn_tsdf_cuda_block_count(probe);
         cudaFree(dp);
@@ -421,14 +495,30 @@ bool run_cell(const Cell& cell, const ArmHandles& arms, int reps, int warmup, in
     }
 
     std::printf("=== cell %s (axis %s) ===\n", cell.name, cell.axis);
-    std::printf("  scene %s extent %.2f m, %d points, voxel %.3f m\n", shape_name(cell.shape),
-                cell.extent, n, voxel);
+    if (cell.shape == Shape::File)
+        std::printf("  scene %s, %d points, cam (%.2f %.2f %.2f), voxel %.3f m%s\n",
+                    shape_name(cell.shape), n, cx, cy, cz, voxel,
+                    has_warm ? "" : ", cold volume");
+    else
+        std::printf("  scene %s extent %.2f m, %d points, voxel %.3f m\n",
+                    shape_name(cell.shape), cell.extent, n, voxel);
+    if (has_warm)
+        std::printf("  pre-warm: %zu points integrated per repetition, OUTSIDE the timed "
+                    "window\n", warm.pts.size() / 3);
     std::printf("  pool %d blocks (%.0f MiB/volume), batch %d%s\n", pool, per_vol / 1048576.0,
                 batch, batch != batch_req ? "  <-- REDUCED TO FIT" : "");
 
     float* d_pts = nullptr;
     cudaMalloc(&d_pts, pts.size() * sizeof(float));
     cudaMemcpy(d_pts, pts.data(), pts.size() * sizeof(float), cudaMemcpyHostToDevice);
+
+    float* d_warm = nullptr;
+    const int32_t n_warm = has_warm ? (int32_t)(warm.pts.size() / 3) : 0;
+    if (n_warm > 0) {
+        cudaMalloc(&d_warm, warm.pts.size() * sizeof(float));
+        cudaMemcpy(d_warm, warm.pts.data(), warm.pts.size() * sizeof(float),
+                   cudaMemcpyHostToDevice);
+    }
 
     std::vector<OsnTsdfCudaVolume*> vols((size_t)batch, nullptr);
     std::vector<OsnTsdfDeviceView> dvs((size_t)batch);
@@ -447,11 +537,22 @@ bool run_cell(const Cell& cell, const ArmHandles& arms, int reps, int warmup, in
 
     auto reset_all = [&]() {
         for (int j = 0; j < batch; ++j) osn_tsdf_cuda_reset(vols[j]);
+        // Pre-warm with arm A3 for EVERY arm, deliberately. The warm state is
+        // an input to the measurement, not part of it, so it must be identical
+        // across arms; letting each arm build its own would fold that arm's
+        // behaviour into the starting condition. Outside the timed window.
+        if (n_warm > 0) {
+            for (int j = 0; j < batch; ++j) {
+                osn_tsdf_cuda_allocate_blocks(vols[j], d_warm, n_warm, cx, cy, cz, 0);
+                osn_tsdf_cuda_update_voxels(vols[j], d_warm, n_warm, cx, cy, cz, 0);
+            }
+            cudaDeviceSynchronize();
+        }
     };
     auto launch_alloc = [&](int arm, int j) {
-        if (arm == 0) osn_tsdf_cuda_allocate_blocks(vols[j], d_pts, n, 0, 0, 0, 0);
+        if (arm == 0) osn_tsdf_cuda_allocate_blocks(vols[j], d_pts, n, cx, cy, cz, 0);
 #ifdef OSN_TSDF_HAVE_A4
-        else if (arm == 1) a4_allocate_blocks(&dvs[j], (uint64_t)d_pts, n, 0, 0, 0, 0);
+        else if (arm == 1) a4_allocate_blocks(&dvs[j], (uint64_t)d_pts, n, cx, cy, cz, 0);
 #endif
 #ifdef HAVE_A5
         else if (arm == 2) {
@@ -464,16 +565,16 @@ bool run_cell(const Cell& cell, const ArmHandles& arms, int reps, int warmup, in
                             (void*)&g_scratch_mask,
                             (void*)&n, (void*)&hm, (void*)&dvs[j].pool_capacity,
                             (void*)&dvs[j].voxel_size_m, (void*)&dvs[j].trunc_m,
-                            (void*)&z, (void*)&z, (void*)&z, (void*)&z};
+                            (void*)&cx, (void*)&cy, (void*)&cz, (void*)&z};
             osn_triton_launch(arms.k_alloc, grid, OSN_TRITON_ALLOC_BLOCK_DIM_X,
                               OSN_TRITON_ALLOC_SHARED, args, 17);
         }
 #endif
     };
     auto launch_update = [&](int arm, int j) {
-        if (arm == 0) osn_tsdf_cuda_update_voxels(vols[j], d_pts, n, 0, 0, 0, 0);
+        if (arm == 0) osn_tsdf_cuda_update_voxels(vols[j], d_pts, n, cx, cy, cz, 0);
 #ifdef OSN_TSDF_HAVE_A4
-        else if (arm == 1) a4_update_voxels(&dvs[j], (uint64_t)d_pts, n, 0, 0, 0, 0);
+        else if (arm == 1) a4_update_voxels(&dvs[j], (uint64_t)d_pts, n, cx, cy, cz, 0);
 #endif
 #ifdef HAVE_A5
         else if (arm == 2) {
@@ -485,7 +586,7 @@ bool run_cell(const Cell& cell, const ArmHandles& arms, int reps, int warmup, in
                             (void*)&dvs[j].g, (void*)&dvs[j].b, (void*)&n, (void*)&hm,
                             (void*)&dvs[j].voxel_size_m, (void*)&dvs[j].trunc_m,
                             (void*)&dvs[j].weight_cap,
-                            (void*)&z, (void*)&z, (void*)&z, (void*)&z};
+                            (void*)&cx, (void*)&cy, (void*)&cz, (void*)&z};
             osn_triton_launch(arms.k_upd, grid, OSN_TRITON_UPDATE_BLOCK_DIM_X,
                               OSN_TRITON_UPDATE_SHARED, args, 17);
         }
@@ -618,6 +719,7 @@ bool run_cell(const Cell& cell, const ArmHandles& arms, int reps, int warmup, in
     for (auto* v : vols)
         if (v) osn_tsdf_cuda_destroy(v);
     cudaFree(d_pts);
+    if (d_warm) cudaFree(d_warm);
     return valid;
 }
 

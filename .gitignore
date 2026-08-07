@@ -30,3 +30,4 @@ cpp/build/
 crates/tsdf-rust-cuda/target/
 
 results/
+data/tartanair/

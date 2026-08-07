@@ -95,8 +95,9 @@ SMs at all. This is the sharpest expressiveness result in the project, because
 the failure was invisible on a single device — one GPU reports 1.8 ms and looks
 reasonable.
 
-**Rust is 1.23x slower on update at the baseline, and at parity for large
-scenes.** The baseline gap tracks a 1.62x SASS instruction count, 504 against
+**Rust is at parity on update except on small synthetic scenes.** 1.00–1.02x on
+real TartanAir data and 0.97–1.02x on the largest synthetic cells; the 1.23x
+figure is the baseline sphere and is the exception, not the rule. The baseline gap tracks a 1.62x SASS instruction count, 504 against
 312, concentrated in LOP3, FFMA, FSETP and BRA. But the ratio falls to 0.97–1.02x
 on the largest cells, where Rust is at or slightly ahead of CUDA C++. That is
 consistent and worth stating plainly: instruction count sets the gap while the
@@ -195,8 +196,15 @@ need real depth to be compared.
 
 1. ~~**More than one workload.**~~ **Done**, docs/WORKLOAD-SWEEP.md: 13 cells
    across four axes, three passes, both local cards. It changed the conclusions
-   rather than confirming them. Still missing: one real TartanAir sequence, so
-   every scene remains synthetic, and the `loadfactor` axis cannot exceed 0.283
+   rather than confirming them. **Real data added 2026-08-07**: two TartanAir
+   V2 RetroOffice cells, cold and warm. They validated the synthetic sweep
+   (real ratios land inside the synthetic range and within a fraction of a
+   point of the baseline), showed Rust's update gap to be a small-scene
+   artefact (1.00–1.02x on real data against 1.23x on the sphere), and reached
+   the regime the `loadfactor` axis could not: in the warm volume a live
+   pipeline actually runs in, CUDA and Rust take the early exit and get 1.3–1.4x
+   faster while Triton does not move at all, widening the gap from 17.2x to
+   23.7x. Still open: the `loadfactor` axis cannot exceed 0.283
    because the table is sized at twice the pool. Reaching the 0.7–0.9 regime
    where probe chains actually blow up needs table size decoupled from pool
    capacity, and until then the sharpest prediction of the Triton explanation

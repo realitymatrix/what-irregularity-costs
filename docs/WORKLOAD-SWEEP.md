@@ -333,3 +333,85 @@ exists to explore.
 memory, and the reduction is printed. A cell measured at a different batch size
 is not directly comparable to one that was not, so this is reported rather than
 silently applied.
+
+## Sixth finding: real data, and the warm regime
+
+Added 2026-08-07. Every cell above is synthetic: uniform point density over a
+single convex surface, with a hash occupancy a formula predicts. A room is
+none of those things, and the parts of the algorithm under test are exactly the
+parts that depend on how points cluster.
+
+Two cells from TartanAir V2 RetroOffice `Data_easy/P000`, frame 8, unprojected
+from ground-truth depth at full resolution: 407,444 points, close to the
+baseline's 320,000 so the comparison is distribution and not size.
+
+* `tartan-cold` integrates the frame into an empty volume, matching how every
+  synthetic cell is measured.
+* `tartan-warm` integrates the same frame into a volume already holding frames
+  0 to 7 (3.2 M points, pre-filled outside the timed window). **A live pipeline
+  is in this state for every frame but the first**, and it is a different
+  regime for the code under test: most probes hit an existing key rather than
+  finding an empty slot.
+
+The warm fill is done by arm A3 for every arm, deliberately. The warm state is
+an input to the measurement, not part of it, so it must be identical across
+arms; letting each arm build its own would fold that arm's behaviour into the
+starting condition.
+
+### Result 1: the synthetic cells were representative
+
+Allocate, medians of three passes, p50 ms:
+
+| cell | A3 5070Ti | A5 5070Ti | A5/A3 | A3 5060 | A5 5060 | A5/A3 |
+|---|---|---|---|---|---|---|
+| tartan-cold | 0.0378 | 0.7147 | 18.9x | 0.0713 | 1.2250 | 17.2x |
+| tartan-warm | 0.0380 | 0.7267 | 19.1x | 0.0516 | 1.2235 | **23.7x** |
+| *synthetic base* | *0.0279* | *0.5277* | *18.9x* | *0.0541* | *0.9642* | *17.8x* |
+
+Real data lands inside the synthetic range (9.1x to 26.2x) and within a
+fraction of a point of the baseline cell on the cold path. That is a positive
+result for the synthetic sweep, not a redundancy: it means the sphere was not
+quietly flattering or penalising any arm, which could not be asserted before.
+
+### Result 2: Rust's update disadvantage is a synthetic artefact
+
+On update, A4/A3 is **1.00x to 1.02x on real data**, against 1.23x on the
+baseline sphere. Combined with the 0.97–1.02x already seen on the largest
+synthetic cells, the conclusion is that Rust's update gap appears on small
+uniform scenes and vanishes on everything else. The paper should lead with
+parity and treat 1.23x as the small-scene case, not the other way round.
+
+### Result 3: the warm regime widens the Triton gap, and it is the realistic one
+
+On the 5060, warming the volume speeds A3's allocate by 1.38x (0.0713 to
+0.0516) and A4's by 1.29x, while **A5 does not move at all** (1.2250 to
+1.2235). The gap widens from 17.2x to 23.7x.
+
+This is the mechanism the `loadfactor` axis was built to test and failed to
+reach. Warm means most lanes find their key on the first probe and exit; CUDA
+C++ and Rust both take that exit and skip the insert path, and Triton cannot,
+because its loop is a `tl.static_range` that runs to the bound regardless. So
+the language's cost is *highest* in precisely the regime a real pipeline spends
+all its time in.
+
+Per-pass values, showing how reproducible this is on the 5060:
+
+    tartan-cold A3   0.0713  0.0713  0.0713
+    tartan-warm A3   0.0515  0.0516  0.0517
+    tartan-cold A5   1.2233  1.2250  1.2267
+    tartan-warm A5   1.2220  1.2235  1.2241
+
+### The one honest caveat
+
+**The warm speedup does not appear on the 5070 Ti**: A3 is 0.0378 cold and
+0.0380 warm. Its three warm passes were 0.0393, 0.0245, 0.0380, so that cell is
+also the only one in the sweep flagged for run-to-run instability, and the
+0.0245 outlier is exactly what the three-pass median exists to reject.
+
+The likely reason is that at 407k points the allocate kernel is only 0.038 ms
+on 70 SMs and close to a launch-bound floor, so removing insert work does not
+shorten it; on 30 SMs the same kernel is 0.071 ms and work-bound, so it does.
+That is a hypothesis, not a measurement. What is measured is narrower and
+should be stated that way: **A5 fails to benefit from the warm regime on both
+cards, and A3 and A4 benefit on the card where there is enough work for the
+saving to be visible.**
