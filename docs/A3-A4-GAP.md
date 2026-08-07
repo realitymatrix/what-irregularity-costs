@@ -122,7 +122,19 @@ Runtime, allocate p50 ms, three runs of 20 reps:
 | tartan-warm | 5070 Ti | 0.0542 | 0.054–0.055 |
 | tartan-warm | 5060 | 0.0746 | 0.073–0.074 |
 
-**Nothing moved.** Eliminating all six system-scope strongly-ordered loads
+**Nothing moved.** Confirmed a second time on the full matrix: the identical
+sweep (12 cells, 3 passes, both devices, 65,536 scratch slots) re-run with the
+scoped-atomic build gives 48 paired A4 comparisons with a mean delta of -0.04%,
+a median of +0.01%, and a range of -1.5% to +1.2%.
+
+The control makes it airtight. A3, which was **not** changed between the two
+sweeps, moved *more* than A4 did: mean +0.72%, range -2.4% to +41.5%. That
+outlier is `r-1.0` on the wide card, one of the large-pool cells already known
+to be bimodal. In other words the arm under test moved less than the arm that
+could not possibly have moved, so any real effect is well below the noise
+floor of the instrument.
+
+The single-cell version of this measurement: Eliminating all six system-scope strongly-ordered loads
 changed the ratio from 1.65x to 1.63x on the wide card and 1.45x to 1.44x on
 the narrow one, which is noise. Correctness is unaffected: 1160 blocks, mean
 surface distance to A3 still 0.000000000 m.
