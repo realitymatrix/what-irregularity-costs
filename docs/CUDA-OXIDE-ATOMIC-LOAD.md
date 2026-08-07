@@ -99,6 +99,13 @@ Two deliberate choices:
   rebuild it with `cargo +nightly-2026-04-03 build --release` inside
   `crates/rustc-codegen-cuda` of that worktree; it takes about 40 seconds.
 
+  Verified end to end from the new location on 2026-08-07: A4 rebuilds in 12.7 s
+  against the relocated backend, and all five arms agree. A2, A3, A4, A5a and
+  A5b each produce 1,160 blocks and 846,288 vertices with zero dropped points,
+  mean radius error 0.000015 m against the analytic sphere, and mean surface
+  distance to A3 of 0.000000000 m for A4 and 0.000000019 m for both Triton arms.
+  So none of the L1 work changed what any kernel computes.
+
   The worktree lives at `~/Documents/cuda-oxide-scoped`, moved there from a
   `/tmp` scratchpad on 2026-08-07 after the scratchpad was cleaned mid-session
   and took the built backend with it. The branch itself was never at risk,
