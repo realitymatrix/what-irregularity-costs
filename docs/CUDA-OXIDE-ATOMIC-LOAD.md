@@ -103,6 +103,23 @@ Two deliberate choices:
 That is a negative result for the performance hypothesis and a positive one for
 the patch: the experiment was impossible to run before, and it is now cheap to
 run. The defect is worth reporting upstream on its own merits.
+* **Second commit pushed 2026-08-07**, `0aa4e86`, from using the feature rather
+  than from reviewing it. Two parts.
+
+  A **doc note on `cuda_device::atomic`** stating that a scoped atomic load is
+  coherent at its scope, an L1 is not coherent across SMs, and so such a load
+  bypasses L1 on every call however weak the ordering. Relaxed removes ordering,
+  not coherence. This is the part worth arguing for: it is not inferable from
+  the type signatures, it is written down nowhere, and the reflex it warns
+  against cost this project 24% and eleven dead hypotheses.
+
+  A **lowering change** emitting `~{memory}` only for ordering-carrying
+  atomics, since a memory clobber forces a spill and reload of everything in
+  registers around the access and a relaxed access orders nothing. Reported
+  honestly as justified on principle rather than measurement: in isolation it
+  moved the benchmark about 1%, which is noise, and the comment invites the
+  maintainers to drop it if they prefer the clobber unconditionally.
+
 * **Submitted upstream as NVlabs/cuda-oxide#695** (draft), 2026-08-07:
   https://github.com/NVlabs/cuda-oxide/pull/695
 * Rebased onto upstream `main` after it moved 65 commits ahead. The conflict
