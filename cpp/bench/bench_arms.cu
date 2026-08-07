@@ -526,8 +526,16 @@ bool run_cell(const Cell& cell, const ArmHandles& arms, int reps, int warmup, in
     for (int arm = 0; arm < 3; ++arm) {
         if (smp[arm][0].empty()) continue;
         if (drops_seen[arm] > 0) {
-            std::printf("  INVALID: %s dropped %llu blocks (pool %d too small)\n", arm_name[arm],
-                        (unsigned long long)drops_seen[arm], pool);
+            // A drop is one lost point-voxel CONTRIBUTION, not one lost block:
+            // many points probe toward the same block, so an unreachable block
+            // produces many drops. At load factor 0.283 A5 reported 26,940
+            // drops for 13 missing blocks. Two causes are possible and the
+            // counter does not distinguish them: pool exhaustion, which every
+            // arm reports, and probe exhaustion, which only A5 can suffer
+            // because its probe bound is a compile-time constant.
+            std::printf("  INVALID: %s dropped %llu contributions (pool %d full, or for A5 "
+                        "the probe bound)\n",
+                        arm_name[arm], (unsigned long long)drops_seen[arm], pool);
             valid = false;
         }
         if (blocks_seen[0] > 0 && blocks_seen[arm] > 0 && blocks_seen[arm] != blocks_seen[0]) {

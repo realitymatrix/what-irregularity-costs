@@ -174,6 +174,11 @@ def tsdf_alloc_kernel(
         want = _pack(bx, by, bz)
         start = _hash(bx, by, bz, hash_mask)
 
+        # Hoisted out of the probe loop so the probe-exhaustion report after it
+        # can use it too. See its first use inside the loop for why a broadcast
+        # tensor is required rather than the bare scalar pointer.
+        lane0 = tl.zeros((BLOCK,), tl.int32)
+
         done = ~active
         for p in tl.static_range(0, MAX_PROBE):
             slot = (start + p) & hash_mask
@@ -195,11 +200,11 @@ def tsdf_alloc_kernel(
             # Claim a pool index for the winners only.
             #
             # The counter is a single scalar, but the atomic must be issued as a
-            # TENSOR of pointers. Passing the bare scalar pointer with a tensor
-            # value crashes the compiler outright (MLIR assertion
-            # "only integers and floats have a bitwidth"), rather than reporting
-            # a type error, so the broadcast here is load-bearing.
-            lane0 = tl.zeros((BLOCK,), tl.int32)
+            # TENSOR of pointers (`lane0`, hoisted above). Passing the bare
+            # scalar pointer with a tensor value crashes the compiler outright
+            # (MLIR assertion "only integers and floats have a bitwidth"),
+            # rather than reporting a type error, so the broadcast is
+            # load-bearing.
             idx = tl.atomic_add(block_count_ptr + lane0, 1, mask=won)
             ok = won & (idx < pool_capacity)
             # Publish coordinates then the index. The other arms fence between
@@ -222,6 +227,25 @@ def tsdf_alloc_kernel(
             done = done | won
             # Lost the race but the winner wrote our key: share the slot.
             done = done | (empty & (old == want))
+
+        # Probe exhausted: report, rather than dropping silently.
+        #
+        # This is the one place where the arms genuinely cannot match. The CUDA
+        # and Rust arms probe `hash_mask + 1` slots, so they always find a slot
+        # when one exists and only ever fail on a full table. `MAX_PROBE` is a
+        # `tl.static_range` bound and must therefore be a compile-time constant,
+        # because the loop is statically unrolled; an unbounded probe is not
+        # expressible in Triton at any price, and raising the bound costs
+        # compile time and code size superlinearly (MAX_PROBE 32 took ~20 min to
+        # compile against seconds at 8, for a 3.7x larger cubin).
+        #
+        # So the bound stays and the loss is made visible instead. Without this
+        # the failure surfaces only as a block-count mismatch against A3, is
+        # invisible at low load factor, and would let this arm post a faster
+        # time for having built fewer blocks. Counted here rather than skipped
+        # because the CUDA arm counts its own equivalent failure the same way.
+        exhausted = active & (~done)
+        tl.atomic_add(drop_count_ptr + lane0.to(tl.int64), 1, mask=exhausted)
 
 
 @triton.jit
