@@ -810,8 +810,63 @@ language.
 \section{Threats to validity}
 \label{sec:threats}
 
-% TODO: one architecture (sm_120), the load-factor cap at 0.283, the
-% unattributed residual, one real sequence.
+\paragraph{One architecture.} Every measurement is on sm\_120, across two GPUs
+differing $2.33\times$ in streaming multiprocessor count and roughly $2\times$ in
+memory bandwidth. A second architecture was considered and not run.
+
+The magnitudes are therefore Blackwell figures and should be read as such. The
+mechanisms are not: Triton's missing per-lane early exit and unmasked
+compare-exchange are properties of the language; a \texttt{tl.static\_range}
+trip count being a compile-time constant is a property of the language; and a
+GPU-scope atomic load bypassing L1 follows from no NVIDIA L1 being coherent
+across streaming multiprocessors, which holds on every current architecture. We
+claim the ranking and its causes generalise, and that the numbers attached to
+them do not. Nothing in the argument rests on a magnitude.
+
+The two-card axis is a partial mitigation rather than a substitute. It varies
+machine width at fixed code generation, and the ratios agree closely between the
+cards, which rules out their being an artefact of one machine's balance. An
+earlier version of these numbers halved between the two cards, and that turned
+out to be a symptom rather than a finding.
+
+\paragraph{The sharpest prediction is untested.} The Triton explanation predicts
+that its advantage should shrink as the hash table fills, because CUDA C++ pays
+actual probe depth while Triton pays a fixed bound. The data structure prevents
+the test: the table is sized at twice the pool and the pool must hold every
+block, so the reachable load factor caps at 0.283, over which range CUDA's
+expected probe count moves only from 1.02 to 1.39. Reaching the regime where
+probe chains genuinely lengthen requires decoupling table size from pool
+capacity, which changes the shared data structure and therefore every arm. We
+report the prediction as untested rather than unsupported.
+
+\paragraph{An unattributed residual.} After the fix in
+Section~\ref{sec:attribution}, Rust's allocate stage remains $1.12$--$1.33\times$
+CUDA C++, and we do not know why. Given that eleven prior hypotheses about this
+same gap were each plausible and each wrong, we prefer to leave it open than to
+assign it to whichever cause is nearest.
+
+\paragraph{One environment of real data.} The real-data cells come from a single
+TartanAir sequence. They validated the synthetic sweep rather than contradicting
+it, which is the outcome that carries the least information: had they disagreed,
+we would have learned more. One indoor environment is not a claim about real
+depth data in general.
+
+\paragraph{We wrote all the implementations.} Every arm was written by the same
+authors, who had substantially more experience in CUDA C++ than in Triton before
+this work. We mitigated this by holding the algorithm, memory layout, hash
+function and launch geometry identical across arms, by gating on correctness
+before timing, and by attributing every gap to a specific construct rather than
+resting on the totals. The Triton results in particular should be read as what a
+competent non-expert obtains from the documented API, and an expert may do
+better. We note that two of our own Triton and Rust implementations were
+materially improved during this work, in both cases by measurement rather than by
+insight, which suggests the remaining implementations may not be optimal either.
+
+\paragraph{One workload family.} All cells are TSDF fusion. The properties we
+claim to be measuring, data-dependent per-lane work, compare-exchange insertion
+and contended scatter, are shared with other GPU hash tables, sparse structure
+builders and dynamic work queues, but we have not measured those. The
+generalisation in Section~\ref{sec:workload} is an argument, not a result.
 
 \section{Related work}
 \label{sec:related}
