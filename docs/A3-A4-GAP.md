@@ -100,6 +100,81 @@ the *same* reason for longer, the gap is throughput rather than structure, and
 the honest paper text becomes "same work, same instructions, lower atomic
 throughput" with the cause left to NVIDIA.
 
+## ATTRIBUTED: the gap is exposed memory latency from L1 bypass
+
+Profiled 2026-08-07 with counters enabled. Both production allocate kernels,
+same process, same input, 320k points.
+
+### Speed of light and occupancy
+
+| | A3 CUDA C++ | A4 Rust |
+|---|---|---|
+| Duration | 44.96 us | 52.16 us (1.16x) |
+| Elapsed cycles | 102,593 | 119,440 |
+| Achieved occupancy | 84.30% | 84.27% |
+| Avg. active threads per warp | 26.95 | 28.18 |
+| Warp cycles per issued instruction | 19.73 | **23.21** |
+| Compute (SM) throughput | 44.05% | 40.45% |
+| L2 cache throughput | 22.58% | **32.77%** |
+
+Occupancy is identical, so it was never an occupancy effect. A4 even has *less*
+warp divergence, 28.18 active threads per warp against 26.95. What A4 has is
+more warp-cycles per instruction: every instruction it issues costs 18% more
+cycles of warp residency, and 1.18x on that against 1.16x on duration accounts
+for the whole gap.
+
+### Where the warps wait
+
+Average warps stalled per issue-active cycle, by reason:
+
+| stall reason | A3 | A4 | delta |
+|---|---|---|---|
+| **long_scoreboard** | 12.020 | **15.630** | **+3.610** |
+| mio_throttle | 0.070 | 0.180 | +0.110 |
+| short_scoreboard | 0.590 | 0.670 | +0.080 |
+| membar | 0.140 | 0.120 | -0.020 |
+| dispatch_stall | 0.230 | 0.170 | -0.060 |
+| lg_throttle | 0.260 | 0.190 | -0.070 |
+| no_instruction | 0.450 | 0.330 | -0.120 |
+| math_pipe_throttle | 0.450 | 0.190 | -0.260 |
+| wait | 2.460 | 2.090 | -0.370 |
+| not_selected | 1.670 | 1.100 | -0.570 |
+| branch_resolving | 2.120 | 1.150 | -0.970 |
+| total | 20.530 | 21.850 | +1.320 |
+
+**`long_scoreboard` is the only reason that got worse, and it is worse by more
+than the total gap.** Every other stall favours A4, most of all
+`branch_resolving`, which is consistent with A4's smaller static branch count.
+`long_scoreboard` is the wait for a long-latency memory operation to return
+data, so the gap is exposed memory latency and nothing else.
+
+### Why: identical requests, 1.70x the L2 traffic
+
+| metric | A3 | A4 | ratio |
+|---|---|---|---|
+| L1 requests | 430,890 | 433,409 | 1.006x |
+| L1 sectors | 1,167,659 | 1,181,069 | 1.011x |
+| **L2 sectors** | **568,655** | **964,189** | **1.70x** |
+
+A4 issues the same memory requests over the same sectors and pushes 70% more of
+them through to L2. Its L1 absorbs about 18% of sectors where A3's absorbs about
+51%. That is an L1 hit-rate difference with an identical access pattern, which
+leaves only one explanation: A4's loads are not L1-cacheable.
+
+They are not, and the reason traces straight back to the language. A4's hot
+probe load reads the key with `DeviceAtomicI64::load(Relaxed)`. A relaxed atomic
+load at GPU scope must be coherent across SMs, and NVIDIA's L1 is not coherent
+across SMs, so such a load bypasses L1 by construction. A3 reads the same field
+with a plain `int64_t` load, which is L1-cacheable, and relies on the algorithm
+rather than on the memory model: the probe visits a different slot each
+iteration so nothing can be hoisted, and a stale key costs at most one extra
+probe.
+
+That is the mechanism. Ten hypotheses died because they were all about
+instruction counts, and the answer was never about instruction counts: it is one
+load, correctly typed for what the language offers, whose coherence guarantee
+forbids the cache that the CUDA version relies on.
+
 ### ncu is blocked on this machine
 
 `ncu` is installed but refuses with `ERR_NVGPUCTRPERM`: access to GPU

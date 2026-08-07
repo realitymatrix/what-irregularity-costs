@@ -171,13 +171,19 @@ mod kernels {
                 let key_ptr = table.add(slot * 2);
                 let idx_ptr = key_ptr.add(1) as *mut i32;
                 let key_atomic = DeviceAtomicI64::from_ptr(key_ptr);
-                // Relaxed atomic load at GPU scope. This is the HOT load: it
-                // runs on every probe iteration, where the block_idx spins
-                // above run only when a peer is mid-publication. Previously
-                // `read_volatile`, which lowers to LDG.E.64.STRONG.SYS -
-                // system scope, ordering against host and peer devices for a
-                // table that never leaves this device.
-                let key = key_atomic.load(AtomicOrdering::Relaxed);
+                // PLAIN read, not an atomic load, and this is the hot path: it
+                // runs on every probe iteration. An atomic load at GPU scope
+                // must be coherent across SMs, so it cannot be served from L1;
+                // profiling showed that pushing 1.70x the sectors to L2 against
+                // A3 (964k against 569k) for an identical request count, which
+                // is where the extra long_scoreboard stalls come from.
+                //
+                // Correct because the probe visits a DIFFERENT slot each
+                // iteration, so nothing can be hoisted, and a stale key only
+                // costs an extra probe. A3 reads its key plainly for the same
+                // reason. The block_idx spin below still needs a real atomic
+                // load: it re-reads ONE address until a peer publishes.
+                let key = key_ptr.read();
 
                 if key == want {
                     // Scoped atomic load, GPU scope, not `read_volatile`.

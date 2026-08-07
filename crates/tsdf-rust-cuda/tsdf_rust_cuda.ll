@@ -2046,7 +2046,7 @@ bb4:
   br i1 %v46, label %bb6, label %bb5
 bb5:
   %v47 = bitcast ptr %v40 to ptr
-  %v48 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v47)
+  %v48 = load atomic i32, ptr %v47 syncscope("device") monotonic, align 4
   br label %bb7
 bb6:
   %v49 = add i32 %v32, 1
@@ -2057,7 +2057,7 @@ bb7:
   %v52 = xor i1 %v51, 1
   br i1 %v52, label %bb10, label %bb8
 bb8:
-  %v53 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v47)
+  %v53 = load atomic i32, ptr %v47 syncscope("device") monotonic, align 4
   br label %bb9
 bb9:
   br label %bb7
@@ -2173,10 +2173,10 @@ bb0:
   %v39 = and i32 %v38, %v10
   br label %bb1
 bb1:
-  %v40 = phi i32 [ 0, %bb0 ], [ %v88, %bb40 ]
+  %v40 = phi i32 [ 0, %bb0 ], [ %v89, %bb39 ]
   %v41 = icmp ult i32 %v40, %v30
   %v42 = xor i1 %v41, 1
-  br i1 %v42, label %bb41, label %bb2
+  br i1 %v42, label %bb40, label %bb2
 bb2:
   %v43 = add i32 %v39, %v40
   %v44 = and i32 %v43, %v10
@@ -2186,171 +2186,170 @@ bb2:
   %v48 = getelementptr inbounds i64, ptr %v47, i64 1
   %v49 = bitcast ptr %v48 to ptr
   %v50 = bitcast ptr %v47 to ptr
-  %v51 = call i64 asm sideeffect "ld.relaxed.gpu.b64 $0, [$1];", "=l,l,~{memory}"(ptr %v50)
-  br label %bb3
+  %v51 = bitcast ptr %v47 to ptr
+  %v52 = load i64, ptr %v51, align 8
+  %v53 = icmp eq i64 %v52, %v29
+  %v54 = xor i1 %v53, 1
+  br i1 %v54, label %bb10, label %bb3
 bb3:
-  %v52 = icmp eq i64 %v51, %v29
-  %v53 = xor i1 %v52, 1
-  br i1 %v53, label %bb11, label %bb4
+  %v55 = bitcast ptr %v48 to ptr
+  %v56 = load atomic i32, ptr %v55 syncscope("device") monotonic, align 4
+  br label %bb4
 bb4:
-  %v54 = bitcast ptr %v48 to ptr
-  %v55 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v54)
   br label %bb5
 bb5:
-  br label %bb6
+  %v57 = phi i32 [ %v56, %bb4 ], [ %v60, %bb7 ]
+  %v58 = icmp slt i32 %v57, 0
+  %v59 = xor i1 %v58, 1
+  br i1 %v59, label %bb8, label %bb6
 bb6:
-  %v56 = phi i32 [ %v55, %bb5 ], [ %v59, %bb8 ]
-  %v57 = icmp slt i32 %v56, 0
-  %v58 = xor i1 %v57, 1
-  br i1 %v58, label %bb9, label %bb7
+  %v60 = load atomic i32, ptr %v55 syncscope("device") monotonic, align 4
+  br label %bb7
 bb7:
-  %v59 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v54)
-  br label %bb8
+  br label %bb5
 bb8:
-  br label %bb6
+  br label %bb9
 bb9:
-  br label %bb10
+  br label %bb45
 bb10:
-  br label %bb46
+  %v61 = icmp eq i64 %v52, 18446744073709551615
+  br i1 %v61, label %bb11, label %bb39
 bb11:
-  %v60 = icmp eq i64 %v51, 18446744073709551615
-  br i1 %v60, label %bb12, label %bb40
+  br label %bb12
 bb12:
   br label %bb13
 bb13:
-  br label %bb14
+  %v62 = cmpxchg ptr %v50, i64 18446744073709551615, i64 %v29 syncscope("device") monotonic monotonic
+  %v63 = extractvalue { i64, i1 } %v62, 0
+  br label %bb47
 bb14:
-  %v61 = cmpxchg ptr %v50, i64 18446744073709551615, i64 %v29 syncscope("device") monotonic monotonic
-  %v62 = extractvalue { i64, i1 } %v61, 0
-  br label %bb48
-bb15:
   unreachable
+bb15:
+  %v64 = extractvalue { i64, i64 } %v108, 1
+  %v65 = icmp eq i64 %v64, %v29
+  %v66 = xor i1 %v65, 1
+  br i1 %v66, label %bb38, label %bb31
 bb16:
-  %v63 = extractvalue { i64, i64 } %v107, 1
-  %v64 = icmp eq i64 %v63, %v29
-  %v65 = xor i1 %v64, 1
-  br i1 %v65, label %bb39, label %bb32
+  br label %bb17
 bb17:
+  %v67 = bitcast ptr %v11 to ptr
+  %v68 = atomicrmw add ptr %v67, i32 1 syncscope("device") monotonic
   br label %bb18
 bb18:
-  %v66 = bitcast ptr %v11 to ptr
-  %v67 = atomicrmw add ptr %v66, i32 1 syncscope("device") monotonic
-  br label %bb19
+  %v69 = icmp sge i32 %v68, %v12
+  %v70 = xor i1 %v69, 1
+  br i1 %v70, label %bb24, label %bb19
 bb19:
-  %v68 = icmp sge i32 %v67, %v12
-  %v69 = xor i1 %v68, 1
-  br i1 %v69, label %bb25, label %bb20
+  %v71 = bitcast ptr %v11 to ptr
+  %v72 = atomicrmw sub ptr %v71, i32 1 syncscope("device") monotonic
+  br label %bb20
 bb20:
-  %v70 = bitcast ptr %v11 to ptr
-  %v71 = atomicrmw sub ptr %v70, i32 1 syncscope("device") monotonic
   br label %bb21
 bb21:
+  %v73 = atomicrmw xchg ptr %v50, i64 18446744073709551615 syncscope("device") monotonic
   br label %bb22
 bb22:
-  %v72 = atomicrmw xchg ptr %v50, i64 18446744073709551615 syncscope("device") monotonic
+  %v74 = bitcast ptr %v13 to ptr
+  %v75 = atomicrmw add ptr %v74, i64 1 syncscope("device") monotonic
   br label %bb23
 bb23:
-  %v73 = bitcast ptr %v13 to ptr
-  %v74 = atomicrmw add ptr %v73, i64 1 syncscope("device") monotonic
-  br label %bb24
+  br label %bb42
 bb24:
-  br label %bb43
+  br label %bb25
 bb25:
+  %v76 = mul i32 %v68, 3
+  %v77 = sext i32 %v76 to i64
+  %v78 = getelementptr inbounds i32, ptr %v14, i64 %v77
+  store i32 %v15, ptr %v78, align 4
+  %v79 = getelementptr inbounds i32, ptr %v78, i64 1
+  store i32 %v16, ptr %v79, align 4
+  %v80 = getelementptr inbounds i32, ptr %v78, i64 2
+  store i32 %v17, ptr %v80, align 4
   br label %bb26
 bb26:
-  %v75 = mul i32 %v67, 3
-  %v76 = sext i32 %v75 to i64
-  %v77 = getelementptr inbounds i32, ptr %v14, i64 %v76
-  store i32 %v15, ptr %v77, align 4
-  %v78 = getelementptr inbounds i32, ptr %v77, i64 1
-  store i32 %v16, ptr %v78, align 4
-  %v79 = getelementptr inbounds i32, ptr %v77, i64 2
-  store i32 %v17, ptr %v79, align 4
   br label %bb27
 bb27:
   br label %bb28
 bb28:
+  %v81 = bitcast ptr %v48 to ptr
+  %v82 = atomicrmw xchg ptr %v81, i32 %v68 syncscope("device") monotonic
   br label %bb29
 bb29:
-  %v80 = bitcast ptr %v48 to ptr
-  %v81 = atomicrmw xchg ptr %v80, i32 %v67 syncscope("device") monotonic
   br label %bb30
 bb30:
-  br label %bb31
+  br label %bb42
 bb31:
-  br label %bb43
+  %v83 = bitcast ptr %v48 to ptr
+  %v84 = load atomic i32, ptr %v83 syncscope("device") monotonic, align 4
+  br label %bb32
 bb32:
-  %v82 = bitcast ptr %v48 to ptr
-  %v83 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v82)
   br label %bb33
 bb33:
-  br label %bb34
+  %v85 = phi i32 [ %v84, %bb32 ], [ %v88, %bb35 ]
+  %v86 = icmp slt i32 %v85, 0
+  %v87 = xor i1 %v86, 1
+  br i1 %v87, label %bb36, label %bb34
 bb34:
-  %v84 = phi i32 [ %v83, %bb33 ], [ %v87, %bb36 ]
-  %v85 = icmp slt i32 %v84, 0
-  %v86 = xor i1 %v85, 1
-  br i1 %v86, label %bb37, label %bb35
+  %v88 = load atomic i32, ptr %v83 syncscope("device") monotonic, align 4
+  br label %bb35
 bb35:
-  %v87 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v82)
-  br label %bb36
+  br label %bb33
 bb36:
-  br label %bb34
+  br label %bb37
 bb37:
-  br label %bb38
+  br label %bb43
 bb38:
-  br label %bb44
+  br label %bb39
 bb39:
-  br label %bb40
-bb40:
-  %v88 = add i32 %v40, 1
+  %v89 = add i32 %v40, 1
   br label %bb1
+bb40:
+  %v90 = bitcast ptr %v13 to ptr
+  %v91 = atomicrmw add ptr %v90, i64 1 syncscope("device") monotonic
+  br label %bb41
 bb41:
-  %v89 = bitcast ptr %v13 to ptr
-  %v90 = atomicrmw add ptr %v89, i64 1 syncscope("device") monotonic
-  br label %bb42
+  br label %bb46
 bb42:
-  br label %bb47
+  %v92 = phi i32 [ 4294967295, %bb23 ], [ %v68, %bb30 ]
+  br label %bb43
 bb43:
-  %v91 = phi i32 [ 4294967295, %bb24 ], [ %v67, %bb31 ]
+  %v93 = phi i32 [ %v85, %bb37 ], [ %v92, %bb42 ]
   br label %bb44
 bb44:
-  %v92 = phi i32 [ %v84, %bb38 ], [ %v91, %bb43 ]
   br label %bb45
 bb45:
+  %v94 = phi i32 [ %v57, %bb9 ], [ %v93, %bb44 ]
   br label %bb46
 bb46:
-  %v93 = phi i32 [ %v56, %bb10 ], [ %v92, %bb45 ]
-  br label %bb47
+  %v95 = phi i32 [ 4294967295, %bb41 ], [ %v94, %bb45 ]
+  ret i32 %v95
 bb47:
-  %v94 = phi i32 [ 4294967295, %bb42 ], [ %v93, %bb46 ]
-  ret i32 %v94
+  %v96 = icmp eq i64 %v63, 18446744073709551615
+  br i1 %v96, label %bb48, label %bb49
 bb48:
-  %v95 = icmp eq i64 %v62, 18446744073709551615
-  br i1 %v95, label %bb49, label %bb50
+  %v97 = insertvalue { i64, i64 } undef, i64 0, 0
+  %v98 = insertvalue { i64, i64 } %v97, i64 %v63, 1
+  %v99 = extractvalue { i64, i64 } %v98, 0
+  %v100 = extractvalue { i64, i64 } %v98, 1
+  br label %bb50
 bb49:
-  %v96 = insertvalue { i64, i64 } undef, i64 0, 0
-  %v97 = insertvalue { i64, i64 } %v96, i64 %v62, 1
-  %v98 = extractvalue { i64, i64 } %v97, 0
-  %v99 = extractvalue { i64, i64 } %v97, 1
-  br label %bb51
+  %v101 = insertvalue { i64, i64 } undef, i64 1, 0
+  %v102 = insertvalue { i64, i64 } %v101, i64 %v63, 1
+  %v103 = extractvalue { i64, i64 } %v102, 0
+  %v104 = extractvalue { i64, i64 } %v102, 1
+  br label %bb50
 bb50:
-  %v100 = insertvalue { i64, i64 } undef, i64 1, 0
-  %v101 = insertvalue { i64, i64 } %v100, i64 %v62, 1
-  %v102 = extractvalue { i64, i64 } %v101, 0
-  %v103 = extractvalue { i64, i64 } %v101, 1
-  br label %bb51
+  %v105 = phi i64 [ %v99, %bb48 ], [ %v103, %bb49 ]
+  %v106 = phi i64 [ %v100, %bb48 ], [ %v104, %bb49 ]
+  %v107 = insertvalue { i64, i64 } undef, i64 %v105, 0
+  %v108 = insertvalue { i64, i64 } %v107, i64 %v106, 1
+  %v109 = extractvalue { i64, i64 } %v108, 0
+  %v110 = bitcast i64 %v109 to i64
+  %v111 = icmp eq i64 %v110, 0
+  br i1 %v111, label %bb16, label %bb51
 bb51:
-  %v104 = phi i64 [ %v98, %bb49 ], [ %v102, %bb50 ]
-  %v105 = phi i64 [ %v99, %bb49 ], [ %v103, %bb50 ]
-  %v106 = insertvalue { i64, i64 } undef, i64 %v104, 0
-  %v107 = insertvalue { i64, i64 } %v106, i64 %v105, 1
-  %v108 = extractvalue { i64, i64 } %v107, 0
-  %v109 = bitcast i64 %v108 to i64
-  %v110 = icmp eq i64 %v109, 0
-  br i1 %v110, label %bb17, label %bb52
-bb52:
-  %v111 = icmp eq i64 %v109, 1
-  br i1 %v111, label %bb16, label %bb15
+  %v112 = icmp eq i64 %v110, 1
+  br i1 %v112, label %bb15, label %bb14
 }
 
 define i32 @_RINvNtCshAQQRahQDk9_14tsdf_rust_cuda7kernels14find_or_insertKb0_Kb1_KB11_KB11_KB11_KBX_EB4_(ptr %v0, i32 %v1, ptr %v2, i32 %v3, ptr %v4, ptr %v5, i32 %v6, i32 %v7, i32 %v8) alwaysinline #0 {
@@ -2390,10 +2389,10 @@ bb0:
   %v39 = and i32 %v38, %v10
   br label %bb1
 bb1:
-  %v40 = phi i32 [ 0, %bb0 ], [ %v61, %bb14 ]
+  %v40 = phi i32 [ 0, %bb0 ], [ %v62, %bb13 ]
   %v41 = icmp ult i32 %v40, %v30
   %v42 = xor i1 %v41, 1
-  br i1 %v42, label %bb15, label %bb2
+  br i1 %v42, label %bb14, label %bb2
 bb2:
   %v43 = add i32 %v39, %v40
   %v44 = and i32 %v43, %v10
@@ -2403,56 +2402,55 @@ bb2:
   %v48 = getelementptr inbounds i64, ptr %v47, i64 1
   %v49 = bitcast ptr %v48 to ptr
   %v50 = bitcast ptr %v47 to ptr
-  %v51 = call i64 asm sideeffect "ld.relaxed.gpu.b64 $0, [$1];", "=l,l,~{memory}"(ptr %v50)
-  br label %bb3
+  %v51 = bitcast ptr %v47 to ptr
+  %v52 = load i64, ptr %v51, align 8
+  %v53 = icmp eq i64 %v52, %v29
+  %v54 = xor i1 %v53, 1
+  br i1 %v54, label %bb10, label %bb3
 bb3:
-  %v52 = icmp eq i64 %v51, %v29
-  %v53 = xor i1 %v52, 1
-  br i1 %v53, label %bb11, label %bb4
+  %v55 = bitcast ptr %v48 to ptr
+  %v56 = load atomic i32, ptr %v55 syncscope("device") monotonic, align 4
+  br label %bb4
 bb4:
-  %v54 = bitcast ptr %v48 to ptr
-  %v55 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v54)
   br label %bb5
 bb5:
-  br label %bb6
+  %v57 = phi i32 [ %v56, %bb4 ], [ %v60, %bb7 ]
+  %v58 = icmp slt i32 %v57, 0
+  %v59 = xor i1 %v58, 1
+  br i1 %v59, label %bb8, label %bb6
 bb6:
-  %v56 = phi i32 [ %v55, %bb5 ], [ %v59, %bb8 ]
-  %v57 = icmp slt i32 %v56, 0
-  %v58 = xor i1 %v57, 1
-  br i1 %v58, label %bb9, label %bb7
+  %v60 = load atomic i32, ptr %v55 syncscope("device") monotonic, align 4
+  br label %bb7
 bb7:
-  %v59 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v54)
-  br label %bb8
+  br label %bb5
 bb8:
-  br label %bb6
+  br label %bb9
 bb9:
-  br label %bb10
-bb10:
-  br label %bb18
-bb11:
-  %v60 = icmp eq i64 %v51, 18446744073709551615
-  br i1 %v60, label %bb12, label %bb14
-bb12:
-  br label %bb13
-bb13:
   br label %bb17
-bb14:
-  %v61 = add i32 %v40, 1
-  br label %bb1
-bb15:
-  %v62 = bitcast ptr %v13 to ptr
-  %v63 = atomicrmw add ptr %v62, i64 1 syncscope("device") monotonic
+bb10:
+  %v61 = icmp eq i64 %v52, 18446744073709551615
+  br i1 %v61, label %bb11, label %bb13
+bb11:
+  br label %bb12
+bb12:
   br label %bb16
+bb13:
+  %v62 = add i32 %v40, 1
+  br label %bb1
+bb14:
+  %v63 = bitcast ptr %v13 to ptr
+  %v64 = atomicrmw add ptr %v63, i64 1 syncscope("device") monotonic
+  br label %bb15
+bb15:
+  br label %bb18
 bb16:
-  br label %bb19
+  br label %bb17
 bb17:
+  %v65 = phi i32 [ %v57, %bb9 ], [ 4294967295, %bb16 ]
   br label %bb18
 bb18:
-  %v64 = phi i32 [ %v56, %bb10 ], [ 4294967295, %bb17 ]
-  br label %bb19
-bb19:
-  %v65 = phi i32 [ 4294967295, %bb16 ], [ %v64, %bb18 ]
-  ret i32 %v65
+  %v66 = phi i32 [ 4294967295, %bb15 ], [ %v65, %bb17 ]
+  ret i32 %v66
 }
 
 define i32 @_RINvNtCshAQQRahQDk9_14tsdf_rust_cuda7kernels14find_or_insertKb1_Kb0_KBX_KB11_KB11_KB11_EB4_(ptr %v0, i32 %v1, ptr %v2, i32 %v3, ptr %v4, ptr %v5, i32 %v6, i32 %v7, i32 %v8) alwaysinline #0 {
@@ -2492,10 +2490,10 @@ bb0:
   %v39 = and i32 %v38, %v10
   br label %bb1
 bb1:
-  %v40 = phi i32 [ 0, %bb0 ], [ %v73, %bb28 ]
+  %v40 = phi i32 [ 0, %bb0 ], [ %v74, %bb27 ]
   %v41 = icmp ult i32 %v40, %v30
   %v42 = xor i1 %v41, 1
-  br i1 %v42, label %bb29, label %bb2
+  br i1 %v42, label %bb28, label %bb2
 bb2:
   %v43 = add i32 %v39, %v40
   %v44 = and i32 %v43, %v10
@@ -2505,129 +2503,128 @@ bb2:
   %v48 = getelementptr inbounds i64, ptr %v47, i64 1
   %v49 = bitcast ptr %v48 to ptr
   %v50 = bitcast ptr %v47 to ptr
-  %v51 = call i64 asm sideeffect "ld.relaxed.gpu.b64 $0, [$1];", "=l,l,~{memory}"(ptr %v50)
-  br label %bb3
+  %v51 = bitcast ptr %v47 to ptr
+  %v52 = load i64, ptr %v51, align 8
+  %v53 = icmp eq i64 %v52, %v29
+  %v54 = xor i1 %v53, 1
+  br i1 %v54, label %bb6, label %bb3
 bb3:
-  %v52 = icmp eq i64 %v51, %v29
-  %v53 = xor i1 %v52, 1
-  br i1 %v53, label %bb7, label %bb4
+  %v55 = bitcast ptr %v48 to ptr
+  %v56 = load atomic i32, ptr %v55 syncscope("device") monotonic, align 4
+  br label %bb4
 bb4:
-  %v54 = bitcast ptr %v48 to ptr
-  %v55 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v54)
   br label %bb5
 bb5:
-  br label %bb6
+  br label %bb33
 bb6:
-  br label %bb34
+  %v57 = icmp eq i64 %v52, 18446744073709551615
+  br i1 %v57, label %bb7, label %bb27
 bb7:
-  %v56 = icmp eq i64 %v51, 18446744073709551615
-  br i1 %v56, label %bb8, label %bb28
+  br label %bb8
 bb8:
   br label %bb9
 bb9:
-  br label %bb10
+  %v58 = cmpxchg ptr %v50, i64 18446744073709551615, i64 %v29 syncscope("device") monotonic monotonic
+  %v59 = extractvalue { i64, i1 } %v58, 0
+  br label %bb35
 bb10:
-  %v57 = cmpxchg ptr %v50, i64 18446744073709551615, i64 %v29 syncscope("device") monotonic monotonic
-  %v58 = extractvalue { i64, i1 } %v57, 0
-  br label %bb36
-bb11:
   unreachable
+bb11:
+  %v60 = extractvalue { i64, i64 } %v93, 1
+  %v61 = icmp eq i64 %v60, %v29
+  %v62 = xor i1 %v61, 1
+  br i1 %v62, label %bb26, label %bb23
 bb12:
-  %v59 = extractvalue { i64, i64 } %v92, 1
-  %v60 = icmp eq i64 %v59, %v29
-  %v61 = xor i1 %v60, 1
-  br i1 %v61, label %bb27, label %bb24
+  br label %bb13
 bb13:
+  %v63 = bitcast ptr %v11 to ptr
+  %v64 = atomicrmw add ptr %v63, i32 1 syncscope("device") monotonic
   br label %bb14
 bb14:
-  %v62 = bitcast ptr %v11 to ptr
-  %v63 = atomicrmw add ptr %v62, i32 1 syncscope("device") monotonic
-  br label %bb15
+  %v65 = icmp sge i32 %v64, %v12
+  %v66 = xor i1 %v65, 1
+  br i1 %v66, label %bb20, label %bb15
 bb15:
-  %v64 = icmp sge i32 %v63, %v12
-  %v65 = xor i1 %v64, 1
-  br i1 %v65, label %bb21, label %bb16
+  %v67 = bitcast ptr %v11 to ptr
+  %v68 = atomicrmw sub ptr %v67, i32 1 syncscope("device") monotonic
+  br label %bb16
 bb16:
-  %v66 = bitcast ptr %v11 to ptr
-  %v67 = atomicrmw sub ptr %v66, i32 1 syncscope("device") monotonic
   br label %bb17
 bb17:
+  %v69 = atomicrmw xchg ptr %v50, i64 18446744073709551615 syncscope("device") monotonic
   br label %bb18
 bb18:
-  %v68 = atomicrmw xchg ptr %v50, i64 18446744073709551615 syncscope("device") monotonic
+  %v70 = bitcast ptr %v13 to ptr
+  %v71 = atomicrmw add ptr %v70, i64 1 syncscope("device") monotonic
   br label %bb19
 bb19:
-  %v69 = bitcast ptr %v13 to ptr
-  %v70 = atomicrmw add ptr %v69, i64 1 syncscope("device") monotonic
-  br label %bb20
+  br label %bb30
 bb20:
-  br label %bb31
+  br label %bb21
 bb21:
   br label %bb22
 bb22:
-  br label %bb23
+  br label %bb30
 bb23:
-  br label %bb31
+  %v72 = bitcast ptr %v48 to ptr
+  %v73 = load atomic i32, ptr %v72 syncscope("device") monotonic, align 4
+  br label %bb24
 bb24:
-  %v71 = bitcast ptr %v48 to ptr
-  %v72 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v71)
   br label %bb25
 bb25:
-  br label %bb26
+  br label %bb31
 bb26:
-  br label %bb32
+  br label %bb27
 bb27:
-  br label %bb28
-bb28:
-  %v73 = add i32 %v40, 1
+  %v74 = add i32 %v40, 1
   br label %bb1
+bb28:
+  %v75 = bitcast ptr %v13 to ptr
+  %v76 = atomicrmw add ptr %v75, i64 1 syncscope("device") monotonic
+  br label %bb29
 bb29:
-  %v74 = bitcast ptr %v13 to ptr
-  %v75 = atomicrmw add ptr %v74, i64 1 syncscope("device") monotonic
-  br label %bb30
+  br label %bb34
 bb30:
-  br label %bb35
+  %v77 = phi i32 [ 4294967295, %bb19 ], [ %v64, %bb22 ]
+  br label %bb31
 bb31:
-  %v76 = phi i32 [ 4294967295, %bb20 ], [ %v63, %bb23 ]
+  %v78 = phi i32 [ %v73, %bb25 ], [ %v77, %bb30 ]
   br label %bb32
 bb32:
-  %v77 = phi i32 [ %v72, %bb26 ], [ %v76, %bb31 ]
   br label %bb33
 bb33:
+  %v79 = phi i32 [ %v56, %bb5 ], [ %v78, %bb32 ]
   br label %bb34
 bb34:
-  %v78 = phi i32 [ %v55, %bb6 ], [ %v77, %bb33 ]
-  br label %bb35
+  %v80 = phi i32 [ 4294967295, %bb29 ], [ %v79, %bb33 ]
+  ret i32 %v80
 bb35:
-  %v79 = phi i32 [ 4294967295, %bb30 ], [ %v78, %bb34 ]
-  ret i32 %v79
+  %v81 = icmp eq i64 %v59, 18446744073709551615
+  br i1 %v81, label %bb36, label %bb37
 bb36:
-  %v80 = icmp eq i64 %v58, 18446744073709551615
-  br i1 %v80, label %bb37, label %bb38
+  %v82 = insertvalue { i64, i64 } undef, i64 0, 0
+  %v83 = insertvalue { i64, i64 } %v82, i64 %v59, 1
+  %v84 = extractvalue { i64, i64 } %v83, 0
+  %v85 = extractvalue { i64, i64 } %v83, 1
+  br label %bb38
 bb37:
-  %v81 = insertvalue { i64, i64 } undef, i64 0, 0
-  %v82 = insertvalue { i64, i64 } %v81, i64 %v58, 1
-  %v83 = extractvalue { i64, i64 } %v82, 0
-  %v84 = extractvalue { i64, i64 } %v82, 1
-  br label %bb39
+  %v86 = insertvalue { i64, i64 } undef, i64 1, 0
+  %v87 = insertvalue { i64, i64 } %v86, i64 %v59, 1
+  %v88 = extractvalue { i64, i64 } %v87, 0
+  %v89 = extractvalue { i64, i64 } %v87, 1
+  br label %bb38
 bb38:
-  %v85 = insertvalue { i64, i64 } undef, i64 1, 0
-  %v86 = insertvalue { i64, i64 } %v85, i64 %v58, 1
-  %v87 = extractvalue { i64, i64 } %v86, 0
-  %v88 = extractvalue { i64, i64 } %v86, 1
-  br label %bb39
+  %v90 = phi i64 [ %v84, %bb36 ], [ %v88, %bb37 ]
+  %v91 = phi i64 [ %v85, %bb36 ], [ %v89, %bb37 ]
+  %v92 = insertvalue { i64, i64 } undef, i64 %v90, 0
+  %v93 = insertvalue { i64, i64 } %v92, i64 %v91, 1
+  %v94 = extractvalue { i64, i64 } %v93, 0
+  %v95 = bitcast i64 %v94 to i64
+  %v96 = icmp eq i64 %v95, 0
+  br i1 %v96, label %bb12, label %bb39
 bb39:
-  %v89 = phi i64 [ %v83, %bb37 ], [ %v87, %bb38 ]
-  %v90 = phi i64 [ %v84, %bb37 ], [ %v88, %bb38 ]
-  %v91 = insertvalue { i64, i64 } undef, i64 %v89, 0
-  %v92 = insertvalue { i64, i64 } %v91, i64 %v90, 1
-  %v93 = extractvalue { i64, i64 } %v92, 0
-  %v94 = bitcast i64 %v93 to i64
-  %v95 = icmp eq i64 %v94, 0
-  br i1 %v95, label %bb13, label %bb40
-bb40:
-  %v96 = icmp eq i64 %v94, 1
-  br i1 %v96, label %bb12, label %bb11
+  %v97 = icmp eq i64 %v95, 1
+  br i1 %v97, label %bb11, label %bb10
 }
 
 define i32 @tsdf_rust_cuda__kernels__find_or_insert_slotidx(ptr %v0, i32 %v1, ptr %v2, ptr %v3, ptr %v4, i32 %v5, i32 %v6, i32 %v7) #0 {
@@ -2678,7 +2675,7 @@ bb2:
   %v45 = mul i64 %v44, 2
   %v46 = getelementptr inbounds i64, ptr %v8, i64 %v45
   %v47 = bitcast ptr %v46 to ptr
-  %v48 = call i64 asm sideeffect "ld.relaxed.gpu.b64 $0, [$1];", "=l,l,~{memory}"(ptr %v47)
+  %v48 = load atomic i64, ptr %v47 syncscope("device") monotonic, align 8
   br label %bb3
 bb3:
   %v49 = icmp eq i64 %v48, %v29
@@ -2807,10 +2804,10 @@ bb0:
   %v39 = and i32 %v38, %v10
   br label %bb1
 bb1:
-  %v40 = phi i32 [ 0, %bb0 ], [ %v90, %bb42 ]
+  %v40 = phi i32 [ 0, %bb0 ], [ %v91, %bb41 ]
   %v41 = icmp ult i32 %v40, %v30
   %v42 = xor i1 %v41, 1
-  br i1 %v42, label %bb43, label %bb2
+  br i1 %v42, label %bb42, label %bb2
 bb2:
   %v43 = add i32 %v39, %v40
   %v44 = and i32 %v43, %v10
@@ -2820,177 +2817,176 @@ bb2:
   %v48 = getelementptr inbounds i64, ptr %v47, i64 1
   %v49 = bitcast ptr %v48 to ptr
   %v50 = bitcast ptr %v47 to ptr
-  %v51 = call i64 asm sideeffect "ld.relaxed.gpu.b64 $0, [$1];", "=l,l,~{memory}"(ptr %v50)
-  br label %bb3
+  %v51 = bitcast ptr %v47 to ptr
+  %v52 = load i64, ptr %v51, align 8
+  %v53 = icmp eq i64 %v52, %v29
+  %v54 = xor i1 %v53, 1
+  br i1 %v54, label %bb10, label %bb3
 bb3:
-  %v52 = icmp eq i64 %v51, %v29
-  %v53 = xor i1 %v52, 1
-  br i1 %v53, label %bb11, label %bb4
+  %v55 = bitcast ptr %v48 to ptr
+  %v56 = load atomic i32, ptr %v55 syncscope("device") monotonic, align 4
+  br label %bb4
 bb4:
-  %v54 = bitcast ptr %v48 to ptr
-  %v55 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v54)
   br label %bb5
 bb5:
-  br label %bb6
+  %v57 = phi i32 [ %v56, %bb4 ], [ %v60, %bb7 ]
+  %v58 = icmp slt i32 %v57, 0
+  %v59 = xor i1 %v58, 1
+  br i1 %v59, label %bb8, label %bb6
 bb6:
-  %v56 = phi i32 [ %v55, %bb5 ], [ %v59, %bb8 ]
-  %v57 = icmp slt i32 %v56, 0
-  %v58 = xor i1 %v57, 1
-  br i1 %v58, label %bb9, label %bb7
+  %v60 = load atomic i32, ptr %v55 syncscope("device") monotonic, align 4
+  br label %bb7
 bb7:
-  %v59 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v54)
-  br label %bb8
+  br label %bb5
 bb8:
-  br label %bb6
+  br label %bb9
 bb9:
-  br label %bb10
+  br label %bb47
 bb10:
-  br label %bb48
+  %v61 = icmp eq i64 %v52, 18446744073709551615
+  br i1 %v61, label %bb11, label %bb41
 bb11:
-  %v60 = icmp eq i64 %v51, 18446744073709551615
-  br i1 %v60, label %bb12, label %bb42
+  br label %bb12
 bb12:
   br label %bb13
 bb13:
-  br label %bb14
+  %v62 = cmpxchg ptr %v50, i64 18446744073709551615, i64 %v29 syncscope("device") monotonic monotonic
+  %v63 = extractvalue { i64, i1 } %v62, 0
+  br label %bb49
 bb14:
-  %v61 = cmpxchg ptr %v50, i64 18446744073709551615, i64 %v29 syncscope("device") monotonic monotonic
-  %v62 = extractvalue { i64, i1 } %v61, 0
-  br label %bb50
-bb15:
   unreachable
+bb15:
+  %v64 = extractvalue { i64, i64 } %v110, 1
+  %v65 = icmp eq i64 %v64, %v29
+  %v66 = xor i1 %v65, 1
+  br i1 %v66, label %bb40, label %bb33
 bb16:
-  %v63 = extractvalue { i64, i64 } %v109, 1
-  %v64 = icmp eq i64 %v63, %v29
-  %v65 = xor i1 %v64, 1
-  br i1 %v65, label %bb41, label %bb34
+  br label %bb17
 bb17:
+  %v67 = bitcast ptr %v11 to ptr
+  %v68 = atomicrmw add ptr %v67, i32 1 syncscope("device") monotonic
   br label %bb18
 bb18:
-  %v66 = bitcast ptr %v11 to ptr
-  %v67 = atomicrmw add ptr %v66, i32 1 syncscope("device") monotonic
-  br label %bb19
+  %v69 = icmp sge i32 %v68, %v12
+  %v70 = xor i1 %v69, 1
+  br i1 %v70, label %bb25, label %bb19
 bb19:
-  %v68 = icmp sge i32 %v67, %v12
-  %v69 = xor i1 %v68, 1
-  br i1 %v69, label %bb26, label %bb20
+  %v71 = bitcast ptr %v11 to ptr
+  %v72 = atomicrmw sub ptr %v71, i32 1 syncscope("device") monotonic
+  br label %bb20
 bb20:
-  %v70 = bitcast ptr %v11 to ptr
-  %v71 = atomicrmw sub ptr %v70, i32 1 syncscope("device") monotonic
   br label %bb21
 bb21:
+  call void @llvm.nvvm.membar.gl() #0
   br label %bb22
 bb22:
-  call void @llvm.nvvm.membar.gl() #0
+  %v74 = atomicrmw xchg ptr %v50, i64 18446744073709551615 syncscope("device") monotonic
   br label %bb23
 bb23:
-  %v73 = atomicrmw xchg ptr %v50, i64 18446744073709551615 syncscope("device") monotonic
+  %v75 = bitcast ptr %v13 to ptr
+  %v76 = atomicrmw add ptr %v75, i64 1 syncscope("device") monotonic
   br label %bb24
 bb24:
-  %v74 = bitcast ptr %v13 to ptr
-  %v75 = atomicrmw add ptr %v74, i64 1 syncscope("device") monotonic
-  br label %bb25
+  br label %bb44
 bb25:
-  br label %bb45
+  br label %bb26
 bb26:
+  %v77 = mul i32 %v68, 3
+  %v78 = sext i32 %v77 to i64
+  %v79 = getelementptr inbounds i32, ptr %v14, i64 %v78
+  store i32 %v15, ptr %v79, align 4
+  %v80 = getelementptr inbounds i32, ptr %v79, i64 1
+  store i32 %v16, ptr %v80, align 4
+  %v81 = getelementptr inbounds i32, ptr %v79, i64 2
+  store i32 %v17, ptr %v81, align 4
   br label %bb27
 bb27:
-  %v76 = mul i32 %v67, 3
-  %v77 = sext i32 %v76 to i64
-  %v78 = getelementptr inbounds i32, ptr %v14, i64 %v77
-  store i32 %v15, ptr %v78, align 4
-  %v79 = getelementptr inbounds i32, ptr %v78, i64 1
-  store i32 %v16, ptr %v79, align 4
-  %v80 = getelementptr inbounds i32, ptr %v78, i64 2
-  store i32 %v17, ptr %v80, align 4
   br label %bb28
 bb28:
   br label %bb29
 bb29:
+  call void @llvm.nvvm.membar.gl() #0
   br label %bb30
 bb30:
-  call void @llvm.nvvm.membar.gl() #0
+  %v83 = bitcast ptr %v48 to ptr
+  %v84 = atomicrmw xchg ptr %v83, i32 %v68 syncscope("device") monotonic
   br label %bb31
 bb31:
-  %v82 = bitcast ptr %v48 to ptr
-  %v83 = atomicrmw xchg ptr %v82, i32 %v67 syncscope("device") monotonic
   br label %bb32
 bb32:
-  br label %bb33
+  br label %bb44
 bb33:
-  br label %bb45
+  %v85 = bitcast ptr %v48 to ptr
+  %v86 = load atomic i32, ptr %v85 syncscope("device") monotonic, align 4
+  br label %bb34
 bb34:
-  %v84 = bitcast ptr %v48 to ptr
-  %v85 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v84)
   br label %bb35
 bb35:
-  br label %bb36
+  %v87 = phi i32 [ %v86, %bb34 ], [ %v90, %bb37 ]
+  %v88 = icmp slt i32 %v87, 0
+  %v89 = xor i1 %v88, 1
+  br i1 %v89, label %bb38, label %bb36
 bb36:
-  %v86 = phi i32 [ %v85, %bb35 ], [ %v89, %bb38 ]
-  %v87 = icmp slt i32 %v86, 0
-  %v88 = xor i1 %v87, 1
-  br i1 %v88, label %bb39, label %bb37
+  %v90 = load atomic i32, ptr %v85 syncscope("device") monotonic, align 4
+  br label %bb37
 bb37:
-  %v89 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v84)
-  br label %bb38
+  br label %bb35
 bb38:
-  br label %bb36
+  br label %bb39
 bb39:
-  br label %bb40
+  br label %bb45
 bb40:
-  br label %bb46
+  br label %bb41
 bb41:
-  br label %bb42
-bb42:
-  %v90 = add i32 %v40, 1
+  %v91 = add i32 %v40, 1
   br label %bb1
+bb42:
+  %v92 = bitcast ptr %v13 to ptr
+  %v93 = atomicrmw add ptr %v92, i64 1 syncscope("device") monotonic
+  br label %bb43
 bb43:
-  %v91 = bitcast ptr %v13 to ptr
-  %v92 = atomicrmw add ptr %v91, i64 1 syncscope("device") monotonic
-  br label %bb44
+  br label %bb48
 bb44:
-  br label %bb49
+  %v94 = phi i32 [ 4294967295, %bb24 ], [ %v68, %bb32 ]
+  br label %bb45
 bb45:
-  %v93 = phi i32 [ 4294967295, %bb25 ], [ %v67, %bb33 ]
+  %v95 = phi i32 [ %v87, %bb39 ], [ %v94, %bb44 ]
   br label %bb46
 bb46:
-  %v94 = phi i32 [ %v86, %bb40 ], [ %v93, %bb45 ]
   br label %bb47
 bb47:
+  %v96 = phi i32 [ %v57, %bb9 ], [ %v95, %bb46 ]
   br label %bb48
 bb48:
-  %v95 = phi i32 [ %v56, %bb10 ], [ %v94, %bb47 ]
-  br label %bb49
+  %v97 = phi i32 [ 4294967295, %bb43 ], [ %v96, %bb47 ]
+  ret i32 %v97
 bb49:
-  %v96 = phi i32 [ 4294967295, %bb44 ], [ %v95, %bb48 ]
-  ret i32 %v96
+  %v98 = icmp eq i64 %v63, 18446744073709551615
+  br i1 %v98, label %bb50, label %bb51
 bb50:
-  %v97 = icmp eq i64 %v62, 18446744073709551615
-  br i1 %v97, label %bb51, label %bb52
+  %v99 = insertvalue { i64, i64 } undef, i64 0, 0
+  %v100 = insertvalue { i64, i64 } %v99, i64 %v63, 1
+  %v101 = extractvalue { i64, i64 } %v100, 0
+  %v102 = extractvalue { i64, i64 } %v100, 1
+  br label %bb52
 bb51:
-  %v98 = insertvalue { i64, i64 } undef, i64 0, 0
-  %v99 = insertvalue { i64, i64 } %v98, i64 %v62, 1
-  %v100 = extractvalue { i64, i64 } %v99, 0
-  %v101 = extractvalue { i64, i64 } %v99, 1
-  br label %bb53
+  %v103 = insertvalue { i64, i64 } undef, i64 1, 0
+  %v104 = insertvalue { i64, i64 } %v103, i64 %v63, 1
+  %v105 = extractvalue { i64, i64 } %v104, 0
+  %v106 = extractvalue { i64, i64 } %v104, 1
+  br label %bb52
 bb52:
-  %v102 = insertvalue { i64, i64 } undef, i64 1, 0
-  %v103 = insertvalue { i64, i64 } %v102, i64 %v62, 1
-  %v104 = extractvalue { i64, i64 } %v103, 0
-  %v105 = extractvalue { i64, i64 } %v103, 1
-  br label %bb53
+  %v107 = phi i64 [ %v101, %bb50 ], [ %v105, %bb51 ]
+  %v108 = phi i64 [ %v102, %bb50 ], [ %v106, %bb51 ]
+  %v109 = insertvalue { i64, i64 } undef, i64 %v107, 0
+  %v110 = insertvalue { i64, i64 } %v109, i64 %v108, 1
+  %v111 = extractvalue { i64, i64 } %v110, 0
+  %v112 = bitcast i64 %v111 to i64
+  %v113 = icmp eq i64 %v112, 0
+  br i1 %v113, label %bb16, label %bb53
 bb53:
-  %v106 = phi i64 [ %v100, %bb51 ], [ %v104, %bb52 ]
-  %v107 = phi i64 [ %v101, %bb51 ], [ %v105, %bb52 ]
-  %v108 = insertvalue { i64, i64 } undef, i64 %v106, 0
-  %v109 = insertvalue { i64, i64 } %v108, i64 %v107, 1
-  %v110 = extractvalue { i64, i64 } %v109, 0
-  %v111 = bitcast i64 %v110 to i64
-  %v112 = icmp eq i64 %v111, 0
-  br i1 %v112, label %bb17, label %bb54
-bb54:
-  %v113 = icmp eq i64 %v111, 1
-  br i1 %v113, label %bb16, label %bb15
+  %v114 = icmp eq i64 %v112, 1
+  br i1 %v114, label %bb15, label %bb14
 }
 
 define i32 @tsdf_rust_cuda__kernels__find_or_insert_128(ptr %v0, i32 %v1, ptr %v2, i32 %v3, ptr %v4, ptr %v5, i32 %v6, i32 %v7, i32 %v8) #0 {
@@ -3044,7 +3040,7 @@ bb2:
   %v49 = getelementptr inbounds i64, ptr %v48, i64 1
   %v50 = bitcast ptr %v49 to ptr
   %v51 = bitcast ptr %v48 to ptr
-  %v52 = call i64 asm sideeffect "ld.acquire.gpu.b64 $0, [$1];", "=l,l,~{memory}"(ptr %v51)
+  %v52 = load atomic i64, ptr %v51 syncscope("device") acquire, align 8
   br label %bb3
 bb3:
   %v53 = icmp eq i64 %v52, %v29
@@ -3052,7 +3048,7 @@ bb3:
   br i1 %v54, label %bb6, label %bb4
 bb4:
   %v55 = bitcast ptr %v49 to ptr
-  %v56 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v55)
+  %v56 = load atomic i32, ptr %v55 syncscope("device") monotonic, align 4
   br label %bb5
 bb5:
   br label %bb26
@@ -3219,10 +3215,10 @@ bb0:
   %v39 = and i32 %v38, %v10
   br label %bb1
 bb1:
-  %v40 = phi i32 [ 0, %bb0 ], [ %v91, %bb42 ]
+  %v40 = phi i32 [ 0, %bb0 ], [ %v92, %bb41 ]
   %v41 = icmp ult i32 %v40, %v30
   %v42 = xor i1 %v41, 1
-  br i1 %v42, label %bb43, label %bb2
+  br i1 %v42, label %bb42, label %bb2
 bb2:
   %v43 = add i32 %v39, %v40
   %v44 = and i32 %v43, %v10
@@ -3232,191 +3228,190 @@ bb2:
   %v48 = getelementptr inbounds i64, ptr %v47, i64 1
   %v49 = bitcast ptr %v48 to ptr
   %v50 = bitcast ptr %v47 to ptr
-  %v51 = call i64 asm sideeffect "ld.relaxed.gpu.b64 $0, [$1];", "=l,l,~{memory}"(ptr %v50)
-  br label %bb3
+  %v51 = bitcast ptr %v47 to ptr
+  %v52 = load i64, ptr %v51, align 8
+  %v53 = icmp eq i64 %v52, %v29
+  %v54 = xor i1 %v53, 1
+  br i1 %v54, label %bb10, label %bb3
 bb3:
-  %v52 = icmp eq i64 %v51, %v29
-  %v53 = xor i1 %v52, 1
-  br i1 %v53, label %bb11, label %bb4
+  %v55 = bitcast ptr %v48 to ptr
+  %v56 = load atomic i32, ptr %v55 syncscope("device") monotonic, align 4
+  br label %bb4
 bb4:
-  %v54 = bitcast ptr %v48 to ptr
-  %v55 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v54)
   br label %bb5
 bb5:
-  br label %bb6
+  %v57 = phi i32 [ %v56, %bb4 ], [ %v60, %bb7 ]
+  %v58 = icmp slt i32 %v57, 0
+  %v59 = xor i1 %v58, 1
+  br i1 %v59, label %bb8, label %bb6
 bb6:
-  %v56 = phi i32 [ %v55, %bb5 ], [ %v59, %bb8 ]
-  %v57 = icmp slt i32 %v56, 0
-  %v58 = xor i1 %v57, 1
-  br i1 %v58, label %bb9, label %bb7
+  %v60 = load atomic i32, ptr %v55 syncscope("device") monotonic, align 4
+  br label %bb7
 bb7:
-  %v59 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v54)
-  br label %bb8
+  br label %bb5
 bb8:
-  br label %bb6
+  br label %bb9
 bb9:
-  br label %bb10
+  br label %bb47
 bb10:
-  br label %bb48
+  %v61 = icmp eq i64 %v52, 18446744073709551615
+  br i1 %v61, label %bb11, label %bb41
 bb11:
-  %v60 = icmp eq i64 %v51, 18446744073709551615
-  br i1 %v60, label %bb12, label %bb42
+  br label %bb12
 bb12:
   br label %bb13
 bb13:
-  br label %bb14
+  %v62 = cmpxchg ptr %v50, i64 18446744073709551615, i64 %v29 syncscope("device") monotonic monotonic
+  %v63 = extractvalue { i64, i1 } %v62, 0
+  br label %bb49
 bb14:
-  %v61 = cmpxchg ptr %v50, i64 18446744073709551615, i64 %v29 syncscope("device") monotonic monotonic
-  %v62 = extractvalue { i64, i1 } %v61, 0
-  br label %bb50
-bb15:
   unreachable
+bb15:
+  %v64 = extractvalue { i64, i64 } %v111, 1
+  %v65 = icmp eq i64 %v64, %v29
+  %v66 = xor i1 %v65, 1
+  br i1 %v66, label %bb40, label %bb33
 bb16:
-  %v63 = extractvalue { i64, i64 } %v110, 1
-  %v64 = icmp eq i64 %v63, %v29
-  %v65 = xor i1 %v64, 1
-  br i1 %v65, label %bb41, label %bb34
+  br label %bb17
 bb17:
-  br label %bb18
+  %v67 = and i32 %v15, 1023
+  %v68 = icmp slt i32 %v67, 0
+  %v69 = xor i1 %v68, 1
+  br i1 %v69, label %bb56, label %bb54
 bb18:
-  %v66 = and i32 %v15, 1023
-  %v67 = icmp slt i32 %v66, 0
-  %v68 = xor i1 %v67, 1
-  br i1 %v68, label %bb57, label %bb55
+  %v70 = icmp sge i32 %v119, %v12
+  %v71 = xor i1 %v70, 1
+  br i1 %v71, label %bb25, label %bb19
 bb19:
-  %v69 = icmp sge i32 %v118, %v12
-  %v70 = xor i1 %v69, 1
-  br i1 %v70, label %bb26, label %bb20
+  %v72 = bitcast ptr %v11 to ptr
+  %v73 = atomicrmw sub ptr %v72, i32 1 syncscope("device") monotonic
+  br label %bb20
 bb20:
-  %v71 = bitcast ptr %v11 to ptr
-  %v72 = atomicrmw sub ptr %v71, i32 1 syncscope("device") monotonic
   br label %bb21
 bb21:
+  call void @llvm.nvvm.membar.gl() #0
   br label %bb22
 bb22:
-  call void @llvm.nvvm.membar.gl() #0
+  %v75 = atomicrmw xchg ptr %v50, i64 18446744073709551615 syncscope("device") monotonic
   br label %bb23
 bb23:
-  %v74 = atomicrmw xchg ptr %v50, i64 18446744073709551615 syncscope("device") monotonic
+  %v76 = bitcast ptr %v13 to ptr
+  %v77 = atomicrmw add ptr %v76, i64 1 syncscope("device") monotonic
   br label %bb24
 bb24:
-  %v75 = bitcast ptr %v13 to ptr
-  %v76 = atomicrmw add ptr %v75, i64 1 syncscope("device") monotonic
-  br label %bb25
+  br label %bb44
 bb25:
-  br label %bb45
+  br label %bb26
 bb26:
+  %v78 = mul i32 %v119, 3
+  %v79 = sext i32 %v78 to i64
+  %v80 = getelementptr inbounds i32, ptr %v14, i64 %v79
+  store i32 %v15, ptr %v80, align 4
+  %v81 = getelementptr inbounds i32, ptr %v80, i64 1
+  store i32 %v16, ptr %v81, align 4
+  %v82 = getelementptr inbounds i32, ptr %v80, i64 2
+  store i32 %v17, ptr %v82, align 4
   br label %bb27
 bb27:
-  %v77 = mul i32 %v118, 3
-  %v78 = sext i32 %v77 to i64
-  %v79 = getelementptr inbounds i32, ptr %v14, i64 %v78
-  store i32 %v15, ptr %v79, align 4
-  %v80 = getelementptr inbounds i32, ptr %v79, i64 1
-  store i32 %v16, ptr %v80, align 4
-  %v81 = getelementptr inbounds i32, ptr %v79, i64 2
-  store i32 %v17, ptr %v81, align 4
   br label %bb28
 bb28:
   br label %bb29
 bb29:
+  call void @llvm.nvvm.membar.gl() #0
   br label %bb30
 bb30:
-  call void @llvm.nvvm.membar.gl() #0
+  %v84 = bitcast ptr %v48 to ptr
+  %v85 = atomicrmw xchg ptr %v84, i32 %v119 syncscope("device") monotonic
   br label %bb31
 bb31:
-  %v83 = bitcast ptr %v48 to ptr
-  %v84 = atomicrmw xchg ptr %v83, i32 %v118 syncscope("device") monotonic
   br label %bb32
 bb32:
-  br label %bb33
+  br label %bb44
 bb33:
-  br label %bb45
+  %v86 = bitcast ptr %v48 to ptr
+  %v87 = load atomic i32, ptr %v86 syncscope("device") monotonic, align 4
+  br label %bb34
 bb34:
-  %v85 = bitcast ptr %v48 to ptr
-  %v86 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v85)
   br label %bb35
 bb35:
-  br label %bb36
+  %v88 = phi i32 [ %v87, %bb34 ], [ %v91, %bb37 ]
+  %v89 = icmp slt i32 %v88, 0
+  %v90 = xor i1 %v89, 1
+  br i1 %v90, label %bb38, label %bb36
 bb36:
-  %v87 = phi i32 [ %v86, %bb35 ], [ %v90, %bb38 ]
-  %v88 = icmp slt i32 %v87, 0
-  %v89 = xor i1 %v88, 1
-  br i1 %v89, label %bb39, label %bb37
+  %v91 = load atomic i32, ptr %v86 syncscope("device") monotonic, align 4
+  br label %bb37
 bb37:
-  %v90 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v85)
-  br label %bb38
+  br label %bb35
 bb38:
-  br label %bb36
+  br label %bb39
 bb39:
-  br label %bb40
+  br label %bb45
 bb40:
-  br label %bb46
+  br label %bb41
 bb41:
-  br label %bb42
-bb42:
-  %v91 = add i32 %v40, 1
+  %v92 = add i32 %v40, 1
   br label %bb1
+bb42:
+  %v93 = bitcast ptr %v13 to ptr
+  %v94 = atomicrmw add ptr %v93, i64 1 syncscope("device") monotonic
+  br label %bb43
 bb43:
-  %v92 = bitcast ptr %v13 to ptr
-  %v93 = atomicrmw add ptr %v92, i64 1 syncscope("device") monotonic
-  br label %bb44
+  br label %bb48
 bb44:
-  br label %bb49
+  %v95 = phi i32 [ 4294967295, %bb24 ], [ %v119, %bb32 ]
+  br label %bb45
 bb45:
-  %v94 = phi i32 [ 4294967295, %bb25 ], [ %v118, %bb33 ]
+  %v96 = phi i32 [ %v88, %bb39 ], [ %v95, %bb44 ]
   br label %bb46
 bb46:
-  %v95 = phi i32 [ %v87, %bb40 ], [ %v94, %bb45 ]
   br label %bb47
 bb47:
+  %v97 = phi i32 [ %v57, %bb9 ], [ %v96, %bb46 ]
   br label %bb48
 bb48:
-  %v96 = phi i32 [ %v56, %bb10 ], [ %v95, %bb47 ]
-  br label %bb49
+  %v98 = phi i32 [ 4294967295, %bb43 ], [ %v97, %bb47 ]
+  ret i32 %v98
 bb49:
-  %v97 = phi i32 [ 4294967295, %bb44 ], [ %v96, %bb48 ]
-  ret i32 %v97
+  %v99 = icmp eq i64 %v63, 18446744073709551615
+  br i1 %v99, label %bb50, label %bb51
 bb50:
-  %v98 = icmp eq i64 %v62, 18446744073709551615
-  br i1 %v98, label %bb51, label %bb52
+  %v100 = insertvalue { i64, i64 } undef, i64 0, 0
+  %v101 = insertvalue { i64, i64 } %v100, i64 %v63, 1
+  %v102 = extractvalue { i64, i64 } %v101, 0
+  %v103 = extractvalue { i64, i64 } %v101, 1
+  br label %bb52
 bb51:
-  %v99 = insertvalue { i64, i64 } undef, i64 0, 0
-  %v100 = insertvalue { i64, i64 } %v99, i64 %v62, 1
-  %v101 = extractvalue { i64, i64 } %v100, 0
-  %v102 = extractvalue { i64, i64 } %v100, 1
-  br label %bb53
+  %v104 = insertvalue { i64, i64 } undef, i64 1, 0
+  %v105 = insertvalue { i64, i64 } %v104, i64 %v63, 1
+  %v106 = extractvalue { i64, i64 } %v105, 0
+  %v107 = extractvalue { i64, i64 } %v105, 1
+  br label %bb52
 bb52:
-  %v103 = insertvalue { i64, i64 } undef, i64 1, 0
-  %v104 = insertvalue { i64, i64 } %v103, i64 %v62, 1
-  %v105 = extractvalue { i64, i64 } %v104, 0
-  %v106 = extractvalue { i64, i64 } %v104, 1
-  br label %bb53
+  %v108 = phi i64 [ %v102, %bb50 ], [ %v106, %bb51 ]
+  %v109 = phi i64 [ %v103, %bb50 ], [ %v107, %bb51 ]
+  %v110 = insertvalue { i64, i64 } undef, i64 %v108, 0
+  %v111 = insertvalue { i64, i64 } %v110, i64 %v109, 1
+  %v112 = extractvalue { i64, i64 } %v111, 0
+  %v113 = bitcast i64 %v112 to i64
+  %v114 = icmp eq i64 %v113, 0
+  br i1 %v114, label %bb16, label %bb53
 bb53:
-  %v107 = phi i64 [ %v101, %bb51 ], [ %v105, %bb52 ]
-  %v108 = phi i64 [ %v102, %bb51 ], [ %v106, %bb52 ]
-  %v109 = insertvalue { i64, i64 } undef, i64 %v107, 0
-  %v110 = insertvalue { i64, i64 } %v109, i64 %v108, 1
-  %v111 = extractvalue { i64, i64 } %v110, 0
-  %v112 = bitcast i64 %v111 to i64
-  %v113 = icmp eq i64 %v112, 0
-  br i1 %v113, label %bb17, label %bb54
+  %v115 = icmp eq i64 %v113, 1
+  br i1 %v115, label %bb15, label %bb14
 bb54:
-  %v114 = icmp eq i64 %v112, 1
-  br i1 %v114, label %bb16, label %bb15
+  %v116 = icmp eq i32 %v67, 2147483648
+  %v117 = xor i1 %v116, 1
+  br i1 %v117, label %bb55, label %bb58
 bb55:
-  %v115 = icmp eq i32 %v66, 2147483648
-  %v116 = xor i1 %v115, 1
-  br i1 %v116, label %bb56, label %bb59
+  %v118 = sub i32 0, %v67
+  br label %bb57
 bb56:
-  %v117 = sub i32 0, %v66
-  br label %bb58
+  br label %bb57
 bb57:
-  br label %bb58
+  %v119 = phi i32 [ %v118, %bb55 ], [ %v67, %bb56 ]
+  br label %bb18
 bb58:
-  %v118 = phi i32 [ %v117, %bb56 ], [ %v66, %bb57 ]
-  br label %bb19
-bb59:
   call void @llvm.trap() #0
   unreachable
 }
@@ -3458,10 +3453,10 @@ bb0:
   %v39 = and i32 %v38, %v10
   br label %bb1
 bb1:
-  %v40 = phi i32 [ 0, %bb0 ], [ %v92, %bb44 ]
+  %v40 = phi i32 [ 0, %bb0 ], [ %v93, %bb43 ]
   %v41 = icmp ult i32 %v40, %v30
   %v42 = xor i1 %v41, 1
-  br i1 %v42, label %bb45, label %bb2
+  br i1 %v42, label %bb44, label %bb2
 bb2:
   %v43 = add i32 %v39, %v40
   %v44 = and i32 %v43, %v10
@@ -3471,183 +3466,182 @@ bb2:
   %v48 = getelementptr inbounds i64, ptr %v47, i64 1
   %v49 = bitcast ptr %v48 to ptr
   %v50 = bitcast ptr %v47 to ptr
-  %v51 = call i64 asm sideeffect "ld.relaxed.gpu.b64 $0, [$1];", "=l,l,~{memory}"(ptr %v50)
-  br label %bb3
+  %v51 = bitcast ptr %v47 to ptr
+  %v52 = load i64, ptr %v51, align 8
+  %v53 = icmp eq i64 %v52, %v29
+  %v54 = xor i1 %v53, 1
+  br i1 %v54, label %bb10, label %bb3
 bb3:
-  %v52 = icmp eq i64 %v51, %v29
-  %v53 = xor i1 %v52, 1
-  br i1 %v53, label %bb11, label %bb4
+  %v55 = bitcast ptr %v48 to ptr
+  %v56 = load atomic i32, ptr %v55 syncscope("device") monotonic, align 4
+  br label %bb4
 bb4:
-  %v54 = bitcast ptr %v48 to ptr
-  %v55 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v54)
   br label %bb5
 bb5:
-  br label %bb6
+  %v57 = phi i32 [ %v56, %bb4 ], [ %v60, %bb7 ]
+  %v58 = icmp slt i32 %v57, 0
+  %v59 = xor i1 %v58, 1
+  br i1 %v59, label %bb8, label %bb6
 bb6:
-  %v56 = phi i32 [ %v55, %bb5 ], [ %v59, %bb8 ]
-  %v57 = icmp slt i32 %v56, 0
-  %v58 = xor i1 %v57, 1
-  br i1 %v58, label %bb9, label %bb7
+  %v60 = load atomic i32, ptr %v55 syncscope("device") monotonic, align 4
+  br label %bb7
 bb7:
-  %v59 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v54)
-  br label %bb8
+  br label %bb5
 bb8:
-  br label %bb6
+  br label %bb9
 bb9:
-  br label %bb10
+  br label %bb49
 bb10:
-  br label %bb50
+  %v61 = icmp eq i64 %v52, 18446744073709551615
+  br i1 %v61, label %bb11, label %bb43
 bb11:
-  %v60 = icmp eq i64 %v51, 18446744073709551615
-  br i1 %v60, label %bb12, label %bb44
+  br label %bb12
 bb12:
   br label %bb13
 bb13:
+  %v62 = bitcast ptr %v13 to ptr
+  %v63 = atomicrmw add ptr %v62, i64 1 syncscope("device") monotonic
   br label %bb14
 bb14:
-  %v61 = bitcast ptr %v13 to ptr
-  %v62 = atomicrmw add ptr %v61, i64 1 syncscope("device") monotonic
   br label %bb15
 bb15:
-  br label %bb16
+  %v64 = cmpxchg ptr %v50, i64 18446744073709551615, i64 %v29 syncscope("device") monotonic monotonic
+  %v65 = extractvalue { i64, i1 } %v64, 0
+  br label %bb51
 bb16:
-  %v63 = cmpxchg ptr %v50, i64 18446744073709551615, i64 %v29 syncscope("device") monotonic monotonic
-  %v64 = extractvalue { i64, i1 } %v63, 0
-  br label %bb52
-bb17:
   unreachable
+bb17:
+  %v66 = extractvalue { i64, i64 } %v112, 1
+  %v67 = icmp eq i64 %v66, %v29
+  %v68 = xor i1 %v67, 1
+  br i1 %v68, label %bb42, label %bb35
 bb18:
-  %v65 = extractvalue { i64, i64 } %v111, 1
-  %v66 = icmp eq i64 %v65, %v29
-  %v67 = xor i1 %v66, 1
-  br i1 %v67, label %bb43, label %bb36
+  br label %bb19
 bb19:
+  %v69 = bitcast ptr %v11 to ptr
+  %v70 = atomicrmw add ptr %v69, i32 1 syncscope("device") monotonic
   br label %bb20
 bb20:
-  %v68 = bitcast ptr %v11 to ptr
-  %v69 = atomicrmw add ptr %v68, i32 1 syncscope("device") monotonic
-  br label %bb21
+  %v71 = icmp sge i32 %v70, %v12
+  %v72 = xor i1 %v71, 1
+  br i1 %v72, label %bb27, label %bb21
 bb21:
-  %v70 = icmp sge i32 %v69, %v12
-  %v71 = xor i1 %v70, 1
-  br i1 %v71, label %bb28, label %bb22
+  %v73 = bitcast ptr %v11 to ptr
+  %v74 = atomicrmw sub ptr %v73, i32 1 syncscope("device") monotonic
+  br label %bb22
 bb22:
-  %v72 = bitcast ptr %v11 to ptr
-  %v73 = atomicrmw sub ptr %v72, i32 1 syncscope("device") monotonic
   br label %bb23
 bb23:
+  call void @llvm.nvvm.membar.gl() #0
   br label %bb24
 bb24:
-  call void @llvm.nvvm.membar.gl() #0
+  %v76 = atomicrmw xchg ptr %v50, i64 18446744073709551615 syncscope("device") monotonic
   br label %bb25
 bb25:
-  %v75 = atomicrmw xchg ptr %v50, i64 18446744073709551615 syncscope("device") monotonic
+  %v77 = bitcast ptr %v13 to ptr
+  %v78 = atomicrmw add ptr %v77, i64 1 syncscope("device") monotonic
   br label %bb26
 bb26:
-  %v76 = bitcast ptr %v13 to ptr
-  %v77 = atomicrmw add ptr %v76, i64 1 syncscope("device") monotonic
-  br label %bb27
+  br label %bb46
 bb27:
-  br label %bb47
+  br label %bb28
 bb28:
+  %v79 = mul i32 %v70, 3
+  %v80 = sext i32 %v79 to i64
+  %v81 = getelementptr inbounds i32, ptr %v14, i64 %v80
+  store i32 %v15, ptr %v81, align 4
+  %v82 = getelementptr inbounds i32, ptr %v81, i64 1
+  store i32 %v16, ptr %v82, align 4
+  %v83 = getelementptr inbounds i32, ptr %v81, i64 2
+  store i32 %v17, ptr %v83, align 4
   br label %bb29
 bb29:
-  %v78 = mul i32 %v69, 3
-  %v79 = sext i32 %v78 to i64
-  %v80 = getelementptr inbounds i32, ptr %v14, i64 %v79
-  store i32 %v15, ptr %v80, align 4
-  %v81 = getelementptr inbounds i32, ptr %v80, i64 1
-  store i32 %v16, ptr %v81, align 4
-  %v82 = getelementptr inbounds i32, ptr %v80, i64 2
-  store i32 %v17, ptr %v82, align 4
   br label %bb30
 bb30:
   br label %bb31
 bb31:
+  call void @llvm.nvvm.membar.gl() #0
   br label %bb32
 bb32:
-  call void @llvm.nvvm.membar.gl() #0
+  %v85 = bitcast ptr %v48 to ptr
+  %v86 = atomicrmw xchg ptr %v85, i32 %v70 syncscope("device") monotonic
   br label %bb33
 bb33:
-  %v84 = bitcast ptr %v48 to ptr
-  %v85 = atomicrmw xchg ptr %v84, i32 %v69 syncscope("device") monotonic
   br label %bb34
 bb34:
-  br label %bb35
+  br label %bb46
 bb35:
-  br label %bb47
+  %v87 = bitcast ptr %v48 to ptr
+  %v88 = load atomic i32, ptr %v87 syncscope("device") monotonic, align 4
+  br label %bb36
 bb36:
-  %v86 = bitcast ptr %v48 to ptr
-  %v87 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v86)
   br label %bb37
 bb37:
-  br label %bb38
+  %v89 = phi i32 [ %v88, %bb36 ], [ %v92, %bb39 ]
+  %v90 = icmp slt i32 %v89, 0
+  %v91 = xor i1 %v90, 1
+  br i1 %v91, label %bb40, label %bb38
 bb38:
-  %v88 = phi i32 [ %v87, %bb37 ], [ %v91, %bb40 ]
-  %v89 = icmp slt i32 %v88, 0
-  %v90 = xor i1 %v89, 1
-  br i1 %v90, label %bb41, label %bb39
+  %v92 = load atomic i32, ptr %v87 syncscope("device") monotonic, align 4
+  br label %bb39
 bb39:
-  %v91 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v86)
-  br label %bb40
+  br label %bb37
 bb40:
-  br label %bb38
+  br label %bb41
 bb41:
-  br label %bb42
+  br label %bb47
 bb42:
-  br label %bb48
+  br label %bb43
 bb43:
-  br label %bb44
-bb44:
-  %v92 = add i32 %v40, 1
+  %v93 = add i32 %v40, 1
   br label %bb1
+bb44:
+  %v94 = bitcast ptr %v13 to ptr
+  %v95 = atomicrmw add ptr %v94, i64 1 syncscope("device") monotonic
+  br label %bb45
 bb45:
-  %v93 = bitcast ptr %v13 to ptr
-  %v94 = atomicrmw add ptr %v93, i64 1 syncscope("device") monotonic
-  br label %bb46
+  br label %bb50
 bb46:
-  br label %bb51
+  %v96 = phi i32 [ 4294967295, %bb26 ], [ %v70, %bb34 ]
+  br label %bb47
 bb47:
-  %v95 = phi i32 [ 4294967295, %bb27 ], [ %v69, %bb35 ]
+  %v97 = phi i32 [ %v89, %bb41 ], [ %v96, %bb46 ]
   br label %bb48
 bb48:
-  %v96 = phi i32 [ %v88, %bb42 ], [ %v95, %bb47 ]
   br label %bb49
 bb49:
+  %v98 = phi i32 [ %v57, %bb9 ], [ %v97, %bb48 ]
   br label %bb50
 bb50:
-  %v97 = phi i32 [ %v56, %bb10 ], [ %v96, %bb49 ]
-  br label %bb51
+  %v99 = phi i32 [ 4294967295, %bb45 ], [ %v98, %bb49 ]
+  ret i32 %v99
 bb51:
-  %v98 = phi i32 [ 4294967295, %bb46 ], [ %v97, %bb50 ]
-  ret i32 %v98
+  %v100 = icmp eq i64 %v65, 18446744073709551615
+  br i1 %v100, label %bb52, label %bb53
 bb52:
-  %v99 = icmp eq i64 %v64, 18446744073709551615
-  br i1 %v99, label %bb53, label %bb54
+  %v101 = insertvalue { i64, i64 } undef, i64 0, 0
+  %v102 = insertvalue { i64, i64 } %v101, i64 %v65, 1
+  %v103 = extractvalue { i64, i64 } %v102, 0
+  %v104 = extractvalue { i64, i64 } %v102, 1
+  br label %bb54
 bb53:
-  %v100 = insertvalue { i64, i64 } undef, i64 0, 0
-  %v101 = insertvalue { i64, i64 } %v100, i64 %v64, 1
-  %v102 = extractvalue { i64, i64 } %v101, 0
-  %v103 = extractvalue { i64, i64 } %v101, 1
-  br label %bb55
+  %v105 = insertvalue { i64, i64 } undef, i64 1, 0
+  %v106 = insertvalue { i64, i64 } %v105, i64 %v65, 1
+  %v107 = extractvalue { i64, i64 } %v106, 0
+  %v108 = extractvalue { i64, i64 } %v106, 1
+  br label %bb54
 bb54:
-  %v104 = insertvalue { i64, i64 } undef, i64 1, 0
-  %v105 = insertvalue { i64, i64 } %v104, i64 %v64, 1
-  %v106 = extractvalue { i64, i64 } %v105, 0
-  %v107 = extractvalue { i64, i64 } %v105, 1
-  br label %bb55
+  %v109 = phi i64 [ %v103, %bb52 ], [ %v107, %bb53 ]
+  %v110 = phi i64 [ %v104, %bb52 ], [ %v108, %bb53 ]
+  %v111 = insertvalue { i64, i64 } undef, i64 %v109, 0
+  %v112 = insertvalue { i64, i64 } %v111, i64 %v110, 1
+  %v113 = extractvalue { i64, i64 } %v112, 0
+  %v114 = bitcast i64 %v113 to i64
+  %v115 = icmp eq i64 %v114, 0
+  br i1 %v115, label %bb18, label %bb55
 bb55:
-  %v108 = phi i64 [ %v102, %bb53 ], [ %v106, %bb54 ]
-  %v109 = phi i64 [ %v103, %bb53 ], [ %v107, %bb54 ]
-  %v110 = insertvalue { i64, i64 } undef, i64 %v108, 0
-  %v111 = insertvalue { i64, i64 } %v110, i64 %v109, 1
-  %v112 = extractvalue { i64, i64 } %v111, 0
-  %v113 = bitcast i64 %v112 to i64
-  %v114 = icmp eq i64 %v113, 0
-  br i1 %v114, label %bb19, label %bb56
-bb56:
-  %v115 = icmp eq i64 %v113, 1
-  br i1 %v115, label %bb18, label %bb17
+  %v116 = icmp eq i64 %v114, 1
+  br i1 %v116, label %bb17, label %bb16
 }
 
 define i32 @_RINvNtCshAQQRahQDk9_14tsdf_rust_cuda7kernels14find_or_insertKb1_Kb0_KBX_KBX_KBX_KB11_EB4_(ptr %v0, i32 %v1, ptr %v2, i32 %v3, ptr %v4, ptr %v5, i32 %v6, i32 %v7, i32 %v8) alwaysinline #0 {
@@ -3687,10 +3681,10 @@ bb0:
   %v39 = and i32 %v38, %v10
   br label %bb1
 bb1:
-  %v40 = phi i32 [ 0, %bb0 ], [ %v82, %bb34 ]
+  %v40 = phi i32 [ 0, %bb0 ], [ %v83, %bb33 ]
   %v41 = icmp ult i32 %v40, %v30
   %v42 = xor i1 %v41, 1
-  br i1 %v42, label %bb35, label %bb2
+  br i1 %v42, label %bb34, label %bb2
 bb2:
   %v43 = add i32 %v39, %v40
   %v44 = and i32 %v43, %v10
@@ -3700,153 +3694,152 @@ bb2:
   %v48 = getelementptr inbounds i64, ptr %v47, i64 1
   %v49 = bitcast ptr %v48 to ptr
   %v50 = bitcast ptr %v47 to ptr
-  %v51 = call i64 asm sideeffect "ld.relaxed.gpu.b64 $0, [$1];", "=l,l,~{memory}"(ptr %v50)
-  br label %bb3
+  %v51 = bitcast ptr %v47 to ptr
+  %v52 = load i64, ptr %v51, align 8
+  %v53 = icmp eq i64 %v52, %v29
+  %v54 = xor i1 %v53, 1
+  br i1 %v54, label %bb6, label %bb3
 bb3:
-  %v52 = icmp eq i64 %v51, %v29
-  %v53 = xor i1 %v52, 1
-  br i1 %v53, label %bb7, label %bb4
+  %v55 = bitcast ptr %v48 to ptr
+  %v56 = load atomic i32, ptr %v55 syncscope("device") monotonic, align 4
+  br label %bb4
 bb4:
-  %v54 = bitcast ptr %v48 to ptr
-  %v55 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v54)
   br label %bb5
 bb5:
-  br label %bb6
+  br label %bb39
 bb6:
-  br label %bb40
+  %v57 = icmp eq i64 %v52, 18446744073709551615
+  br i1 %v57, label %bb7, label %bb33
 bb7:
-  %v56 = icmp eq i64 %v51, 18446744073709551615
-  br i1 %v56, label %bb8, label %bb34
+  br label %bb8
 bb8:
   br label %bb9
 bb9:
-  br label %bb10
+  %v58 = cmpxchg ptr %v50, i64 18446744073709551615, i64 %v29 syncscope("device") monotonic monotonic
+  %v59 = extractvalue { i64, i1 } %v58, 0
+  br label %bb41
 bb10:
-  %v57 = cmpxchg ptr %v50, i64 18446744073709551615, i64 %v29 syncscope("device") monotonic monotonic
-  %v58 = extractvalue { i64, i1 } %v57, 0
-  br label %bb42
-bb11:
   unreachable
+bb11:
+  %v60 = extractvalue { i64, i64 } %v102, 1
+  %v61 = icmp eq i64 %v60, %v29
+  %v62 = xor i1 %v61, 1
+  br i1 %v62, label %bb32, label %bb29
 bb12:
-  %v59 = extractvalue { i64, i64 } %v101, 1
-  %v60 = icmp eq i64 %v59, %v29
-  %v61 = xor i1 %v60, 1
-  br i1 %v61, label %bb33, label %bb30
+  br label %bb13
 bb13:
+  %v63 = bitcast ptr %v11 to ptr
+  %v64 = atomicrmw add ptr %v63, i32 1 syncscope("device") monotonic
   br label %bb14
 bb14:
-  %v62 = bitcast ptr %v11 to ptr
-  %v63 = atomicrmw add ptr %v62, i32 1 syncscope("device") monotonic
-  br label %bb15
+  %v65 = icmp sge i32 %v64, %v12
+  %v66 = xor i1 %v65, 1
+  br i1 %v66, label %bb21, label %bb15
 bb15:
-  %v64 = icmp sge i32 %v63, %v12
-  %v65 = xor i1 %v64, 1
-  br i1 %v65, label %bb22, label %bb16
+  %v67 = bitcast ptr %v11 to ptr
+  %v68 = atomicrmw sub ptr %v67, i32 1 syncscope("device") monotonic
+  br label %bb16
 bb16:
-  %v66 = bitcast ptr %v11 to ptr
-  %v67 = atomicrmw sub ptr %v66, i32 1 syncscope("device") monotonic
   br label %bb17
 bb17:
+  call void @llvm.nvvm.membar.gl() #0
   br label %bb18
 bb18:
-  call void @llvm.nvvm.membar.gl() #0
+  %v70 = atomicrmw xchg ptr %v50, i64 18446744073709551615 syncscope("device") monotonic
   br label %bb19
 bb19:
-  %v69 = atomicrmw xchg ptr %v50, i64 18446744073709551615 syncscope("device") monotonic
+  %v71 = bitcast ptr %v13 to ptr
+  %v72 = atomicrmw add ptr %v71, i64 1 syncscope("device") monotonic
   br label %bb20
 bb20:
-  %v70 = bitcast ptr %v13 to ptr
-  %v71 = atomicrmw add ptr %v70, i64 1 syncscope("device") monotonic
-  br label %bb21
+  br label %bb36
 bb21:
-  br label %bb37
+  br label %bb22
 bb22:
+  %v73 = mul i32 %v64, 3
+  %v74 = sext i32 %v73 to i64
+  %v75 = getelementptr inbounds i32, ptr %v14, i64 %v74
+  store i32 %v15, ptr %v75, align 4
+  %v76 = getelementptr inbounds i32, ptr %v75, i64 1
+  store i32 %v16, ptr %v76, align 4
+  %v77 = getelementptr inbounds i32, ptr %v75, i64 2
+  store i32 %v17, ptr %v77, align 4
   br label %bb23
 bb23:
-  %v72 = mul i32 %v63, 3
-  %v73 = sext i32 %v72 to i64
-  %v74 = getelementptr inbounds i32, ptr %v14, i64 %v73
-  store i32 %v15, ptr %v74, align 4
-  %v75 = getelementptr inbounds i32, ptr %v74, i64 1
-  store i32 %v16, ptr %v75, align 4
-  %v76 = getelementptr inbounds i32, ptr %v74, i64 2
-  store i32 %v17, ptr %v76, align 4
   br label %bb24
 bb24:
   br label %bb25
 bb25:
+  call void @llvm.nvvm.membar.gl() #0
   br label %bb26
 bb26:
-  call void @llvm.nvvm.membar.gl() #0
+  %v79 = bitcast ptr %v48 to ptr
+  %v80 = atomicrmw xchg ptr %v79, i32 %v64 syncscope("device") monotonic
   br label %bb27
 bb27:
-  %v78 = bitcast ptr %v48 to ptr
-  %v79 = atomicrmw xchg ptr %v78, i32 %v63 syncscope("device") monotonic
   br label %bb28
 bb28:
-  br label %bb29
+  br label %bb36
 bb29:
-  br label %bb37
+  %v81 = bitcast ptr %v48 to ptr
+  %v82 = load atomic i32, ptr %v81 syncscope("device") monotonic, align 4
+  br label %bb30
 bb30:
-  %v80 = bitcast ptr %v48 to ptr
-  %v81 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v80)
   br label %bb31
 bb31:
-  br label %bb32
+  br label %bb37
 bb32:
-  br label %bb38
+  br label %bb33
 bb33:
-  br label %bb34
-bb34:
-  %v82 = add i32 %v40, 1
+  %v83 = add i32 %v40, 1
   br label %bb1
+bb34:
+  %v84 = bitcast ptr %v13 to ptr
+  %v85 = atomicrmw add ptr %v84, i64 1 syncscope("device") monotonic
+  br label %bb35
 bb35:
-  %v83 = bitcast ptr %v13 to ptr
-  %v84 = atomicrmw add ptr %v83, i64 1 syncscope("device") monotonic
-  br label %bb36
+  br label %bb40
 bb36:
-  br label %bb41
+  %v86 = phi i32 [ 4294967295, %bb20 ], [ %v64, %bb28 ]
+  br label %bb37
 bb37:
-  %v85 = phi i32 [ 4294967295, %bb21 ], [ %v63, %bb29 ]
+  %v87 = phi i32 [ %v82, %bb31 ], [ %v86, %bb36 ]
   br label %bb38
 bb38:
-  %v86 = phi i32 [ %v81, %bb32 ], [ %v85, %bb37 ]
   br label %bb39
 bb39:
+  %v88 = phi i32 [ %v56, %bb5 ], [ %v87, %bb38 ]
   br label %bb40
 bb40:
-  %v87 = phi i32 [ %v55, %bb6 ], [ %v86, %bb39 ]
-  br label %bb41
+  %v89 = phi i32 [ 4294967295, %bb35 ], [ %v88, %bb39 ]
+  ret i32 %v89
 bb41:
-  %v88 = phi i32 [ 4294967295, %bb36 ], [ %v87, %bb40 ]
-  ret i32 %v88
+  %v90 = icmp eq i64 %v59, 18446744073709551615
+  br i1 %v90, label %bb42, label %bb43
 bb42:
-  %v89 = icmp eq i64 %v58, 18446744073709551615
-  br i1 %v89, label %bb43, label %bb44
+  %v91 = insertvalue { i64, i64 } undef, i64 0, 0
+  %v92 = insertvalue { i64, i64 } %v91, i64 %v59, 1
+  %v93 = extractvalue { i64, i64 } %v92, 0
+  %v94 = extractvalue { i64, i64 } %v92, 1
+  br label %bb44
 bb43:
-  %v90 = insertvalue { i64, i64 } undef, i64 0, 0
-  %v91 = insertvalue { i64, i64 } %v90, i64 %v58, 1
-  %v92 = extractvalue { i64, i64 } %v91, 0
-  %v93 = extractvalue { i64, i64 } %v91, 1
-  br label %bb45
+  %v95 = insertvalue { i64, i64 } undef, i64 1, 0
+  %v96 = insertvalue { i64, i64 } %v95, i64 %v59, 1
+  %v97 = extractvalue { i64, i64 } %v96, 0
+  %v98 = extractvalue { i64, i64 } %v96, 1
+  br label %bb44
 bb44:
-  %v94 = insertvalue { i64, i64 } undef, i64 1, 0
-  %v95 = insertvalue { i64, i64 } %v94, i64 %v58, 1
-  %v96 = extractvalue { i64, i64 } %v95, 0
-  %v97 = extractvalue { i64, i64 } %v95, 1
-  br label %bb45
+  %v99 = phi i64 [ %v93, %bb42 ], [ %v97, %bb43 ]
+  %v100 = phi i64 [ %v94, %bb42 ], [ %v98, %bb43 ]
+  %v101 = insertvalue { i64, i64 } undef, i64 %v99, 0
+  %v102 = insertvalue { i64, i64 } %v101, i64 %v100, 1
+  %v103 = extractvalue { i64, i64 } %v102, 0
+  %v104 = bitcast i64 %v103 to i64
+  %v105 = icmp eq i64 %v104, 0
+  br i1 %v105, label %bb12, label %bb45
 bb45:
-  %v98 = phi i64 [ %v92, %bb43 ], [ %v96, %bb44 ]
-  %v99 = phi i64 [ %v93, %bb43 ], [ %v97, %bb44 ]
-  %v100 = insertvalue { i64, i64 } undef, i64 %v98, 0
-  %v101 = insertvalue { i64, i64 } %v100, i64 %v99, 1
-  %v102 = extractvalue { i64, i64 } %v101, 0
-  %v103 = bitcast i64 %v102 to i64
-  %v104 = icmp eq i64 %v103, 0
-  br i1 %v104, label %bb13, label %bb46
-bb46:
-  %v105 = icmp eq i64 %v103, 1
-  br i1 %v105, label %bb12, label %bb11
+  %v106 = icmp eq i64 %v104, 1
+  br i1 %v106, label %bb11, label %bb10
 }
 
 declare i32 @llvm.nvvm.read.ptx.sreg.ntid.y()
