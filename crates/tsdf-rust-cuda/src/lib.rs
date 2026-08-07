@@ -116,9 +116,16 @@ mod kernels {
                 if key == want {
                     // Spin until the winner publishes the index; seeing the key
                     // without the index would read -1 and drop the point.
-                    let mut idx = idx_ptr.read_volatile();
+                    // Scoped atomic load, GPU scope, not `read_volatile`.
+                    // Both re-read the address every iteration, but
+                    // `read_volatile` is a Rust volatile access and lowers to a
+                    // SYSTEM-scope strongly-ordered load, ordering against the
+                    // host and peer devices. Nothing here needs that: the table
+                    // lives in one device's global memory. See docs/A3-A4-GAP.md.
+                    let idx_atomic = DeviceAtomicI32::from_ptr(idx_ptr);
+                    let mut idx = idx_atomic.load(AtomicOrdering::Relaxed);
                     while idx < 0 {
-                        idx = idx_ptr.read_volatile();
+                        idx = idx_atomic.load(AtomicOrdering::Relaxed);
                     }
                     return idx;
                 }
@@ -157,9 +164,16 @@ mod kernels {
                 let key = key_ptr.read_volatile();
 
                 if key == want {
-                    let mut idx = idx_ptr.read_volatile();
+                    // Scoped atomic load, GPU scope, not `read_volatile`.
+                    // Both re-read the address every iteration, but
+                    // `read_volatile` is a Rust volatile access and lowers to a
+                    // SYSTEM-scope strongly-ordered load, ordering against the
+                    // host and peer devices. Nothing here needs that: the table
+                    // lives in one device's global memory. See docs/A3-A4-GAP.md.
+                    let idx_atomic = DeviceAtomicI32::from_ptr(idx_ptr);
+                    let mut idx = idx_atomic.load(AtomicOrdering::Relaxed);
                     while idx < 0 {
-                        idx = idx_ptr.read_volatile();
+                        idx = idx_atomic.load(AtomicOrdering::Relaxed);
                     }
                     return idx;
                 }
@@ -203,10 +217,10 @@ mod kernels {
                         }
                         Err(actual) => {
                             if actual == want {
-                                let mut idx =
-                                    idx_ptr.read_volatile();
+                                let idx_atomic = DeviceAtomicI32::from_ptr(idx_ptr);
+                                let mut idx = idx_atomic.load(AtomicOrdering::Relaxed);
                                 while idx < 0 {
-                                    idx = idx_ptr.read_volatile();
+                                    idx = idx_atomic.load(AtomicOrdering::Relaxed);
                                 }
                                 return idx;
                             }

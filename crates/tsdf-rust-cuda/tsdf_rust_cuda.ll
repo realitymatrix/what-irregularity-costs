@@ -575,7 +575,7 @@ bb1:
   %v32 = phi i32 [ 0, %bb0 ], [ %v49, %bb6 ]
   %v33 = icmp ult i32 %v32, %v22
   %v34 = xor i1 %v33, 1
-  br i1 %v34, label %bb10, label %bb2
+  br i1 %v34, label %bb11, label %bb2
 bb2:
   %v35 = add i32 %v31, %v32
   %v36 = and i32 %v35, %v6
@@ -589,40 +589,38 @@ bb2:
   %v44 = icmp eq i64 %v43, 18446744073709551615
   br i1 %v44, label %bb3, label %bb4
 bb3:
-  br label %bb11
+  br label %bb12
 bb4:
   %v45 = icmp eq i64 %v43, %v21
   %v46 = xor i1 %v45, 1
   br i1 %v46, label %bb6, label %bb5
 bb5:
   %v47 = bitcast ptr %v40 to ptr
-  %v48 = load volatile i32, ptr %v47, align 4
-  br label %bb13
+  %v48 = load atomic i32, ptr %v47 syncscope("device") monotonic, align 4
+  br label %bb7
 bb6:
   %v49 = add i32 %v32, 1
   br label %bb1
 bb7:
-  %v50 = phi i32 [ %v48, %bb13 ], [ %v53, %bb14 ]
+  %v50 = phi i32 [ %v48, %bb5 ], [ %v53, %bb9 ]
   %v51 = icmp slt i32 %v50, 0
   %v52 = xor i1 %v51, 1
-  br i1 %v52, label %bb9, label %bb8
+  br i1 %v52, label %bb10, label %bb8
 bb8:
-  %v53 = load volatile i32, ptr %v47, align 4
-  br label %bb14
+  %v53 = load atomic i32, ptr %v47 syncscope("device") monotonic, align 4
+  br label %bb9
 bb9:
-  br label %bb11
+  br label %bb7
 bb10:
   br label %bb12
 bb11:
-  %v54 = phi i32 [ 4294967295, %bb3 ], [ %v50, %bb9 ]
-  br label %bb12
+  br label %bb13
 bb12:
-  %v55 = phi i32 [ 4294967295, %bb10 ], [ %v54, %bb11 ]
-  ret i32 %v55
+  %v54 = phi i32 [ 4294967295, %bb3 ], [ %v50, %bb10 ]
+  br label %bb13
 bb13:
-  br label %bb7
-bb14:
-  br label %bb7
+  %v55 = phi i32 [ 4294967295, %bb11 ], [ %v54, %bb12 ]
+  ret i32 %v55
 }
 
 define float @core__f32___impl_f32___clamp(float %v0, float %v1, float %v2) #0 {
@@ -727,10 +725,10 @@ bb0:
   %v39 = and i32 %v38, %v10
   br label %bb1
 bb1:
-  %v40 = phi i32 [ 0, %bb0 ], [ %v88, %bb26 ]
+  %v40 = phi i32 [ 0, %bb0 ], [ %v88, %bb28 ]
   %v41 = icmp ult i32 %v40, %v30
   %v42 = xor i1 %v41, 1
-  br i1 %v42, label %bb27, label %bb2
+  br i1 %v42, label %bb29, label %bb2
 bb2:
   %v43 = add i32 %v39, %v40
   %v44 = and i32 %v43, %v10
@@ -742,59 +740,61 @@ bb2:
   %v50 = bitcast ptr %v47 to ptr
   %v51 = bitcast ptr %v47 to ptr
   %v52 = load volatile i64, ptr %v51, align 8
-  br label %bb32
+  br label %bb34
 bb3:
   %v53 = bitcast ptr %v48 to ptr
-  %v54 = load volatile i32, ptr %v53, align 4
-  br label %bb33
+  %v54 = load atomic i32, ptr %v53 syncscope("device") monotonic, align 4
+  br label %bb4
 bb4:
-  %v55 = phi i32 [ %v54, %bb33 ], [ %v58, %bb34 ]
+  %v55 = phi i32 [ %v54, %bb3 ], [ %v58, %bb6 ]
   %v56 = icmp slt i32 %v55, 0
   %v57 = xor i1 %v56, 1
-  br i1 %v57, label %bb6, label %bb5
+  br i1 %v57, label %bb7, label %bb5
 bb5:
-  %v58 = load volatile i32, ptr %v53, align 4
-  br label %bb34
+  %v58 = load atomic i32, ptr %v53 syncscope("device") monotonic, align 4
+  br label %bb6
 bb6:
-  br label %bb30
+  br label %bb4
 bb7:
-  %v59 = icmp eq i64 %v52, 18446744073709551615
-  br i1 %v59, label %bb8, label %bb26
+  br label %bb32
 bb8:
+  %v59 = icmp eq i64 %v52, 18446744073709551615
+  br i1 %v59, label %bb9, label %bb28
+bb9:
   %v60 = cmpxchg ptr %v50, i64 18446744073709551615, i64 %v29 syncscope("device") monotonic monotonic
   %v61 = extractvalue { i64, i1 } %v60, 0
   br label %bb35
-bb9:
-  unreachable
 bb10:
+  unreachable
+bb11:
   %v62 = extractvalue { i64, i64 } %v108, 1
   %v63 = icmp eq i64 %v62, %v29
   %v64 = xor i1 %v63, 1
-  br i1 %v64, label %bb25, label %bb21
-bb11:
+  br i1 %v64, label %bb27, label %bb22
+bb12:
   %v65 = bitcast ptr %v11 to ptr
   %v66 = atomicrmw add ptr %v65, i32 1 syncscope("device") monotonic
-  br label %bb12
-bb12:
+  br label %bb13
+bb13:
   %v67 = icmp sge i32 %v66, %v12
   %v68 = xor i1 %v67, 1
-  br i1 %v68, label %bb18, label %bb13
-bb13:
-  %v69 = atomicrmw sub ptr %v65, i32 1 syncscope("device") monotonic
-  br label %bb14
+  br i1 %v68, label %bb19, label %bb14
 bb14:
-  call void @llvm.nvvm.membar.gl() #0
+  %v69 = atomicrmw sub ptr %v65, i32 1 syncscope("device") monotonic
   br label %bb15
 bb15:
-  %v71 = atomicrmw xchg ptr %v50, i64 18446744073709551615 syncscope("device") monotonic
+  call void @llvm.nvvm.membar.gl() #0
   br label %bb16
 bb16:
-  %v72 = bitcast ptr %v13 to ptr
-  %v73 = atomicrmw add ptr %v72, i64 1 syncscope("device") monotonic
+  %v71 = atomicrmw xchg ptr %v50, i64 18446744073709551615 syncscope("device") monotonic
   br label %bb17
 bb17:
-  br label %bb29
+  %v72 = bitcast ptr %v13 to ptr
+  %v73 = atomicrmw add ptr %v72, i64 1 syncscope("device") monotonic
+  br label %bb18
 bb18:
+  br label %bb31
+bb19:
   %v74 = mul i32 %v66, 3
   %v75 = sext i32 %v74 to i64
   %v76 = getelementptr inbounds i32, ptr %v14, i64 %v75
@@ -804,55 +804,53 @@ bb18:
   %v78 = getelementptr inbounds i32, ptr %v76, i64 2
   store i32 %v17, ptr %v78, align 4
   call void @llvm.nvvm.membar.gl() #0
-  br label %bb19
-bb19:
-  %v80 = bitcast ptr %v48 to ptr
-  %v81 = atomicrmw xchg ptr %v80, i32 %v66 syncscope("device") monotonic
   br label %bb20
 bb20:
-  br label %bb29
+  %v80 = bitcast ptr %v48 to ptr
+  %v81 = atomicrmw xchg ptr %v80, i32 %v66 syncscope("device") monotonic
+  br label %bb21
 bb21:
-  %v82 = bitcast ptr %v48 to ptr
-  %v83 = load volatile i32, ptr %v82, align 4
-  br label %bb40
+  br label %bb31
 bb22:
-  %v84 = phi i32 [ %v83, %bb40 ], [ %v87, %bb41 ]
+  %v82 = bitcast ptr %v48 to ptr
+  %v83 = load atomic i32, ptr %v82 syncscope("device") monotonic, align 4
+  br label %bb23
+bb23:
+  %v84 = phi i32 [ %v83, %bb22 ], [ %v87, %bb25 ]
   %v85 = icmp slt i32 %v84, 0
   %v86 = xor i1 %v85, 1
-  br i1 %v86, label %bb24, label %bb23
-bb23:
-  %v87 = load volatile i32, ptr %v82, align 4
-  br label %bb41
+  br i1 %v86, label %bb26, label %bb24
 bb24:
-  br label %bb29
+  %v87 = load atomic i32, ptr %v82 syncscope("device") monotonic, align 4
+  br label %bb25
 bb25:
-  br label %bb26
+  br label %bb23
 bb26:
-  %v88 = add i32 %v40, 1
-  br label %bb1
+  br label %bb31
 bb27:
-  %v89 = bitcast ptr %v13 to ptr
-  %v90 = atomicrmw add ptr %v89, i64 1 syncscope("device") monotonic
   br label %bb28
 bb28:
-  br label %bb31
+  %v88 = add i32 %v40, 1
+  br label %bb1
 bb29:
-  %v91 = phi i32 [ 4294967295, %bb17 ], [ %v66, %bb20 ], [ %v84, %bb24 ]
+  %v89 = bitcast ptr %v13 to ptr
+  %v90 = atomicrmw add ptr %v89, i64 1 syncscope("device") monotonic
   br label %bb30
 bb30:
-  %v92 = phi i32 [ %v55, %bb6 ], [ %v91, %bb29 ]
-  br label %bb31
+  br label %bb33
 bb31:
-  %v93 = phi i32 [ 4294967295, %bb28 ], [ %v92, %bb30 ]
-  ret i32 %v93
+  %v91 = phi i32 [ 4294967295, %bb18 ], [ %v66, %bb21 ], [ %v84, %bb26 ]
+  br label %bb32
 bb32:
+  %v92 = phi i32 [ %v55, %bb7 ], [ %v91, %bb31 ]
+  br label %bb33
+bb33:
+  %v93 = phi i32 [ 4294967295, %bb30 ], [ %v92, %bb32 ]
+  ret i32 %v93
+bb34:
   %v94 = icmp eq i64 %v52, %v29
   %v95 = xor i1 %v94, 1
-  br i1 %v95, label %bb7, label %bb3
-bb33:
-  br label %bb4
-bb34:
-  br label %bb4
+  br i1 %v95, label %bb8, label %bb3
 bb35:
   %v96 = icmp eq i64 %v61, 18446744073709551615
   br i1 %v96, label %bb36, label %bb37
@@ -876,14 +874,10 @@ bb38:
   %v109 = extractvalue { i64, i64 } %v108, 0
   %v110 = bitcast i64 %v109 to i64
   %v111 = icmp eq i64 %v110, 0
-  br i1 %v111, label %bb11, label %bb39
+  br i1 %v111, label %bb12, label %bb39
 bb39:
   %v112 = icmp eq i64 %v110, 1
-  br i1 %v112, label %bb10, label %bb9
-bb40:
-  br label %bb22
-bb41:
-  br label %bb22
+  br i1 %v112, label %bb11, label %bb10
 }
 
 declare i32 @llvm.nvvm.read.ptx.sreg.ntid.y()
