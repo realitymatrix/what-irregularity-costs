@@ -100,7 +100,48 @@ Until then, warp stall reasons, memory throughput and achieved occupancy are
 all unavailable, and the attribution is limited to static analysis of the
 generated code.
 
-### Suggestive, not conclusive: memory-ordering scope
+### REFUTED 2026-08-07: memory-ordering scope
+
+Tested directly and it is not the cause. See docs/CUDA-OXIDE-ATOMIC-LOAD.md for
+why the test needed a compiler patch to run at all.
+
+With every load in A4's allocate kernel moved from system scope to GPU scope,
+the SASS memory-operation mix becomes:
+
+| kernel | plain LDG.E | LDG.E.SYS | LDG.E(.64).STRONG.SYS | atomics |
+|---|---|---|---|---|
+| A4 allocate, before | 3 | 0 | **6** | 7 (STRONG.GPU) |
+| A4 allocate, after | 3 | 0 | **0** | 7 (STRONG.GPU) |
+
+Runtime, allocate p50 ms, three runs of 20 reps:
+
+| cell | device | before | after |
+|---|---|---|---|
+| base | 5070 Ti | 0.0460 | 0.045–0.046 |
+| base | 5060 | 0.0783 | 0.078 |
+| tartan-warm | 5070 Ti | 0.0542 | 0.054–0.055 |
+| tartan-warm | 5060 | 0.0746 | 0.073–0.074 |
+
+**Nothing moved.** Eliminating all six system-scope strongly-ordered loads
+changed the ratio from 1.65x to 1.63x on the wide card and 1.45x to 1.44x on
+the narrow one, which is noise. Correctness is unaffected: 1160 blocks, mean
+surface distance to A3 still 0.000000000 m.
+
+A partial attempt is worth recording because it nearly produced a false
+negative. Converting only the `block_idx` spin loads took the count from 6 to 1
+and also showed no change — but the one that remained was the probe-loop key
+read, which executes every iteration where the spins execute only when a peer
+is mid-publication. The SASS made this visible (`IMAD.WIDE.U32 R5, 0x10`
+immediately before the surviving `LDG.E.64.STRONG.SYS`, i.e. slot times 16
+bytes). Reading the disassembly rather than trusting the source diff is what
+caught it.
+
+So the hypothesis is dead, and with it the last candidate on this list. The
+allocate gap is unattributed and every mechanism proposed so far has been
+tested and eliminated: register pressure, `f32::clamp`, `read_volatile` as
+such, instruction count, and now memory scope.
+
+### Superseded: the original scope observation
 
 The SASS memory instructions differ in scope, and the scopes are not cosmetic:
 `STRONG.SYS` is a system-scope strongly-ordered access, which is materially

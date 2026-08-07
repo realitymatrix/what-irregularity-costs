@@ -86,11 +86,23 @@ Two deliberate choices:
   correctness bug that no test would catch. Acquire-on-store and
   release-on-load are rejected the same way.
 
-## Status
+## Status: the patch works, and the hypothesis it was built to test is dead
 
-* `mir-lower` compiles with the patch.
-* Not yet verified: that the emitted PTX assembles, that the resulting SASS
-  carries GPU rather than system scope, and that arm A4's numbers move.
+* `mir-lower` compiles, the emitted PTX assembles, and `cargo oxide build
+  --materialize-cubin` succeeds on a kernel that previously failed the libNVVM
+  verifier. Point the build at it with
+  `CUDA_OXIDE_BACKEND=<worktree>/crates/rustc-codegen-cuda/target/release/librustc_codegen_cuda.so`.
+* **The SASS carries GPU scope.** Arm A4's allocate kernel went from six
+  `LDG.E(.64).STRONG.SYS` to zero, with all seven atomics already
+  `STRONG.GPU`. Correctness is unchanged: 1160 blocks, mean surface distance to
+  the CUDA C++ arm still 0.000000000 m.
+* **A4's numbers did not move.** 0.0460 to 0.045 ms at the baseline cell and
+  0.0783 to 0.078 on the narrow card, which is noise. Memory-ordering scope is
+  therefore refuted as the cause of the allocate gap (docs/A3-A4-GAP.md).
+
+That is a negative result for the performance hypothesis and a positive one for
+the patch: the experiment was impossible to run before, and it is now cheap to
+run. The defect is worth reporting upstream on its own merits.
 * Not yet done: upstream tests. `crates/dialect-nvvm/tests/ops_test.rs`
   already exercises `NvvmAtomicLoadOp`/`NvvmAtomicStoreOp` construction, but
   the lowering needs a test asserting the emitted template, and there should

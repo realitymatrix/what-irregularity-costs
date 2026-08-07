@@ -161,7 +161,13 @@ mod kernels {
                 let key_ptr = table.add(slot * 2);
                 let idx_ptr = key_ptr.add(1) as *mut i32;
                 let key_atomic = DeviceAtomicI64::from_ptr(key_ptr);
-                let key = key_ptr.read_volatile();
+                // Relaxed atomic load at GPU scope. This is the HOT load: it
+                // runs on every probe iteration, where the block_idx spins
+                // above run only when a peer is mid-publication. Previously
+                // `read_volatile`, which lowers to LDG.E.64.STRONG.SYS -
+                // system scope, ordering against host and peer devices for a
+                // table that never leaves this device.
+                let key = key_atomic.load(AtomicOrdering::Relaxed);
 
                 if key == want {
                     // Scoped atomic load, GPU scope, not `read_volatile`.
