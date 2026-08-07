@@ -268,8 +268,81 @@ reconstruction specifically.
 \section{Implementations}
 \label{sec:impl}
 
-% TODO: the five arms, the shared C ABI, the analytic correctness gate, and the
-% rule that no code was reused between arms.
+Five implementations exist. Three are the comparison; two are there to make the
+three trustworthy.
+
+\begin{description}
+  \item[A1, Open3D.] A third-party voxel block grid, used as an external
+        reference for the algorithm's shape. Not timed against the others.
+  \item[A2, CPU C++.] The same algorithm on the host, in C++20. Establishes that
+        the reference results are not a property of any GPU implementation.
+  \item[A3, CUDA C++.] The performance reference.
+  \item[A4, Rust.] Compiled to PTX through \texttt{cuda-oxide}.
+  \item[A5, Triton.] Two variants: one where allocation runs on A3's kernel and
+        only the update stage is Triton, and one where both stages are Triton.
+        The difference between them isolates the cost of the irregular stage
+        without relying on cross-arm comparison.
+\end{description}
+
+\subsection{What is held fixed}
+
+The three compared arms share the device memory layout exactly: the same 16-byte
+hash entry, the same packed key, the same multiply-xor hash, the same pool
+indexing, the same 256-thread launch geometry, and the same truncation band. Each
+arm is handed pointers into memory allocated once by the harness, through a C
+ABI, and none of them owns or reshapes it.
+
+This is deliberate and it is a constraint on the result. Holding the layout fixed
+means the comparison measures how each language expresses one algorithm, not
+which algorithm each language makes convenient. A Triton implementation free to
+choose its own data structure would look different and probably better; that is a
+different paper, and a less controlled one.
+
+The hash function in particular must be bit-identical across arms. A different
+mix changes probe sequences, which changes which blocks share cache lines, which
+would appear in the timings as a language difference.
+
+\subsection{What is not shared}
+
+No code is reused between arms. Each is written from the algorithm rather than
+ported from another arm's source.
+
+The original design had a vendored reference implementation that the other arms
+were ported from and then checked against. We removed it. Certifying an arm
+against the implementation it was derived from is weakly circular: a shared
+misunderstanding of the algorithm passes the check. The correctness design in
+Section~\ref{sec:method} replaces it with closed-form geometry, which has no such
+failure mode.
+
+\subsection{Correctness}
+
+Every arm must reproduce a sphere of known radius to within a quarter of a voxel,
+agree with the reference on the number of allocated blocks exactly, and drop no
+points. In the final state the three GPU arms agree with each other to
+$0.000000000$\,m mean surface distance and $5.5 \times 10^{-8}$\,m Hausdorff
+distance, on 846{,}288 extracted vertices.
+
+Timing is gated on those checks, and the sweep additionally discards any cell in
+which an arm drops a block or disagrees on block count. That gate is not
+ceremonial: it is what detected the silent data loss described in
+Section~\ref{sec:expressiveness}, in which one arm quietly built 13 fewer blocks
+than the others at a load factor no previous benchmark had reached.
+
+\subsection{Completeness}
+
+No arm is a sketch. Each implements the full algorithm: the truncation-band walk,
+the occlusion test, hash insertion with the publication protocol of
+Listing~\ref{lst:insert}, pool-exhaustion reporting, and weighted accumulation
+across all five voxel arrays. Each passes the same correctness gate. The
+differences reported in Section~\ref{sec:results} are therefore differences in
+how the same work is expressed, not in how much of it was done.
+
+We deliberately do not compare line counts. The Rust source carries the
+measurement variants described in Section~\ref{sec:attribution} alongside the
+production kernels, the Triton source carries two arm variants, and the CUDA
+source carries host-side management the others receive through the C ABI. Any
+line-count comparison across those would measure our file organisation rather
+than the languages.
 
 \section{Methodology}
 \label{sec:method}
