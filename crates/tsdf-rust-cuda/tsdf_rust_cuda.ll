@@ -253,6 +253,531 @@ bb38:
   br i1 %v184, label %bb20, label %bb19
 }
 
+define void @alloc_kernel_nofence(ptr %v0, i64 %v1, ptr %v2, i64 %v3, ptr %v4, i64 %v5, ptr %v6, i64 %v7, ptr %v8, i64 %v9, i32 %v10, i32 %v11, i32 %v12, float %v13, float %v14, float %v15, float %v16, float %v17, float %v18) #0 {
+entry:
+  %v19 = insertvalue { ptr, i64 } undef, ptr %v0, 0
+  %v20 = insertvalue { ptr, i64 } %v19, i64 %v1, 1
+  %v21 = insertvalue { ptr, i64 } undef, ptr %v2, 0
+  %v22 = insertvalue { ptr, i64 } %v21, i64 %v3, 1
+  %v23 = insertvalue { ptr, i64 } undef, ptr %v4, 0
+  %v24 = insertvalue { ptr, i64 } %v23, i64 %v5, 1
+  %v25 = insertvalue { ptr, i64 } undef, ptr %v6, 0
+  %v26 = insertvalue { ptr, i64 } %v25, i64 %v7, 1
+  %v27 = insertvalue { ptr, i64 } undef, ptr %v8, 0
+  %v28 = insertvalue { ptr, i64 } %v27, i64 %v9, 1
+  br label %bb0
+bb0:
+  %v29 = phi { ptr, i64 } [ %v20, %entry ]
+  %v30 = phi { ptr, i64 } [ %v22, %entry ]
+  %v31 = phi { ptr, i64 } [ %v24, %entry ]
+  %v32 = phi { ptr, i64 } [ %v26, %entry ]
+  %v33 = phi { ptr, i64 } [ %v28, %entry ]
+  %v34 = phi i32 [ %v10, %entry ]
+  %v35 = phi i32 [ %v11, %entry ]
+  %v36 = phi i32 [ %v12, %entry ]
+  %v37 = phi float [ %v13, %entry ]
+  %v38 = phi float [ %v14, %entry ]
+  %v39 = phi float [ %v15, %entry ]
+  %v40 = phi float [ %v16, %entry ]
+  %v41 = phi float [ %v17, %entry ]
+  %v42 = phi float [ %v18, %entry ]
+  %v43 = alloca {  }, align 1
+  %v44 = bitcast ptr %v43 to ptr
+  %v45 = call i64 @_RINvNtNtCscaYDm7YuRWO_11cuda_device6thread10___internal8index_1dNtB2_13UnknownDomainNtB2_17NativeCoordinatesECshAQQRahQDk9_14tsdf_rust_cuda(ptr %v44) #0
+  br label %bb1
+bb1:
+  %v46 = trunc i64 %v45 to i32
+  %v47 = icmp sge i32 %v46, %v34
+  %v48 = xor i1 %v47, 1
+  br i1 %v48, label %bb3, label %bb2
+bb2:
+  br label %bb21
+bb3:
+  %v49 = extractvalue { ptr, i64 } %v29, 0
+  %v50 = mul i32 %v46, 3
+  %v51 = sext i32 %v50 to i64
+  %v52 = getelementptr inbounds float, ptr %v49, i64 %v51
+  %v53 = load float, ptr %v52, align 4
+  %v54 = getelementptr inbounds float, ptr %v52, i64 1
+  %v55 = load float, ptr %v54, align 4
+  %v56 = getelementptr inbounds float, ptr %v52, i64 2
+  %v57 = load float, ptr %v56, align 4
+  %v58 = fsub contract float %v53, %v39
+  %v59 = fsub contract float %v55, %v40
+  %v60 = fsub contract float %v57, %v41
+  %v61 = fmul contract float %v58, %v58
+  %v62 = fmul contract float %v59, %v59
+  %v63 = fadd contract float %v61, %v62
+  %v64 = fmul contract float %v60, %v60
+  %v65 = fadd contract float %v63, %v64
+  %v66 = fcmp ogt float %v42, 0.0
+  %v67 = xor i1 %v66, 1
+  br i1 %v67, label %bb6, label %bb4
+bb4:
+  %v68 = fcmp ogt float %v65, %v42
+  %v69 = xor i1 %v68, 1
+  br i1 %v69, label %bb6, label %bb5
+bb5:
+  br label %bb20
+bb6:
+  %v70 = call float @__nv_sqrtf(float %v65) #0
+  br label %bb22
+bb7:
+  %v71 = fdiv contract float %v58, %v70
+  %v72 = fdiv contract float %v59, %v70
+  %v73 = fdiv contract float %v60, %v70
+  %v74 = fdiv contract float 1.0, %v37
+  %v75 = fmul contract float %v38, %v74
+  %v76 = call float @__nv_ceilf(float %v75) #0
+  br label %bb23
+bb8:
+  br label %bb20
+bb9:
+  %v77 = sub i32 0, %v99
+  br label %bb10
+bb10:
+  %v78 = phi i32 [ %v77, %bb9 ], [ %v95, %bb18 ]
+  %v79 = icmp sle i32 %v78, %v99
+  %v80 = xor i1 %v79, 1
+  br i1 %v80, label %bb19, label %bb11
+bb11:
+  %v81 = sitofp i32 %v78 to float
+  %v82 = fmul contract float %v81, %v37
+  %v83 = fmul contract float %v71, %v82
+  %v84 = fadd contract float %v53, %v83
+  %v85 = fmul contract float %v84, %v74
+  %v86 = call float @__nv_floorf(float %v85) #0
+  br label %bb24
+bb12:
+  %v87 = extractvalue { ptr, i64 } %v30, 0
+  %v88 = extractvalue { ptr, i64 } %v31, 0
+  %v89 = extractvalue { ptr, i64 } %v33, 0
+  %v90 = extractvalue { ptr, i64 } %v32, 0
+  %v91 = call i32 @tsdf_rust_cuda__kernels__floor_div(i32 %v100, i32 8) #0
+  br label %bb13
+bb13:
+  %v92 = call i32 @tsdf_rust_cuda__kernels__floor_div(i32 %v105, i32 8) #0
+  br label %bb14
+bb14:
+  %v93 = call i32 @tsdf_rust_cuda__kernels__floor_div(i32 %v110, i32 8) #0
+  br label %bb15
+bb15:
+  %v94 = call i32 @_RINvNtCshAQQRahQDk9_14tsdf_rust_cuda7kernels14find_or_insertKb1_KBX_KBX_Kb0_KBX_EB4_(ptr %v87, i32 %v36, ptr %v88, i32 %v35, ptr %v89, ptr %v90, i32 %v91, i32 %v92, i32 %v93) #0
+  br label %bb16
+bb16:
+  br label %bb18
+bb17:
+  br label %bb18
+bb18:
+  %v95 = add i32 %v78, 1
+  br label %bb10
+bb19:
+  br label %bb21
+bb20:
+  br label %bb21
+bb21:
+  ret void
+bb22:
+  %v96 = fcmp ogt float %v70, 0.0000009999999974752427
+  %v97 = xor i1 %v96, 1
+  br i1 %v97, label %bb8, label %bb7
+bb23:
+  %v98 = call i32 @llvm.fptosi.sat.i32.f32(float %v76) #0
+  %v99 = call i32 @_RNvYlNtNtCsiQ4CSjCKWVc_4core3cmp3Ord3maxCshAQQRahQDk9_14tsdf_rust_cuda(i32 %v98, i32 1) #0
+  br label %bb9
+bb24:
+  %v100 = call i32 @llvm.fptosi.sat.i32.f32(float %v86) #0
+  %v101 = fmul contract float %v72, %v82
+  %v102 = fadd contract float %v55, %v101
+  %v103 = fmul contract float %v102, %v74
+  %v104 = call float @__nv_floorf(float %v103) #0
+  br label %bb25
+bb25:
+  %v105 = call i32 @llvm.fptosi.sat.i32.f32(float %v104) #0
+  %v106 = fmul contract float %v73, %v82
+  %v107 = fadd contract float %v57, %v106
+  %v108 = fmul contract float %v107, %v74
+  %v109 = call float @__nv_floorf(float %v108) #0
+  br label %bb26
+bb26:
+  %v110 = call i32 @llvm.fptosi.sat.i32.f32(float %v109) #0
+  %v111 = sitofp i32 %v100 to float
+  %v112 = fadd contract float %v111, 0.5
+  %v113 = fmul contract float %v112, %v37
+  %v114 = sitofp i32 %v105 to float
+  %v115 = fadd contract float %v114, 0.5
+  %v116 = fmul contract float %v115, %v37
+  %v117 = sitofp i32 %v110 to float
+  %v118 = fadd contract float %v117, 0.5
+  %v119 = fmul contract float %v118, %v37
+  %v120 = fsub contract float %v113, %v39
+  %v121 = fsub contract float %v116, %v40
+  %v122 = fsub contract float %v119, %v41
+  %v123 = fmul contract float %v120, %v120
+  %v124 = fmul contract float %v121, %v121
+  %v125 = fadd contract float %v123, %v124
+  %v126 = fmul contract float %v122, %v122
+  %v127 = fadd contract float %v125, %v126
+  %v128 = call float @__nv_sqrtf(float %v127) #0
+  br label %bb27
+bb27:
+  %v129 = fsub contract float %v70, %v128
+  %v130 = fneg float %v38
+  %v131 = fcmp oge float %v129, %v130
+  %v132 = xor i1 %v131, 1
+  br i1 %v132, label %bb17, label %bb12
+}
+
+define void @alloc_kernel_nocas(ptr %v0, i64 %v1, ptr %v2, i64 %v3, ptr %v4, i64 %v5, ptr %v6, i64 %v7, ptr %v8, i64 %v9, i32 %v10, i32 %v11, i32 %v12, float %v13, float %v14, float %v15, float %v16, float %v17, float %v18) #0 {
+entry:
+  %v19 = insertvalue { ptr, i64 } undef, ptr %v0, 0
+  %v20 = insertvalue { ptr, i64 } %v19, i64 %v1, 1
+  %v21 = insertvalue { ptr, i64 } undef, ptr %v2, 0
+  %v22 = insertvalue { ptr, i64 } %v21, i64 %v3, 1
+  %v23 = insertvalue { ptr, i64 } undef, ptr %v4, 0
+  %v24 = insertvalue { ptr, i64 } %v23, i64 %v5, 1
+  %v25 = insertvalue { ptr, i64 } undef, ptr %v6, 0
+  %v26 = insertvalue { ptr, i64 } %v25, i64 %v7, 1
+  %v27 = insertvalue { ptr, i64 } undef, ptr %v8, 0
+  %v28 = insertvalue { ptr, i64 } %v27, i64 %v9, 1
+  br label %bb0
+bb0:
+  %v29 = phi { ptr, i64 } [ %v20, %entry ]
+  %v30 = phi { ptr, i64 } [ %v22, %entry ]
+  %v31 = phi { ptr, i64 } [ %v24, %entry ]
+  %v32 = phi { ptr, i64 } [ %v26, %entry ]
+  %v33 = phi { ptr, i64 } [ %v28, %entry ]
+  %v34 = phi i32 [ %v10, %entry ]
+  %v35 = phi i32 [ %v11, %entry ]
+  %v36 = phi i32 [ %v12, %entry ]
+  %v37 = phi float [ %v13, %entry ]
+  %v38 = phi float [ %v14, %entry ]
+  %v39 = phi float [ %v15, %entry ]
+  %v40 = phi float [ %v16, %entry ]
+  %v41 = phi float [ %v17, %entry ]
+  %v42 = phi float [ %v18, %entry ]
+  %v43 = alloca {  }, align 1
+  %v44 = bitcast ptr %v43 to ptr
+  %v45 = call i64 @_RINvNtNtCscaYDm7YuRWO_11cuda_device6thread10___internal8index_1dNtB2_13UnknownDomainNtB2_17NativeCoordinatesECshAQQRahQDk9_14tsdf_rust_cuda(ptr %v44) #0
+  br label %bb1
+bb1:
+  %v46 = trunc i64 %v45 to i32
+  %v47 = icmp sge i32 %v46, %v34
+  %v48 = xor i1 %v47, 1
+  br i1 %v48, label %bb3, label %bb2
+bb2:
+  br label %bb21
+bb3:
+  %v49 = extractvalue { ptr, i64 } %v29, 0
+  %v50 = mul i32 %v46, 3
+  %v51 = sext i32 %v50 to i64
+  %v52 = getelementptr inbounds float, ptr %v49, i64 %v51
+  %v53 = load float, ptr %v52, align 4
+  %v54 = getelementptr inbounds float, ptr %v52, i64 1
+  %v55 = load float, ptr %v54, align 4
+  %v56 = getelementptr inbounds float, ptr %v52, i64 2
+  %v57 = load float, ptr %v56, align 4
+  %v58 = fsub contract float %v53, %v39
+  %v59 = fsub contract float %v55, %v40
+  %v60 = fsub contract float %v57, %v41
+  %v61 = fmul contract float %v58, %v58
+  %v62 = fmul contract float %v59, %v59
+  %v63 = fadd contract float %v61, %v62
+  %v64 = fmul contract float %v60, %v60
+  %v65 = fadd contract float %v63, %v64
+  %v66 = fcmp ogt float %v42, 0.0
+  %v67 = xor i1 %v66, 1
+  br i1 %v67, label %bb6, label %bb4
+bb4:
+  %v68 = fcmp ogt float %v65, %v42
+  %v69 = xor i1 %v68, 1
+  br i1 %v69, label %bb6, label %bb5
+bb5:
+  br label %bb20
+bb6:
+  %v70 = call float @__nv_sqrtf(float %v65) #0
+  br label %bb22
+bb7:
+  %v71 = fdiv contract float %v58, %v70
+  %v72 = fdiv contract float %v59, %v70
+  %v73 = fdiv contract float %v60, %v70
+  %v74 = fdiv contract float 1.0, %v37
+  %v75 = fmul contract float %v38, %v74
+  %v76 = call float @__nv_ceilf(float %v75) #0
+  br label %bb23
+bb8:
+  br label %bb20
+bb9:
+  %v77 = sub i32 0, %v99
+  br label %bb10
+bb10:
+  %v78 = phi i32 [ %v77, %bb9 ], [ %v95, %bb18 ]
+  %v79 = icmp sle i32 %v78, %v99
+  %v80 = xor i1 %v79, 1
+  br i1 %v80, label %bb19, label %bb11
+bb11:
+  %v81 = sitofp i32 %v78 to float
+  %v82 = fmul contract float %v81, %v37
+  %v83 = fmul contract float %v71, %v82
+  %v84 = fadd contract float %v53, %v83
+  %v85 = fmul contract float %v84, %v74
+  %v86 = call float @__nv_floorf(float %v85) #0
+  br label %bb24
+bb12:
+  %v87 = extractvalue { ptr, i64 } %v30, 0
+  %v88 = extractvalue { ptr, i64 } %v31, 0
+  %v89 = extractvalue { ptr, i64 } %v33, 0
+  %v90 = extractvalue { ptr, i64 } %v32, 0
+  %v91 = call i32 @tsdf_rust_cuda__kernels__floor_div(i32 %v100, i32 8) #0
+  br label %bb13
+bb13:
+  %v92 = call i32 @tsdf_rust_cuda__kernels__floor_div(i32 %v105, i32 8) #0
+  br label %bb14
+bb14:
+  %v93 = call i32 @tsdf_rust_cuda__kernels__floor_div(i32 %v110, i32 8) #0
+  br label %bb15
+bb15:
+  %v94 = call i32 @_RINvNtCshAQQRahQDk9_14tsdf_rust_cuda7kernels14find_or_insertKb0_Kb1_KB11_KB11_KB11_EB4_(ptr %v87, i32 %v36, ptr %v88, i32 %v35, ptr %v89, ptr %v90, i32 %v91, i32 %v92, i32 %v93) #0
+  br label %bb16
+bb16:
+  br label %bb18
+bb17:
+  br label %bb18
+bb18:
+  %v95 = add i32 %v78, 1
+  br label %bb10
+bb19:
+  br label %bb21
+bb20:
+  br label %bb21
+bb21:
+  ret void
+bb22:
+  %v96 = fcmp ogt float %v70, 0.0000009999999974752427
+  %v97 = xor i1 %v96, 1
+  br i1 %v97, label %bb8, label %bb7
+bb23:
+  %v98 = call i32 @llvm.fptosi.sat.i32.f32(float %v76) #0
+  %v99 = call i32 @_RNvYlNtNtCsiQ4CSjCKWVc_4core3cmp3Ord3maxCshAQQRahQDk9_14tsdf_rust_cuda(i32 %v98, i32 1) #0
+  br label %bb9
+bb24:
+  %v100 = call i32 @llvm.fptosi.sat.i32.f32(float %v86) #0
+  %v101 = fmul contract float %v72, %v82
+  %v102 = fadd contract float %v55, %v101
+  %v103 = fmul contract float %v102, %v74
+  %v104 = call float @__nv_floorf(float %v103) #0
+  br label %bb25
+bb25:
+  %v105 = call i32 @llvm.fptosi.sat.i32.f32(float %v104) #0
+  %v106 = fmul contract float %v73, %v82
+  %v107 = fadd contract float %v57, %v106
+  %v108 = fmul contract float %v107, %v74
+  %v109 = call float @__nv_floorf(float %v108) #0
+  br label %bb26
+bb26:
+  %v110 = call i32 @llvm.fptosi.sat.i32.f32(float %v109) #0
+  %v111 = sitofp i32 %v100 to float
+  %v112 = fadd contract float %v111, 0.5
+  %v113 = fmul contract float %v112, %v37
+  %v114 = sitofp i32 %v105 to float
+  %v115 = fadd contract float %v114, 0.5
+  %v116 = fmul contract float %v115, %v37
+  %v117 = sitofp i32 %v110 to float
+  %v118 = fadd contract float %v117, 0.5
+  %v119 = fmul contract float %v118, %v37
+  %v120 = fsub contract float %v113, %v39
+  %v121 = fsub contract float %v116, %v40
+  %v122 = fsub contract float %v119, %v41
+  %v123 = fmul contract float %v120, %v120
+  %v124 = fmul contract float %v121, %v121
+  %v125 = fadd contract float %v123, %v124
+  %v126 = fmul contract float %v122, %v122
+  %v127 = fadd contract float %v125, %v126
+  %v128 = call float @__nv_sqrtf(float %v127) #0
+  br label %bb27
+bb27:
+  %v129 = fsub contract float %v70, %v128
+  %v130 = fneg float %v38
+  %v131 = fcmp oge float %v129, %v130
+  %v132 = xor i1 %v131, 1
+  br i1 %v132, label %bb17, label %bb12
+}
+
+define void @alloc_kernel_nopublish(ptr %v0, i64 %v1, ptr %v2, i64 %v3, ptr %v4, i64 %v5, ptr %v6, i64 %v7, ptr %v8, i64 %v9, i32 %v10, i32 %v11, i32 %v12, float %v13, float %v14, float %v15, float %v16, float %v17, float %v18) #0 {
+entry:
+  %v19 = insertvalue { ptr, i64 } undef, ptr %v0, 0
+  %v20 = insertvalue { ptr, i64 } %v19, i64 %v1, 1
+  %v21 = insertvalue { ptr, i64 } undef, ptr %v2, 0
+  %v22 = insertvalue { ptr, i64 } %v21, i64 %v3, 1
+  %v23 = insertvalue { ptr, i64 } undef, ptr %v4, 0
+  %v24 = insertvalue { ptr, i64 } %v23, i64 %v5, 1
+  %v25 = insertvalue { ptr, i64 } undef, ptr %v6, 0
+  %v26 = insertvalue { ptr, i64 } %v25, i64 %v7, 1
+  %v27 = insertvalue { ptr, i64 } undef, ptr %v8, 0
+  %v28 = insertvalue { ptr, i64 } %v27, i64 %v9, 1
+  br label %bb0
+bb0:
+  %v29 = phi { ptr, i64 } [ %v20, %entry ]
+  %v30 = phi { ptr, i64 } [ %v22, %entry ]
+  %v31 = phi { ptr, i64 } [ %v24, %entry ]
+  %v32 = phi { ptr, i64 } [ %v26, %entry ]
+  %v33 = phi { ptr, i64 } [ %v28, %entry ]
+  %v34 = phi i32 [ %v10, %entry ]
+  %v35 = phi i32 [ %v11, %entry ]
+  %v36 = phi i32 [ %v12, %entry ]
+  %v37 = phi float [ %v13, %entry ]
+  %v38 = phi float [ %v14, %entry ]
+  %v39 = phi float [ %v15, %entry ]
+  %v40 = phi float [ %v16, %entry ]
+  %v41 = phi float [ %v17, %entry ]
+  %v42 = phi float [ %v18, %entry ]
+  %v43 = alloca {  }, align 1
+  %v44 = bitcast ptr %v43 to ptr
+  %v45 = call i64 @_RINvNtNtCscaYDm7YuRWO_11cuda_device6thread10___internal8index_1dNtB2_13UnknownDomainNtB2_17NativeCoordinatesECshAQQRahQDk9_14tsdf_rust_cuda(ptr %v44) #0
+  br label %bb1
+bb1:
+  %v46 = trunc i64 %v45 to i32
+  %v47 = icmp sge i32 %v46, %v34
+  %v48 = xor i1 %v47, 1
+  br i1 %v48, label %bb3, label %bb2
+bb2:
+  br label %bb21
+bb3:
+  %v49 = extractvalue { ptr, i64 } %v29, 0
+  %v50 = mul i32 %v46, 3
+  %v51 = sext i32 %v50 to i64
+  %v52 = getelementptr inbounds float, ptr %v49, i64 %v51
+  %v53 = load float, ptr %v52, align 4
+  %v54 = getelementptr inbounds float, ptr %v52, i64 1
+  %v55 = load float, ptr %v54, align 4
+  %v56 = getelementptr inbounds float, ptr %v52, i64 2
+  %v57 = load float, ptr %v56, align 4
+  %v58 = fsub contract float %v53, %v39
+  %v59 = fsub contract float %v55, %v40
+  %v60 = fsub contract float %v57, %v41
+  %v61 = fmul contract float %v58, %v58
+  %v62 = fmul contract float %v59, %v59
+  %v63 = fadd contract float %v61, %v62
+  %v64 = fmul contract float %v60, %v60
+  %v65 = fadd contract float %v63, %v64
+  %v66 = fcmp ogt float %v42, 0.0
+  %v67 = xor i1 %v66, 1
+  br i1 %v67, label %bb6, label %bb4
+bb4:
+  %v68 = fcmp ogt float %v65, %v42
+  %v69 = xor i1 %v68, 1
+  br i1 %v69, label %bb6, label %bb5
+bb5:
+  br label %bb20
+bb6:
+  %v70 = call float @__nv_sqrtf(float %v65) #0
+  br label %bb22
+bb7:
+  %v71 = fdiv contract float %v58, %v70
+  %v72 = fdiv contract float %v59, %v70
+  %v73 = fdiv contract float %v60, %v70
+  %v74 = fdiv contract float 1.0, %v37
+  %v75 = fmul contract float %v38, %v74
+  %v76 = call float @__nv_ceilf(float %v75) #0
+  br label %bb23
+bb8:
+  br label %bb20
+bb9:
+  %v77 = sub i32 0, %v99
+  br label %bb10
+bb10:
+  %v78 = phi i32 [ %v77, %bb9 ], [ %v95, %bb18 ]
+  %v79 = icmp sle i32 %v78, %v99
+  %v80 = xor i1 %v79, 1
+  br i1 %v80, label %bb19, label %bb11
+bb11:
+  %v81 = sitofp i32 %v78 to float
+  %v82 = fmul contract float %v81, %v37
+  %v83 = fmul contract float %v71, %v82
+  %v84 = fadd contract float %v53, %v83
+  %v85 = fmul contract float %v84, %v74
+  %v86 = call float @__nv_floorf(float %v85) #0
+  br label %bb24
+bb12:
+  %v87 = extractvalue { ptr, i64 } %v30, 0
+  %v88 = extractvalue { ptr, i64 } %v31, 0
+  %v89 = extractvalue { ptr, i64 } %v33, 0
+  %v90 = extractvalue { ptr, i64 } %v32, 0
+  %v91 = call i32 @tsdf_rust_cuda__kernels__floor_div(i32 %v100, i32 8) #0
+  br label %bb13
+bb13:
+  %v92 = call i32 @tsdf_rust_cuda__kernels__floor_div(i32 %v105, i32 8) #0
+  br label %bb14
+bb14:
+  %v93 = call i32 @tsdf_rust_cuda__kernels__floor_div(i32 %v110, i32 8) #0
+  br label %bb15
+bb15:
+  %v94 = call i32 @_RINvNtCshAQQRahQDk9_14tsdf_rust_cuda7kernels14find_or_insertKb1_Kb0_KBX_KB11_KB11_EB4_(ptr %v87, i32 %v36, ptr %v88, i32 %v35, ptr %v89, ptr %v90, i32 %v91, i32 %v92, i32 %v93) #0
+  br label %bb16
+bb16:
+  br label %bb18
+bb17:
+  br label %bb18
+bb18:
+  %v95 = add i32 %v78, 1
+  br label %bb10
+bb19:
+  br label %bb21
+bb20:
+  br label %bb21
+bb21:
+  ret void
+bb22:
+  %v96 = fcmp ogt float %v70, 0.0000009999999974752427
+  %v97 = xor i1 %v96, 1
+  br i1 %v97, label %bb8, label %bb7
+bb23:
+  %v98 = call i32 @llvm.fptosi.sat.i32.f32(float %v76) #0
+  %v99 = call i32 @_RNvYlNtNtCsiQ4CSjCKWVc_4core3cmp3Ord3maxCshAQQRahQDk9_14tsdf_rust_cuda(i32 %v98, i32 1) #0
+  br label %bb9
+bb24:
+  %v100 = call i32 @llvm.fptosi.sat.i32.f32(float %v86) #0
+  %v101 = fmul contract float %v72, %v82
+  %v102 = fadd contract float %v55, %v101
+  %v103 = fmul contract float %v102, %v74
+  %v104 = call float @__nv_floorf(float %v103) #0
+  br label %bb25
+bb25:
+  %v105 = call i32 @llvm.fptosi.sat.i32.f32(float %v104) #0
+  %v106 = fmul contract float %v73, %v82
+  %v107 = fadd contract float %v57, %v106
+  %v108 = fmul contract float %v107, %v74
+  %v109 = call float @__nv_floorf(float %v108) #0
+  br label %bb26
+bb26:
+  %v110 = call i32 @llvm.fptosi.sat.i32.f32(float %v109) #0
+  %v111 = sitofp i32 %v100 to float
+  %v112 = fadd contract float %v111, 0.5
+  %v113 = fmul contract float %v112, %v37
+  %v114 = sitofp i32 %v105 to float
+  %v115 = fadd contract float %v114, 0.5
+  %v116 = fmul contract float %v115, %v37
+  %v117 = sitofp i32 %v110 to float
+  %v118 = fadd contract float %v117, 0.5
+  %v119 = fmul contract float %v118, %v37
+  %v120 = fsub contract float %v113, %v39
+  %v121 = fsub contract float %v116, %v40
+  %v122 = fsub contract float %v119, %v41
+  %v123 = fmul contract float %v120, %v120
+  %v124 = fmul contract float %v121, %v121
+  %v125 = fadd contract float %v123, %v124
+  %v126 = fmul contract float %v122, %v122
+  %v127 = fadd contract float %v125, %v126
+  %v128 = call float @__nv_sqrtf(float %v127) #0
+  br label %bb27
+bb27:
+  %v129 = fsub contract float %v70, %v128
+  %v130 = fneg float %v38
+  %v131 = fcmp oge float %v129, %v130
+  %v132 = xor i1 %v131, 1
+  br i1 %v132, label %bb17, label %bb12
+}
+
 define void @alloc_kernel(ptr %v0, i64 %v1, ptr %v2, i64 %v3, ptr %v4, i64 %v5, ptr %v6, i64 %v7, ptr %v8, i64 %v9, i32 %v10, i32 %v11, i32 %v12, float %v13, float %v14, float %v15, float %v16, float %v17, float %v18) #0 {
 entry:
   %v19 = insertvalue { ptr, i64 } undef, ptr %v0, 0
@@ -362,7 +887,357 @@ bb14:
   %v93 = call i32 @tsdf_rust_cuda__kernels__floor_div(i32 %v110, i32 8) #0
   br label %bb15
 bb15:
-  %v94 = call i32 @tsdf_rust_cuda__kernels__find_or_insert(ptr %v87, i32 %v36, ptr %v88, i32 %v35, ptr %v89, ptr %v90, i32 %v91, i32 %v92, i32 %v93) #0
+  %v94 = call i32 @_RINvNtCshAQQRahQDk9_14tsdf_rust_cuda7kernels14find_or_insertKb1_KBX_KBX_KBX_KBX_EB4_(ptr %v87, i32 %v36, ptr %v88, i32 %v35, ptr %v89, ptr %v90, i32 %v91, i32 %v92, i32 %v93) #0
+  br label %bb16
+bb16:
+  br label %bb18
+bb17:
+  br label %bb18
+bb18:
+  %v95 = add i32 %v78, 1
+  br label %bb10
+bb19:
+  br label %bb21
+bb20:
+  br label %bb21
+bb21:
+  ret void
+bb22:
+  %v96 = fcmp ogt float %v70, 0.0000009999999974752427
+  %v97 = xor i1 %v96, 1
+  br i1 %v97, label %bb8, label %bb7
+bb23:
+  %v98 = call i32 @llvm.fptosi.sat.i32.f32(float %v76) #0
+  %v99 = call i32 @_RNvYlNtNtCsiQ4CSjCKWVc_4core3cmp3Ord3maxCshAQQRahQDk9_14tsdf_rust_cuda(i32 %v98, i32 1) #0
+  br label %bb9
+bb24:
+  %v100 = call i32 @llvm.fptosi.sat.i32.f32(float %v86) #0
+  %v101 = fmul contract float %v72, %v82
+  %v102 = fadd contract float %v55, %v101
+  %v103 = fmul contract float %v102, %v74
+  %v104 = call float @__nv_floorf(float %v103) #0
+  br label %bb25
+bb25:
+  %v105 = call i32 @llvm.fptosi.sat.i32.f32(float %v104) #0
+  %v106 = fmul contract float %v73, %v82
+  %v107 = fadd contract float %v57, %v106
+  %v108 = fmul contract float %v107, %v74
+  %v109 = call float @__nv_floorf(float %v108) #0
+  br label %bb26
+bb26:
+  %v110 = call i32 @llvm.fptosi.sat.i32.f32(float %v109) #0
+  %v111 = sitofp i32 %v100 to float
+  %v112 = fadd contract float %v111, 0.5
+  %v113 = fmul contract float %v112, %v37
+  %v114 = sitofp i32 %v105 to float
+  %v115 = fadd contract float %v114, 0.5
+  %v116 = fmul contract float %v115, %v37
+  %v117 = sitofp i32 %v110 to float
+  %v118 = fadd contract float %v117, 0.5
+  %v119 = fmul contract float %v118, %v37
+  %v120 = fsub contract float %v113, %v39
+  %v121 = fsub contract float %v116, %v40
+  %v122 = fsub contract float %v119, %v41
+  %v123 = fmul contract float %v120, %v120
+  %v124 = fmul contract float %v121, %v121
+  %v125 = fadd contract float %v123, %v124
+  %v126 = fmul contract float %v122, %v122
+  %v127 = fadd contract float %v125, %v126
+  %v128 = call float @__nv_sqrtf(float %v127) #0
+  br label %bb27
+bb27:
+  %v129 = fsub contract float %v70, %v128
+  %v130 = fneg float %v38
+  %v131 = fcmp oge float %v129, %v130
+  %v132 = xor i1 %v131, 1
+  br i1 %v132, label %bb17, label %bb12
+}
+
+define void @alloc_kernel_nocount(ptr %v0, i64 %v1, ptr %v2, i64 %v3, ptr %v4, i64 %v5, ptr %v6, i64 %v7, ptr %v8, i64 %v9, i32 %v10, i32 %v11, i32 %v12, float %v13, float %v14, float %v15, float %v16, float %v17, float %v18) #0 {
+entry:
+  %v19 = insertvalue { ptr, i64 } undef, ptr %v0, 0
+  %v20 = insertvalue { ptr, i64 } %v19, i64 %v1, 1
+  %v21 = insertvalue { ptr, i64 } undef, ptr %v2, 0
+  %v22 = insertvalue { ptr, i64 } %v21, i64 %v3, 1
+  %v23 = insertvalue { ptr, i64 } undef, ptr %v4, 0
+  %v24 = insertvalue { ptr, i64 } %v23, i64 %v5, 1
+  %v25 = insertvalue { ptr, i64 } undef, ptr %v6, 0
+  %v26 = insertvalue { ptr, i64 } %v25, i64 %v7, 1
+  %v27 = insertvalue { ptr, i64 } undef, ptr %v8, 0
+  %v28 = insertvalue { ptr, i64 } %v27, i64 %v9, 1
+  br label %bb0
+bb0:
+  %v29 = phi { ptr, i64 } [ %v20, %entry ]
+  %v30 = phi { ptr, i64 } [ %v22, %entry ]
+  %v31 = phi { ptr, i64 } [ %v24, %entry ]
+  %v32 = phi { ptr, i64 } [ %v26, %entry ]
+  %v33 = phi { ptr, i64 } [ %v28, %entry ]
+  %v34 = phi i32 [ %v10, %entry ]
+  %v35 = phi i32 [ %v11, %entry ]
+  %v36 = phi i32 [ %v12, %entry ]
+  %v37 = phi float [ %v13, %entry ]
+  %v38 = phi float [ %v14, %entry ]
+  %v39 = phi float [ %v15, %entry ]
+  %v40 = phi float [ %v16, %entry ]
+  %v41 = phi float [ %v17, %entry ]
+  %v42 = phi float [ %v18, %entry ]
+  %v43 = alloca {  }, align 1
+  %v44 = bitcast ptr %v43 to ptr
+  %v45 = call i64 @_RINvNtNtCscaYDm7YuRWO_11cuda_device6thread10___internal8index_1dNtB2_13UnknownDomainNtB2_17NativeCoordinatesECshAQQRahQDk9_14tsdf_rust_cuda(ptr %v44) #0
+  br label %bb1
+bb1:
+  %v46 = trunc i64 %v45 to i32
+  %v47 = icmp sge i32 %v46, %v34
+  %v48 = xor i1 %v47, 1
+  br i1 %v48, label %bb3, label %bb2
+bb2:
+  br label %bb21
+bb3:
+  %v49 = extractvalue { ptr, i64 } %v29, 0
+  %v50 = mul i32 %v46, 3
+  %v51 = sext i32 %v50 to i64
+  %v52 = getelementptr inbounds float, ptr %v49, i64 %v51
+  %v53 = load float, ptr %v52, align 4
+  %v54 = getelementptr inbounds float, ptr %v52, i64 1
+  %v55 = load float, ptr %v54, align 4
+  %v56 = getelementptr inbounds float, ptr %v52, i64 2
+  %v57 = load float, ptr %v56, align 4
+  %v58 = fsub contract float %v53, %v39
+  %v59 = fsub contract float %v55, %v40
+  %v60 = fsub contract float %v57, %v41
+  %v61 = fmul contract float %v58, %v58
+  %v62 = fmul contract float %v59, %v59
+  %v63 = fadd contract float %v61, %v62
+  %v64 = fmul contract float %v60, %v60
+  %v65 = fadd contract float %v63, %v64
+  %v66 = fcmp ogt float %v42, 0.0
+  %v67 = xor i1 %v66, 1
+  br i1 %v67, label %bb6, label %bb4
+bb4:
+  %v68 = fcmp ogt float %v65, %v42
+  %v69 = xor i1 %v68, 1
+  br i1 %v69, label %bb6, label %bb5
+bb5:
+  br label %bb20
+bb6:
+  %v70 = call float @__nv_sqrtf(float %v65) #0
+  br label %bb22
+bb7:
+  %v71 = fdiv contract float %v58, %v70
+  %v72 = fdiv contract float %v59, %v70
+  %v73 = fdiv contract float %v60, %v70
+  %v74 = fdiv contract float 1.0, %v37
+  %v75 = fmul contract float %v38, %v74
+  %v76 = call float @__nv_ceilf(float %v75) #0
+  br label %bb23
+bb8:
+  br label %bb20
+bb9:
+  %v77 = sub i32 0, %v99
+  br label %bb10
+bb10:
+  %v78 = phi i32 [ %v77, %bb9 ], [ %v95, %bb18 ]
+  %v79 = icmp sle i32 %v78, %v99
+  %v80 = xor i1 %v79, 1
+  br i1 %v80, label %bb19, label %bb11
+bb11:
+  %v81 = sitofp i32 %v78 to float
+  %v82 = fmul contract float %v81, %v37
+  %v83 = fmul contract float %v71, %v82
+  %v84 = fadd contract float %v53, %v83
+  %v85 = fmul contract float %v84, %v74
+  %v86 = call float @__nv_floorf(float %v85) #0
+  br label %bb24
+bb12:
+  %v87 = extractvalue { ptr, i64 } %v30, 0
+  %v88 = extractvalue { ptr, i64 } %v31, 0
+  %v89 = extractvalue { ptr, i64 } %v33, 0
+  %v90 = extractvalue { ptr, i64 } %v32, 0
+  %v91 = call i32 @tsdf_rust_cuda__kernels__floor_div(i32 %v100, i32 8) #0
+  br label %bb13
+bb13:
+  %v92 = call i32 @tsdf_rust_cuda__kernels__floor_div(i32 %v105, i32 8) #0
+  br label %bb14
+bb14:
+  %v93 = call i32 @tsdf_rust_cuda__kernels__floor_div(i32 %v110, i32 8) #0
+  br label %bb15
+bb15:
+  %v94 = call i32 @_RINvNtCshAQQRahQDk9_14tsdf_rust_cuda7kernels14find_or_insertKb1_KBX_Kb0_KBX_KBX_EB4_(ptr %v87, i32 %v36, ptr %v88, i32 %v35, ptr %v89, ptr %v90, i32 %v91, i32 %v92, i32 %v93) #0
+  br label %bb16
+bb16:
+  br label %bb18
+bb17:
+  br label %bb18
+bb18:
+  %v95 = add i32 %v78, 1
+  br label %bb10
+bb19:
+  br label %bb21
+bb20:
+  br label %bb21
+bb21:
+  ret void
+bb22:
+  %v96 = fcmp ogt float %v70, 0.0000009999999974752427
+  %v97 = xor i1 %v96, 1
+  br i1 %v97, label %bb8, label %bb7
+bb23:
+  %v98 = call i32 @llvm.fptosi.sat.i32.f32(float %v76) #0
+  %v99 = call i32 @_RNvYlNtNtCsiQ4CSjCKWVc_4core3cmp3Ord3maxCshAQQRahQDk9_14tsdf_rust_cuda(i32 %v98, i32 1) #0
+  br label %bb9
+bb24:
+  %v100 = call i32 @llvm.fptosi.sat.i32.f32(float %v86) #0
+  %v101 = fmul contract float %v72, %v82
+  %v102 = fadd contract float %v55, %v101
+  %v103 = fmul contract float %v102, %v74
+  %v104 = call float @__nv_floorf(float %v103) #0
+  br label %bb25
+bb25:
+  %v105 = call i32 @llvm.fptosi.sat.i32.f32(float %v104) #0
+  %v106 = fmul contract float %v73, %v82
+  %v107 = fadd contract float %v57, %v106
+  %v108 = fmul contract float %v107, %v74
+  %v109 = call float @__nv_floorf(float %v108) #0
+  br label %bb26
+bb26:
+  %v110 = call i32 @llvm.fptosi.sat.i32.f32(float %v109) #0
+  %v111 = sitofp i32 %v100 to float
+  %v112 = fadd contract float %v111, 0.5
+  %v113 = fmul contract float %v112, %v37
+  %v114 = sitofp i32 %v105 to float
+  %v115 = fadd contract float %v114, 0.5
+  %v116 = fmul contract float %v115, %v37
+  %v117 = sitofp i32 %v110 to float
+  %v118 = fadd contract float %v117, 0.5
+  %v119 = fmul contract float %v118, %v37
+  %v120 = fsub contract float %v113, %v39
+  %v121 = fsub contract float %v116, %v40
+  %v122 = fsub contract float %v119, %v41
+  %v123 = fmul contract float %v120, %v120
+  %v124 = fmul contract float %v121, %v121
+  %v125 = fadd contract float %v123, %v124
+  %v126 = fmul contract float %v122, %v122
+  %v127 = fadd contract float %v125, %v126
+  %v128 = call float @__nv_sqrtf(float %v127) #0
+  br label %bb27
+bb27:
+  %v129 = fsub contract float %v70, %v128
+  %v130 = fneg float %v38
+  %v131 = fcmp oge float %v129, %v130
+  %v132 = xor i1 %v131, 1
+  br i1 %v132, label %bb17, label %bb12
+}
+
+define void @alloc_kernel_nospin(ptr %v0, i64 %v1, ptr %v2, i64 %v3, ptr %v4, i64 %v5, ptr %v6, i64 %v7, ptr %v8, i64 %v9, i32 %v10, i32 %v11, i32 %v12, float %v13, float %v14, float %v15, float %v16, float %v17, float %v18) #0 {
+entry:
+  %v19 = insertvalue { ptr, i64 } undef, ptr %v0, 0
+  %v20 = insertvalue { ptr, i64 } %v19, i64 %v1, 1
+  %v21 = insertvalue { ptr, i64 } undef, ptr %v2, 0
+  %v22 = insertvalue { ptr, i64 } %v21, i64 %v3, 1
+  %v23 = insertvalue { ptr, i64 } undef, ptr %v4, 0
+  %v24 = insertvalue { ptr, i64 } %v23, i64 %v5, 1
+  %v25 = insertvalue { ptr, i64 } undef, ptr %v6, 0
+  %v26 = insertvalue { ptr, i64 } %v25, i64 %v7, 1
+  %v27 = insertvalue { ptr, i64 } undef, ptr %v8, 0
+  %v28 = insertvalue { ptr, i64 } %v27, i64 %v9, 1
+  br label %bb0
+bb0:
+  %v29 = phi { ptr, i64 } [ %v20, %entry ]
+  %v30 = phi { ptr, i64 } [ %v22, %entry ]
+  %v31 = phi { ptr, i64 } [ %v24, %entry ]
+  %v32 = phi { ptr, i64 } [ %v26, %entry ]
+  %v33 = phi { ptr, i64 } [ %v28, %entry ]
+  %v34 = phi i32 [ %v10, %entry ]
+  %v35 = phi i32 [ %v11, %entry ]
+  %v36 = phi i32 [ %v12, %entry ]
+  %v37 = phi float [ %v13, %entry ]
+  %v38 = phi float [ %v14, %entry ]
+  %v39 = phi float [ %v15, %entry ]
+  %v40 = phi float [ %v16, %entry ]
+  %v41 = phi float [ %v17, %entry ]
+  %v42 = phi float [ %v18, %entry ]
+  %v43 = alloca {  }, align 1
+  %v44 = bitcast ptr %v43 to ptr
+  %v45 = call i64 @_RINvNtNtCscaYDm7YuRWO_11cuda_device6thread10___internal8index_1dNtB2_13UnknownDomainNtB2_17NativeCoordinatesECshAQQRahQDk9_14tsdf_rust_cuda(ptr %v44) #0
+  br label %bb1
+bb1:
+  %v46 = trunc i64 %v45 to i32
+  %v47 = icmp sge i32 %v46, %v34
+  %v48 = xor i1 %v47, 1
+  br i1 %v48, label %bb3, label %bb2
+bb2:
+  br label %bb21
+bb3:
+  %v49 = extractvalue { ptr, i64 } %v29, 0
+  %v50 = mul i32 %v46, 3
+  %v51 = sext i32 %v50 to i64
+  %v52 = getelementptr inbounds float, ptr %v49, i64 %v51
+  %v53 = load float, ptr %v52, align 4
+  %v54 = getelementptr inbounds float, ptr %v52, i64 1
+  %v55 = load float, ptr %v54, align 4
+  %v56 = getelementptr inbounds float, ptr %v52, i64 2
+  %v57 = load float, ptr %v56, align 4
+  %v58 = fsub contract float %v53, %v39
+  %v59 = fsub contract float %v55, %v40
+  %v60 = fsub contract float %v57, %v41
+  %v61 = fmul contract float %v58, %v58
+  %v62 = fmul contract float %v59, %v59
+  %v63 = fadd contract float %v61, %v62
+  %v64 = fmul contract float %v60, %v60
+  %v65 = fadd contract float %v63, %v64
+  %v66 = fcmp ogt float %v42, 0.0
+  %v67 = xor i1 %v66, 1
+  br i1 %v67, label %bb6, label %bb4
+bb4:
+  %v68 = fcmp ogt float %v65, %v42
+  %v69 = xor i1 %v68, 1
+  br i1 %v69, label %bb6, label %bb5
+bb5:
+  br label %bb20
+bb6:
+  %v70 = call float @__nv_sqrtf(float %v65) #0
+  br label %bb22
+bb7:
+  %v71 = fdiv contract float %v58, %v70
+  %v72 = fdiv contract float %v59, %v70
+  %v73 = fdiv contract float %v60, %v70
+  %v74 = fdiv contract float 1.0, %v37
+  %v75 = fmul contract float %v38, %v74
+  %v76 = call float @__nv_ceilf(float %v75) #0
+  br label %bb23
+bb8:
+  br label %bb20
+bb9:
+  %v77 = sub i32 0, %v99
+  br label %bb10
+bb10:
+  %v78 = phi i32 [ %v77, %bb9 ], [ %v95, %bb18 ]
+  %v79 = icmp sle i32 %v78, %v99
+  %v80 = xor i1 %v79, 1
+  br i1 %v80, label %bb19, label %bb11
+bb11:
+  %v81 = sitofp i32 %v78 to float
+  %v82 = fmul contract float %v81, %v37
+  %v83 = fmul contract float %v71, %v82
+  %v84 = fadd contract float %v53, %v83
+  %v85 = fmul contract float %v84, %v74
+  %v86 = call float @__nv_floorf(float %v85) #0
+  br label %bb24
+bb12:
+  %v87 = extractvalue { ptr, i64 } %v30, 0
+  %v88 = extractvalue { ptr, i64 } %v31, 0
+  %v89 = extractvalue { ptr, i64 } %v33, 0
+  %v90 = extractvalue { ptr, i64 } %v32, 0
+  %v91 = call i32 @tsdf_rust_cuda__kernels__floor_div(i32 %v100, i32 8) #0
+  br label %bb13
+bb13:
+  %v92 = call i32 @tsdf_rust_cuda__kernels__floor_div(i32 %v105, i32 8) #0
+  br label %bb14
+bb14:
+  %v93 = call i32 @tsdf_rust_cuda__kernels__floor_div(i32 %v110, i32 8) #0
+  br label %bb15
+bb15:
+  %v94 = call i32 @_RINvNtCshAQQRahQDk9_14tsdf_rust_cuda7kernels14find_or_insertKb1_Kb0_KBX_KBX_KBX_EB4_(ptr %v87, i32 %v36, ptr %v88, i32 %v35, ptr %v89, ptr %v90, i32 %v91, i32 %v92, i32 %v93) #0
   br label %bb16
 bb16:
   br label %bb18
@@ -686,9 +1561,7 @@ bb4:
   ret i32 %v12
 }
 
-declare void @llvm.nvvm.membar.gl()
-
-define i32 @tsdf_rust_cuda__kernels__find_or_insert(ptr %v0, i32 %v1, ptr %v2, i32 %v3, ptr %v4, ptr %v5, i32 %v6, i32 %v7, i32 %v8) alwaysinline #0 {
+define i32 @_RINvNtCshAQQRahQDk9_14tsdf_rust_cuda7kernels14find_or_insertKb1_KBX_KBX_Kb0_KBX_EB4_(ptr %v0, i32 %v1, ptr %v2, i32 %v3, ptr %v4, ptr %v5, i32 %v6, i32 %v7, i32 %v8) alwaysinline #0 {
 entry:
   br label %bb0
 bb0:
@@ -725,10 +1598,10 @@ bb0:
   %v39 = and i32 %v38, %v10
   br label %bb1
 bb1:
-  %v40 = phi i32 [ 0, %bb0 ], [ %v89, %bb29 ]
+  %v40 = phi i32 [ 0, %bb0 ], [ %v88, %bb39 ]
   %v41 = icmp ult i32 %v40, %v30
   %v42 = xor i1 %v41, 1
-  br i1 %v42, label %bb30, label %bb2
+  br i1 %v42, label %bb40, label %bb2
 bb2:
   %v43 = add i32 %v39, %v40
   %v44 = and i32 %v43, %v10
@@ -743,61 +1616,71 @@ bb2:
 bb3:
   %v52 = icmp eq i64 %v51, %v29
   %v53 = xor i1 %v52, 1
-  br i1 %v53, label %bb9, label %bb4
+  br i1 %v53, label %bb11, label %bb4
 bb4:
   %v54 = bitcast ptr %v48 to ptr
   %v55 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v54)
   br label %bb5
 bb5:
-  %v56 = phi i32 [ %v55, %bb4 ], [ %v59, %bb7 ]
+  br label %bb6
+bb6:
+  %v56 = phi i32 [ %v55, %bb5 ], [ %v59, %bb8 ]
   %v57 = icmp slt i32 %v56, 0
   %v58 = xor i1 %v57, 1
-  br i1 %v58, label %bb8, label %bb6
-bb6:
-  %v59 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v54)
-  br label %bb7
+  br i1 %v58, label %bb9, label %bb7
 bb7:
-  br label %bb5
+  %v59 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v54)
+  br label %bb8
 bb8:
-  br label %bb33
+  br label %bb6
 bb9:
-  %v60 = icmp eq i64 %v51, 18446744073709551615
-  br i1 %v60, label %bb10, label %bb29
+  br label %bb10
 bb10:
+  br label %bb45
+bb11:
+  %v60 = icmp eq i64 %v51, 18446744073709551615
+  br i1 %v60, label %bb12, label %bb39
+bb12:
+  br label %bb13
+bb13:
   %v61 = cmpxchg ptr %v50, i64 18446744073709551615, i64 %v29 syncscope("device") monotonic monotonic
   %v62 = extractvalue { i64, i1 } %v61, 0
-  br label %bb35
-bb11:
+  br label %bb47
+bb14:
   unreachable
-bb12:
+bb15:
   %v63 = extractvalue { i64, i64 } %v107, 1
   %v64 = icmp eq i64 %v63, %v29
   %v65 = xor i1 %v64, 1
-  br i1 %v65, label %bb28, label %bb23
-bb13:
-  %v66 = bitcast ptr %v11 to ptr
-  %v67 = atomicrmw add ptr %v66, i32 1 syncscope("device") monotonic
-  br label %bb14
-bb14:
-  %v68 = icmp sge i32 %v67, %v12
-  %v69 = xor i1 %v68, 1
-  br i1 %v69, label %bb20, label %bb15
-bb15:
-  %v70 = atomicrmw sub ptr %v66, i32 1 syncscope("device") monotonic
-  br label %bb16
+  br i1 %v65, label %bb38, label %bb31
 bb16:
-  call void @llvm.nvvm.membar.gl() #0
   br label %bb17
 bb17:
-  %v72 = atomicrmw xchg ptr %v50, i64 18446744073709551615 syncscope("device") monotonic
+  %v66 = bitcast ptr %v11 to ptr
+  %v67 = atomicrmw add ptr %v66, i32 1 syncscope("device") monotonic
   br label %bb18
 bb18:
+  %v68 = icmp sge i32 %v67, %v12
+  %v69 = xor i1 %v68, 1
+  br i1 %v69, label %bb24, label %bb19
+bb19:
+  %v70 = bitcast ptr %v11 to ptr
+  %v71 = atomicrmw sub ptr %v70, i32 1 syncscope("device") monotonic
+  br label %bb20
+bb20:
+  br label %bb21
+bb21:
+  %v72 = atomicrmw xchg ptr %v50, i64 18446744073709551615 syncscope("device") monotonic
+  br label %bb22
+bb22:
   %v73 = bitcast ptr %v13 to ptr
   %v74 = atomicrmw add ptr %v73, i64 1 syncscope("device") monotonic
-  br label %bb19
-bb19:
-  br label %bb32
-bb20:
+  br label %bb23
+bb23:
+  br label %bb42
+bb24:
+  br label %bb25
+bb25:
   %v75 = mul i32 %v67, 3
   %v76 = sext i32 %v75 to i64
   %v77 = getelementptr inbounds i32, ptr %v14, i64 %v76
@@ -806,77 +1689,1023 @@ bb20:
   store i32 %v16, ptr %v78, align 4
   %v79 = getelementptr inbounds i32, ptr %v77, i64 2
   store i32 %v17, ptr %v79, align 4
-  call void @llvm.nvvm.membar.gl() #0
-  br label %bb21
-bb21:
-  %v81 = bitcast ptr %v48 to ptr
-  %v82 = atomicrmw xchg ptr %v81, i32 %v67 syncscope("device") monotonic
-  br label %bb22
-bb22:
-  br label %bb32
-bb23:
-  %v83 = bitcast ptr %v48 to ptr
-  %v84 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v83)
-  br label %bb24
-bb24:
-  %v85 = phi i32 [ %v84, %bb23 ], [ %v88, %bb26 ]
-  %v86 = icmp slt i32 %v85, 0
-  %v87 = xor i1 %v86, 1
-  br i1 %v87, label %bb27, label %bb25
-bb25:
-  %v88 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v83)
   br label %bb26
 bb26:
-  br label %bb24
+  br label %bb27
 bb27:
-  br label %bb32
+  br label %bb28
 bb28:
+  %v80 = bitcast ptr %v48 to ptr
+  %v81 = atomicrmw xchg ptr %v80, i32 %v67 syncscope("device") monotonic
   br label %bb29
 bb29:
-  %v89 = add i32 %v40, 1
-  br label %bb1
+  br label %bb30
 bb30:
-  %v90 = bitcast ptr %v13 to ptr
-  %v91 = atomicrmw add ptr %v90, i64 1 syncscope("device") monotonic
-  br label %bb31
+  br label %bb42
 bb31:
-  br label %bb34
+  %v82 = bitcast ptr %v48 to ptr
+  %v83 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v82)
+  br label %bb32
 bb32:
-  %v92 = phi i32 [ 4294967295, %bb19 ], [ %v67, %bb22 ], [ %v85, %bb27 ]
   br label %bb33
 bb33:
-  %v93 = phi i32 [ %v56, %bb8 ], [ %v92, %bb32 ]
-  br label %bb34
+  %v84 = phi i32 [ %v83, %bb32 ], [ %v87, %bb35 ]
+  %v85 = icmp slt i32 %v84, 0
+  %v86 = xor i1 %v85, 1
+  br i1 %v86, label %bb36, label %bb34
 bb34:
-  %v94 = phi i32 [ 4294967295, %bb31 ], [ %v93, %bb33 ]
-  ret i32 %v94
+  %v87 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v82)
+  br label %bb35
 bb35:
-  %v95 = icmp eq i64 %v62, 18446744073709551615
-  br i1 %v95, label %bb36, label %bb37
+  br label %bb33
 bb36:
+  br label %bb37
+bb37:
+  br label %bb43
+bb38:
+  br label %bb39
+bb39:
+  %v88 = add i32 %v40, 1
+  br label %bb1
+bb40:
+  %v89 = bitcast ptr %v13 to ptr
+  %v90 = atomicrmw add ptr %v89, i64 1 syncscope("device") monotonic
+  br label %bb41
+bb41:
+  br label %bb46
+bb42:
+  %v91 = phi i32 [ 4294967295, %bb23 ], [ %v67, %bb30 ]
+  br label %bb43
+bb43:
+  %v92 = phi i32 [ %v84, %bb37 ], [ %v91, %bb42 ]
+  br label %bb44
+bb44:
+  br label %bb45
+bb45:
+  %v93 = phi i32 [ %v56, %bb10 ], [ %v92, %bb44 ]
+  br label %bb46
+bb46:
+  %v94 = phi i32 [ 4294967295, %bb41 ], [ %v93, %bb45 ]
+  ret i32 %v94
+bb47:
+  %v95 = icmp eq i64 %v62, 18446744073709551615
+  br i1 %v95, label %bb48, label %bb49
+bb48:
   %v96 = insertvalue { i64, i64 } undef, i64 0, 0
   %v97 = insertvalue { i64, i64 } %v96, i64 %v62, 1
   %v98 = extractvalue { i64, i64 } %v97, 0
   %v99 = extractvalue { i64, i64 } %v97, 1
-  br label %bb38
-bb37:
+  br label %bb50
+bb49:
   %v100 = insertvalue { i64, i64 } undef, i64 1, 0
   %v101 = insertvalue { i64, i64 } %v100, i64 %v62, 1
   %v102 = extractvalue { i64, i64 } %v101, 0
   %v103 = extractvalue { i64, i64 } %v101, 1
-  br label %bb38
-bb38:
-  %v104 = phi i64 [ %v98, %bb36 ], [ %v102, %bb37 ]
-  %v105 = phi i64 [ %v99, %bb36 ], [ %v103, %bb37 ]
+  br label %bb50
+bb50:
+  %v104 = phi i64 [ %v98, %bb48 ], [ %v102, %bb49 ]
+  %v105 = phi i64 [ %v99, %bb48 ], [ %v103, %bb49 ]
   %v106 = insertvalue { i64, i64 } undef, i64 %v104, 0
   %v107 = insertvalue { i64, i64 } %v106, i64 %v105, 1
   %v108 = extractvalue { i64, i64 } %v107, 0
   %v109 = bitcast i64 %v108 to i64
   %v110 = icmp eq i64 %v109, 0
-  br i1 %v110, label %bb13, label %bb39
-bb39:
+  br i1 %v110, label %bb16, label %bb51
+bb51:
   %v111 = icmp eq i64 %v109, 1
-  br i1 %v111, label %bb12, label %bb11
+  br i1 %v111, label %bb15, label %bb14
+}
+
+define i32 @_RINvNtCshAQQRahQDk9_14tsdf_rust_cuda7kernels14find_or_insertKb0_Kb1_KB11_KB11_KB11_EB4_(ptr %v0, i32 %v1, ptr %v2, i32 %v3, ptr %v4, ptr %v5, i32 %v6, i32 %v7, i32 %v8) alwaysinline #0 {
+entry:
+  br label %bb0
+bb0:
+  %v9 = phi ptr [ %v0, %entry ]
+  %v10 = phi i32 [ %v1, %entry ]
+  %v11 = phi ptr [ %v2, %entry ]
+  %v12 = phi i32 [ %v3, %entry ]
+  %v13 = phi ptr [ %v4, %entry ]
+  %v14 = phi ptr [ %v5, %entry ]
+  %v15 = phi i32 [ %v6, %entry ]
+  %v16 = phi i32 [ %v7, %entry ]
+  %v17 = phi i32 [ %v8, %entry ]
+  %v18 = sext i32 %v15 to i64
+  %v19 = add i64 %v18, 1048576
+  %v20 = and i64 42, 63
+  %v21 = shl i64 %v19, %v20
+  %v22 = sext i32 %v16 to i64
+  %v23 = add i64 %v22, 1048576
+  %v24 = and i64 21, 63
+  %v25 = shl i64 %v23, %v24
+  %v26 = or i64 %v21, %v25
+  %v27 = sext i32 %v17 to i64
+  %v28 = add i64 %v27, 1048576
+  %v29 = or i64 %v26, %v28
+  %v30 = add i32 %v10, 1
+  %v31 = bitcast i32 %v15 to i32
+  %v32 = mul i32 %v31, 73856093
+  %v33 = bitcast i32 %v16 to i32
+  %v34 = mul i32 %v33, 19349663
+  %v35 = xor i32 %v32, %v34
+  %v36 = bitcast i32 %v17 to i32
+  %v37 = mul i32 %v36, 83492791
+  %v38 = xor i32 %v35, %v37
+  %v39 = and i32 %v38, %v10
+  br label %bb1
+bb1:
+  %v40 = phi i32 [ 0, %bb0 ], [ %v61, %bb14 ]
+  %v41 = icmp ult i32 %v40, %v30
+  %v42 = xor i1 %v41, 1
+  br i1 %v42, label %bb15, label %bb2
+bb2:
+  %v43 = add i32 %v39, %v40
+  %v44 = and i32 %v43, %v10
+  %v45 = zext i32 %v44 to i64
+  %v46 = mul i64 %v45, 2
+  %v47 = getelementptr inbounds i64, ptr %v9, i64 %v46
+  %v48 = getelementptr inbounds i64, ptr %v47, i64 1
+  %v49 = bitcast ptr %v48 to ptr
+  %v50 = bitcast ptr %v47 to ptr
+  %v51 = call i64 asm sideeffect "ld.relaxed.gpu.b64 $0, [$1];", "=l,l,~{memory}"(ptr %v50)
+  br label %bb3
+bb3:
+  %v52 = icmp eq i64 %v51, %v29
+  %v53 = xor i1 %v52, 1
+  br i1 %v53, label %bb11, label %bb4
+bb4:
+  %v54 = bitcast ptr %v48 to ptr
+  %v55 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v54)
+  br label %bb5
+bb5:
+  br label %bb6
+bb6:
+  %v56 = phi i32 [ %v55, %bb5 ], [ %v59, %bb8 ]
+  %v57 = icmp slt i32 %v56, 0
+  %v58 = xor i1 %v57, 1
+  br i1 %v58, label %bb9, label %bb7
+bb7:
+  %v59 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v54)
+  br label %bb8
+bb8:
+  br label %bb6
+bb9:
+  br label %bb10
+bb10:
+  br label %bb18
+bb11:
+  %v60 = icmp eq i64 %v51, 18446744073709551615
+  br i1 %v60, label %bb12, label %bb14
+bb12:
+  br label %bb13
+bb13:
+  br label %bb17
+bb14:
+  %v61 = add i32 %v40, 1
+  br label %bb1
+bb15:
+  %v62 = bitcast ptr %v13 to ptr
+  %v63 = atomicrmw add ptr %v62, i64 1 syncscope("device") monotonic
+  br label %bb16
+bb16:
+  br label %bb19
+bb17:
+  br label %bb18
+bb18:
+  %v64 = phi i32 [ %v56, %bb10 ], [ 4294967295, %bb17 ]
+  br label %bb19
+bb19:
+  %v65 = phi i32 [ 4294967295, %bb16 ], [ %v64, %bb18 ]
+  ret i32 %v65
+}
+
+define i32 @_RINvNtCshAQQRahQDk9_14tsdf_rust_cuda7kernels14find_or_insertKb1_Kb0_KBX_KB11_KB11_EB4_(ptr %v0, i32 %v1, ptr %v2, i32 %v3, ptr %v4, ptr %v5, i32 %v6, i32 %v7, i32 %v8) alwaysinline #0 {
+entry:
+  br label %bb0
+bb0:
+  %v9 = phi ptr [ %v0, %entry ]
+  %v10 = phi i32 [ %v1, %entry ]
+  %v11 = phi ptr [ %v2, %entry ]
+  %v12 = phi i32 [ %v3, %entry ]
+  %v13 = phi ptr [ %v4, %entry ]
+  %v14 = phi ptr [ %v5, %entry ]
+  %v15 = phi i32 [ %v6, %entry ]
+  %v16 = phi i32 [ %v7, %entry ]
+  %v17 = phi i32 [ %v8, %entry ]
+  %v18 = sext i32 %v15 to i64
+  %v19 = add i64 %v18, 1048576
+  %v20 = and i64 42, 63
+  %v21 = shl i64 %v19, %v20
+  %v22 = sext i32 %v16 to i64
+  %v23 = add i64 %v22, 1048576
+  %v24 = and i64 21, 63
+  %v25 = shl i64 %v23, %v24
+  %v26 = or i64 %v21, %v25
+  %v27 = sext i32 %v17 to i64
+  %v28 = add i64 %v27, 1048576
+  %v29 = or i64 %v26, %v28
+  %v30 = add i32 %v10, 1
+  %v31 = bitcast i32 %v15 to i32
+  %v32 = mul i32 %v31, 73856093
+  %v33 = bitcast i32 %v16 to i32
+  %v34 = mul i32 %v33, 19349663
+  %v35 = xor i32 %v32, %v34
+  %v36 = bitcast i32 %v17 to i32
+  %v37 = mul i32 %v36, 83492791
+  %v38 = xor i32 %v35, %v37
+  %v39 = and i32 %v38, %v10
+  br label %bb1
+bb1:
+  %v40 = phi i32 [ 0, %bb0 ], [ %v73, %bb27 ]
+  %v41 = icmp ult i32 %v40, %v30
+  %v42 = xor i1 %v41, 1
+  br i1 %v42, label %bb28, label %bb2
+bb2:
+  %v43 = add i32 %v39, %v40
+  %v44 = and i32 %v43, %v10
+  %v45 = zext i32 %v44 to i64
+  %v46 = mul i64 %v45, 2
+  %v47 = getelementptr inbounds i64, ptr %v9, i64 %v46
+  %v48 = getelementptr inbounds i64, ptr %v47, i64 1
+  %v49 = bitcast ptr %v48 to ptr
+  %v50 = bitcast ptr %v47 to ptr
+  %v51 = call i64 asm sideeffect "ld.relaxed.gpu.b64 $0, [$1];", "=l,l,~{memory}"(ptr %v50)
+  br label %bb3
+bb3:
+  %v52 = icmp eq i64 %v51, %v29
+  %v53 = xor i1 %v52, 1
+  br i1 %v53, label %bb7, label %bb4
+bb4:
+  %v54 = bitcast ptr %v48 to ptr
+  %v55 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v54)
+  br label %bb5
+bb5:
+  br label %bb6
+bb6:
+  br label %bb33
+bb7:
+  %v56 = icmp eq i64 %v51, 18446744073709551615
+  br i1 %v56, label %bb8, label %bb27
+bb8:
+  br label %bb9
+bb9:
+  %v57 = cmpxchg ptr %v50, i64 18446744073709551615, i64 %v29 syncscope("device") monotonic monotonic
+  %v58 = extractvalue { i64, i1 } %v57, 0
+  br label %bb35
+bb10:
+  unreachable
+bb11:
+  %v59 = extractvalue { i64, i64 } %v92, 1
+  %v60 = icmp eq i64 %v59, %v29
+  %v61 = xor i1 %v60, 1
+  br i1 %v61, label %bb26, label %bb23
+bb12:
+  br label %bb13
+bb13:
+  %v62 = bitcast ptr %v11 to ptr
+  %v63 = atomicrmw add ptr %v62, i32 1 syncscope("device") monotonic
+  br label %bb14
+bb14:
+  %v64 = icmp sge i32 %v63, %v12
+  %v65 = xor i1 %v64, 1
+  br i1 %v65, label %bb20, label %bb15
+bb15:
+  %v66 = bitcast ptr %v11 to ptr
+  %v67 = atomicrmw sub ptr %v66, i32 1 syncscope("device") monotonic
+  br label %bb16
+bb16:
+  br label %bb17
+bb17:
+  %v68 = atomicrmw xchg ptr %v50, i64 18446744073709551615 syncscope("device") monotonic
+  br label %bb18
+bb18:
+  %v69 = bitcast ptr %v13 to ptr
+  %v70 = atomicrmw add ptr %v69, i64 1 syncscope("device") monotonic
+  br label %bb19
+bb19:
+  br label %bb30
+bb20:
+  br label %bb21
+bb21:
+  br label %bb22
+bb22:
+  br label %bb30
+bb23:
+  %v71 = bitcast ptr %v48 to ptr
+  %v72 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v71)
+  br label %bb24
+bb24:
+  br label %bb25
+bb25:
+  br label %bb31
+bb26:
+  br label %bb27
+bb27:
+  %v73 = add i32 %v40, 1
+  br label %bb1
+bb28:
+  %v74 = bitcast ptr %v13 to ptr
+  %v75 = atomicrmw add ptr %v74, i64 1 syncscope("device") monotonic
+  br label %bb29
+bb29:
+  br label %bb34
+bb30:
+  %v76 = phi i32 [ 4294967295, %bb19 ], [ %v63, %bb22 ]
+  br label %bb31
+bb31:
+  %v77 = phi i32 [ %v72, %bb25 ], [ %v76, %bb30 ]
+  br label %bb32
+bb32:
+  br label %bb33
+bb33:
+  %v78 = phi i32 [ %v55, %bb6 ], [ %v77, %bb32 ]
+  br label %bb34
+bb34:
+  %v79 = phi i32 [ 4294967295, %bb29 ], [ %v78, %bb33 ]
+  ret i32 %v79
+bb35:
+  %v80 = icmp eq i64 %v58, 18446744073709551615
+  br i1 %v80, label %bb36, label %bb37
+bb36:
+  %v81 = insertvalue { i64, i64 } undef, i64 0, 0
+  %v82 = insertvalue { i64, i64 } %v81, i64 %v58, 1
+  %v83 = extractvalue { i64, i64 } %v82, 0
+  %v84 = extractvalue { i64, i64 } %v82, 1
+  br label %bb38
+bb37:
+  %v85 = insertvalue { i64, i64 } undef, i64 1, 0
+  %v86 = insertvalue { i64, i64 } %v85, i64 %v58, 1
+  %v87 = extractvalue { i64, i64 } %v86, 0
+  %v88 = extractvalue { i64, i64 } %v86, 1
+  br label %bb38
+bb38:
+  %v89 = phi i64 [ %v83, %bb36 ], [ %v87, %bb37 ]
+  %v90 = phi i64 [ %v84, %bb36 ], [ %v88, %bb37 ]
+  %v91 = insertvalue { i64, i64 } undef, i64 %v89, 0
+  %v92 = insertvalue { i64, i64 } %v91, i64 %v90, 1
+  %v93 = extractvalue { i64, i64 } %v92, 0
+  %v94 = bitcast i64 %v93 to i64
+  %v95 = icmp eq i64 %v94, 0
+  br i1 %v95, label %bb12, label %bb39
+bb39:
+  %v96 = icmp eq i64 %v94, 1
+  br i1 %v96, label %bb11, label %bb10
+}
+
+declare void @llvm.nvvm.membar.gl()
+
+define i32 @_RINvNtCshAQQRahQDk9_14tsdf_rust_cuda7kernels14find_or_insertKb1_KBX_KBX_KBX_KBX_EB4_(ptr %v0, i32 %v1, ptr %v2, i32 %v3, ptr %v4, ptr %v5, i32 %v6, i32 %v7, i32 %v8) alwaysinline #0 {
+entry:
+  br label %bb0
+bb0:
+  %v9 = phi ptr [ %v0, %entry ]
+  %v10 = phi i32 [ %v1, %entry ]
+  %v11 = phi ptr [ %v2, %entry ]
+  %v12 = phi i32 [ %v3, %entry ]
+  %v13 = phi ptr [ %v4, %entry ]
+  %v14 = phi ptr [ %v5, %entry ]
+  %v15 = phi i32 [ %v6, %entry ]
+  %v16 = phi i32 [ %v7, %entry ]
+  %v17 = phi i32 [ %v8, %entry ]
+  %v18 = sext i32 %v15 to i64
+  %v19 = add i64 %v18, 1048576
+  %v20 = and i64 42, 63
+  %v21 = shl i64 %v19, %v20
+  %v22 = sext i32 %v16 to i64
+  %v23 = add i64 %v22, 1048576
+  %v24 = and i64 21, 63
+  %v25 = shl i64 %v23, %v24
+  %v26 = or i64 %v21, %v25
+  %v27 = sext i32 %v17 to i64
+  %v28 = add i64 %v27, 1048576
+  %v29 = or i64 %v26, %v28
+  %v30 = add i32 %v10, 1
+  %v31 = bitcast i32 %v15 to i32
+  %v32 = mul i32 %v31, 73856093
+  %v33 = bitcast i32 %v16 to i32
+  %v34 = mul i32 %v33, 19349663
+  %v35 = xor i32 %v32, %v34
+  %v36 = bitcast i32 %v17 to i32
+  %v37 = mul i32 %v36, 83492791
+  %v38 = xor i32 %v35, %v37
+  %v39 = and i32 %v38, %v10
+  br label %bb1
+bb1:
+  %v40 = phi i32 [ 0, %bb0 ], [ %v90, %bb41 ]
+  %v41 = icmp ult i32 %v40, %v30
+  %v42 = xor i1 %v41, 1
+  br i1 %v42, label %bb42, label %bb2
+bb2:
+  %v43 = add i32 %v39, %v40
+  %v44 = and i32 %v43, %v10
+  %v45 = zext i32 %v44 to i64
+  %v46 = mul i64 %v45, 2
+  %v47 = getelementptr inbounds i64, ptr %v9, i64 %v46
+  %v48 = getelementptr inbounds i64, ptr %v47, i64 1
+  %v49 = bitcast ptr %v48 to ptr
+  %v50 = bitcast ptr %v47 to ptr
+  %v51 = call i64 asm sideeffect "ld.relaxed.gpu.b64 $0, [$1];", "=l,l,~{memory}"(ptr %v50)
+  br label %bb3
+bb3:
+  %v52 = icmp eq i64 %v51, %v29
+  %v53 = xor i1 %v52, 1
+  br i1 %v53, label %bb11, label %bb4
+bb4:
+  %v54 = bitcast ptr %v48 to ptr
+  %v55 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v54)
+  br label %bb5
+bb5:
+  br label %bb6
+bb6:
+  %v56 = phi i32 [ %v55, %bb5 ], [ %v59, %bb8 ]
+  %v57 = icmp slt i32 %v56, 0
+  %v58 = xor i1 %v57, 1
+  br i1 %v58, label %bb9, label %bb7
+bb7:
+  %v59 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v54)
+  br label %bb8
+bb8:
+  br label %bb6
+bb9:
+  br label %bb10
+bb10:
+  br label %bb47
+bb11:
+  %v60 = icmp eq i64 %v51, 18446744073709551615
+  br i1 %v60, label %bb12, label %bb41
+bb12:
+  br label %bb13
+bb13:
+  %v61 = cmpxchg ptr %v50, i64 18446744073709551615, i64 %v29 syncscope("device") monotonic monotonic
+  %v62 = extractvalue { i64, i1 } %v61, 0
+  br label %bb49
+bb14:
+  unreachable
+bb15:
+  %v63 = extractvalue { i64, i64 } %v109, 1
+  %v64 = icmp eq i64 %v63, %v29
+  %v65 = xor i1 %v64, 1
+  br i1 %v65, label %bb40, label %bb33
+bb16:
+  br label %bb17
+bb17:
+  %v66 = bitcast ptr %v11 to ptr
+  %v67 = atomicrmw add ptr %v66, i32 1 syncscope("device") monotonic
+  br label %bb18
+bb18:
+  %v68 = icmp sge i32 %v67, %v12
+  %v69 = xor i1 %v68, 1
+  br i1 %v69, label %bb25, label %bb19
+bb19:
+  %v70 = bitcast ptr %v11 to ptr
+  %v71 = atomicrmw sub ptr %v70, i32 1 syncscope("device") monotonic
+  br label %bb20
+bb20:
+  br label %bb21
+bb21:
+  call void @llvm.nvvm.membar.gl() #0
+  br label %bb22
+bb22:
+  %v73 = atomicrmw xchg ptr %v50, i64 18446744073709551615 syncscope("device") monotonic
+  br label %bb23
+bb23:
+  %v74 = bitcast ptr %v13 to ptr
+  %v75 = atomicrmw add ptr %v74, i64 1 syncscope("device") monotonic
+  br label %bb24
+bb24:
+  br label %bb44
+bb25:
+  br label %bb26
+bb26:
+  %v76 = mul i32 %v67, 3
+  %v77 = sext i32 %v76 to i64
+  %v78 = getelementptr inbounds i32, ptr %v14, i64 %v77
+  store i32 %v15, ptr %v78, align 4
+  %v79 = getelementptr inbounds i32, ptr %v78, i64 1
+  store i32 %v16, ptr %v79, align 4
+  %v80 = getelementptr inbounds i32, ptr %v78, i64 2
+  store i32 %v17, ptr %v80, align 4
+  br label %bb27
+bb27:
+  br label %bb28
+bb28:
+  br label %bb29
+bb29:
+  call void @llvm.nvvm.membar.gl() #0
+  br label %bb30
+bb30:
+  %v82 = bitcast ptr %v48 to ptr
+  %v83 = atomicrmw xchg ptr %v82, i32 %v67 syncscope("device") monotonic
+  br label %bb31
+bb31:
+  br label %bb32
+bb32:
+  br label %bb44
+bb33:
+  %v84 = bitcast ptr %v48 to ptr
+  %v85 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v84)
+  br label %bb34
+bb34:
+  br label %bb35
+bb35:
+  %v86 = phi i32 [ %v85, %bb34 ], [ %v89, %bb37 ]
+  %v87 = icmp slt i32 %v86, 0
+  %v88 = xor i1 %v87, 1
+  br i1 %v88, label %bb38, label %bb36
+bb36:
+  %v89 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v84)
+  br label %bb37
+bb37:
+  br label %bb35
+bb38:
+  br label %bb39
+bb39:
+  br label %bb45
+bb40:
+  br label %bb41
+bb41:
+  %v90 = add i32 %v40, 1
+  br label %bb1
+bb42:
+  %v91 = bitcast ptr %v13 to ptr
+  %v92 = atomicrmw add ptr %v91, i64 1 syncscope("device") monotonic
+  br label %bb43
+bb43:
+  br label %bb48
+bb44:
+  %v93 = phi i32 [ 4294967295, %bb24 ], [ %v67, %bb32 ]
+  br label %bb45
+bb45:
+  %v94 = phi i32 [ %v86, %bb39 ], [ %v93, %bb44 ]
+  br label %bb46
+bb46:
+  br label %bb47
+bb47:
+  %v95 = phi i32 [ %v56, %bb10 ], [ %v94, %bb46 ]
+  br label %bb48
+bb48:
+  %v96 = phi i32 [ 4294967295, %bb43 ], [ %v95, %bb47 ]
+  ret i32 %v96
+bb49:
+  %v97 = icmp eq i64 %v62, 18446744073709551615
+  br i1 %v97, label %bb50, label %bb51
+bb50:
+  %v98 = insertvalue { i64, i64 } undef, i64 0, 0
+  %v99 = insertvalue { i64, i64 } %v98, i64 %v62, 1
+  %v100 = extractvalue { i64, i64 } %v99, 0
+  %v101 = extractvalue { i64, i64 } %v99, 1
+  br label %bb52
+bb51:
+  %v102 = insertvalue { i64, i64 } undef, i64 1, 0
+  %v103 = insertvalue { i64, i64 } %v102, i64 %v62, 1
+  %v104 = extractvalue { i64, i64 } %v103, 0
+  %v105 = extractvalue { i64, i64 } %v103, 1
+  br label %bb52
+bb52:
+  %v106 = phi i64 [ %v100, %bb50 ], [ %v104, %bb51 ]
+  %v107 = phi i64 [ %v101, %bb50 ], [ %v105, %bb51 ]
+  %v108 = insertvalue { i64, i64 } undef, i64 %v106, 0
+  %v109 = insertvalue { i64, i64 } %v108, i64 %v107, 1
+  %v110 = extractvalue { i64, i64 } %v109, 0
+  %v111 = bitcast i64 %v110 to i64
+  %v112 = icmp eq i64 %v111, 0
+  br i1 %v112, label %bb16, label %bb53
+bb53:
+  %v113 = icmp eq i64 %v111, 1
+  br i1 %v113, label %bb15, label %bb14
+}
+
+define i32 @_RINvNtCshAQQRahQDk9_14tsdf_rust_cuda7kernels14find_or_insertKb1_KBX_Kb0_KBX_KBX_EB4_(ptr %v0, i32 %v1, ptr %v2, i32 %v3, ptr %v4, ptr %v5, i32 %v6, i32 %v7, i32 %v8) alwaysinline #0 {
+entry:
+  br label %bb0
+bb0:
+  %v9 = phi ptr [ %v0, %entry ]
+  %v10 = phi i32 [ %v1, %entry ]
+  %v11 = phi ptr [ %v2, %entry ]
+  %v12 = phi i32 [ %v3, %entry ]
+  %v13 = phi ptr [ %v4, %entry ]
+  %v14 = phi ptr [ %v5, %entry ]
+  %v15 = phi i32 [ %v6, %entry ]
+  %v16 = phi i32 [ %v7, %entry ]
+  %v17 = phi i32 [ %v8, %entry ]
+  %v18 = sext i32 %v15 to i64
+  %v19 = add i64 %v18, 1048576
+  %v20 = and i64 42, 63
+  %v21 = shl i64 %v19, %v20
+  %v22 = sext i32 %v16 to i64
+  %v23 = add i64 %v22, 1048576
+  %v24 = and i64 21, 63
+  %v25 = shl i64 %v23, %v24
+  %v26 = or i64 %v21, %v25
+  %v27 = sext i32 %v17 to i64
+  %v28 = add i64 %v27, 1048576
+  %v29 = or i64 %v26, %v28
+  %v30 = add i32 %v10, 1
+  %v31 = bitcast i32 %v15 to i32
+  %v32 = mul i32 %v31, 73856093
+  %v33 = bitcast i32 %v16 to i32
+  %v34 = mul i32 %v33, 19349663
+  %v35 = xor i32 %v32, %v34
+  %v36 = bitcast i32 %v17 to i32
+  %v37 = mul i32 %v36, 83492791
+  %v38 = xor i32 %v35, %v37
+  %v39 = and i32 %v38, %v10
+  br label %bb1
+bb1:
+  %v40 = phi i32 [ 0, %bb0 ], [ %v91, %bb41 ]
+  %v41 = icmp ult i32 %v40, %v30
+  %v42 = xor i1 %v41, 1
+  br i1 %v42, label %bb42, label %bb2
+bb2:
+  %v43 = add i32 %v39, %v40
+  %v44 = and i32 %v43, %v10
+  %v45 = zext i32 %v44 to i64
+  %v46 = mul i64 %v45, 2
+  %v47 = getelementptr inbounds i64, ptr %v9, i64 %v46
+  %v48 = getelementptr inbounds i64, ptr %v47, i64 1
+  %v49 = bitcast ptr %v48 to ptr
+  %v50 = bitcast ptr %v47 to ptr
+  %v51 = call i64 asm sideeffect "ld.relaxed.gpu.b64 $0, [$1];", "=l,l,~{memory}"(ptr %v50)
+  br label %bb3
+bb3:
+  %v52 = icmp eq i64 %v51, %v29
+  %v53 = xor i1 %v52, 1
+  br i1 %v53, label %bb11, label %bb4
+bb4:
+  %v54 = bitcast ptr %v48 to ptr
+  %v55 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v54)
+  br label %bb5
+bb5:
+  br label %bb6
+bb6:
+  %v56 = phi i32 [ %v55, %bb5 ], [ %v59, %bb8 ]
+  %v57 = icmp slt i32 %v56, 0
+  %v58 = xor i1 %v57, 1
+  br i1 %v58, label %bb9, label %bb7
+bb7:
+  %v59 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v54)
+  br label %bb8
+bb8:
+  br label %bb6
+bb9:
+  br label %bb10
+bb10:
+  br label %bb47
+bb11:
+  %v60 = icmp eq i64 %v51, 18446744073709551615
+  br i1 %v60, label %bb12, label %bb41
+bb12:
+  br label %bb13
+bb13:
+  %v61 = cmpxchg ptr %v50, i64 18446744073709551615, i64 %v29 syncscope("device") monotonic monotonic
+  %v62 = extractvalue { i64, i1 } %v61, 0
+  br label %bb49
+bb14:
+  unreachable
+bb15:
+  %v63 = extractvalue { i64, i64 } %v110, 1
+  %v64 = icmp eq i64 %v63, %v29
+  %v65 = xor i1 %v64, 1
+  br i1 %v65, label %bb40, label %bb33
+bb16:
+  br label %bb17
+bb17:
+  %v66 = and i32 %v15, 1023
+  %v67 = icmp slt i32 %v66, 0
+  %v68 = xor i1 %v67, 1
+  br i1 %v68, label %bb56, label %bb54
+bb18:
+  %v69 = icmp sge i32 %v118, %v12
+  %v70 = xor i1 %v69, 1
+  br i1 %v70, label %bb25, label %bb19
+bb19:
+  %v71 = bitcast ptr %v11 to ptr
+  %v72 = atomicrmw sub ptr %v71, i32 1 syncscope("device") monotonic
+  br label %bb20
+bb20:
+  br label %bb21
+bb21:
+  call void @llvm.nvvm.membar.gl() #0
+  br label %bb22
+bb22:
+  %v74 = atomicrmw xchg ptr %v50, i64 18446744073709551615 syncscope("device") monotonic
+  br label %bb23
+bb23:
+  %v75 = bitcast ptr %v13 to ptr
+  %v76 = atomicrmw add ptr %v75, i64 1 syncscope("device") monotonic
+  br label %bb24
+bb24:
+  br label %bb44
+bb25:
+  br label %bb26
+bb26:
+  %v77 = mul i32 %v118, 3
+  %v78 = sext i32 %v77 to i64
+  %v79 = getelementptr inbounds i32, ptr %v14, i64 %v78
+  store i32 %v15, ptr %v79, align 4
+  %v80 = getelementptr inbounds i32, ptr %v79, i64 1
+  store i32 %v16, ptr %v80, align 4
+  %v81 = getelementptr inbounds i32, ptr %v79, i64 2
+  store i32 %v17, ptr %v81, align 4
+  br label %bb27
+bb27:
+  br label %bb28
+bb28:
+  br label %bb29
+bb29:
+  call void @llvm.nvvm.membar.gl() #0
+  br label %bb30
+bb30:
+  %v83 = bitcast ptr %v48 to ptr
+  %v84 = atomicrmw xchg ptr %v83, i32 %v118 syncscope("device") monotonic
+  br label %bb31
+bb31:
+  br label %bb32
+bb32:
+  br label %bb44
+bb33:
+  %v85 = bitcast ptr %v48 to ptr
+  %v86 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v85)
+  br label %bb34
+bb34:
+  br label %bb35
+bb35:
+  %v87 = phi i32 [ %v86, %bb34 ], [ %v90, %bb37 ]
+  %v88 = icmp slt i32 %v87, 0
+  %v89 = xor i1 %v88, 1
+  br i1 %v89, label %bb38, label %bb36
+bb36:
+  %v90 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v85)
+  br label %bb37
+bb37:
+  br label %bb35
+bb38:
+  br label %bb39
+bb39:
+  br label %bb45
+bb40:
+  br label %bb41
+bb41:
+  %v91 = add i32 %v40, 1
+  br label %bb1
+bb42:
+  %v92 = bitcast ptr %v13 to ptr
+  %v93 = atomicrmw add ptr %v92, i64 1 syncscope("device") monotonic
+  br label %bb43
+bb43:
+  br label %bb48
+bb44:
+  %v94 = phi i32 [ 4294967295, %bb24 ], [ %v118, %bb32 ]
+  br label %bb45
+bb45:
+  %v95 = phi i32 [ %v87, %bb39 ], [ %v94, %bb44 ]
+  br label %bb46
+bb46:
+  br label %bb47
+bb47:
+  %v96 = phi i32 [ %v56, %bb10 ], [ %v95, %bb46 ]
+  br label %bb48
+bb48:
+  %v97 = phi i32 [ 4294967295, %bb43 ], [ %v96, %bb47 ]
+  ret i32 %v97
+bb49:
+  %v98 = icmp eq i64 %v62, 18446744073709551615
+  br i1 %v98, label %bb50, label %bb51
+bb50:
+  %v99 = insertvalue { i64, i64 } undef, i64 0, 0
+  %v100 = insertvalue { i64, i64 } %v99, i64 %v62, 1
+  %v101 = extractvalue { i64, i64 } %v100, 0
+  %v102 = extractvalue { i64, i64 } %v100, 1
+  br label %bb52
+bb51:
+  %v103 = insertvalue { i64, i64 } undef, i64 1, 0
+  %v104 = insertvalue { i64, i64 } %v103, i64 %v62, 1
+  %v105 = extractvalue { i64, i64 } %v104, 0
+  %v106 = extractvalue { i64, i64 } %v104, 1
+  br label %bb52
+bb52:
+  %v107 = phi i64 [ %v101, %bb50 ], [ %v105, %bb51 ]
+  %v108 = phi i64 [ %v102, %bb50 ], [ %v106, %bb51 ]
+  %v109 = insertvalue { i64, i64 } undef, i64 %v107, 0
+  %v110 = insertvalue { i64, i64 } %v109, i64 %v108, 1
+  %v111 = extractvalue { i64, i64 } %v110, 0
+  %v112 = bitcast i64 %v111 to i64
+  %v113 = icmp eq i64 %v112, 0
+  br i1 %v113, label %bb16, label %bb53
+bb53:
+  %v114 = icmp eq i64 %v112, 1
+  br i1 %v114, label %bb15, label %bb14
+bb54:
+  %v115 = icmp eq i32 %v66, 2147483648
+  %v116 = xor i1 %v115, 1
+  br i1 %v116, label %bb55, label %bb58
+bb55:
+  %v117 = sub i32 0, %v66
+  br label %bb57
+bb56:
+  br label %bb57
+bb57:
+  %v118 = phi i32 [ %v117, %bb55 ], [ %v66, %bb56 ]
+  br label %bb18
+bb58:
+  call void @llvm.trap() #0
+  unreachable
+}
+
+define i32 @_RINvNtCshAQQRahQDk9_14tsdf_rust_cuda7kernels14find_or_insertKb1_Kb0_KBX_KBX_KBX_EB4_(ptr %v0, i32 %v1, ptr %v2, i32 %v3, ptr %v4, ptr %v5, i32 %v6, i32 %v7, i32 %v8) alwaysinline #0 {
+entry:
+  br label %bb0
+bb0:
+  %v9 = phi ptr [ %v0, %entry ]
+  %v10 = phi i32 [ %v1, %entry ]
+  %v11 = phi ptr [ %v2, %entry ]
+  %v12 = phi i32 [ %v3, %entry ]
+  %v13 = phi ptr [ %v4, %entry ]
+  %v14 = phi ptr [ %v5, %entry ]
+  %v15 = phi i32 [ %v6, %entry ]
+  %v16 = phi i32 [ %v7, %entry ]
+  %v17 = phi i32 [ %v8, %entry ]
+  %v18 = sext i32 %v15 to i64
+  %v19 = add i64 %v18, 1048576
+  %v20 = and i64 42, 63
+  %v21 = shl i64 %v19, %v20
+  %v22 = sext i32 %v16 to i64
+  %v23 = add i64 %v22, 1048576
+  %v24 = and i64 21, 63
+  %v25 = shl i64 %v23, %v24
+  %v26 = or i64 %v21, %v25
+  %v27 = sext i32 %v17 to i64
+  %v28 = add i64 %v27, 1048576
+  %v29 = or i64 %v26, %v28
+  %v30 = add i32 %v10, 1
+  %v31 = bitcast i32 %v15 to i32
+  %v32 = mul i32 %v31, 73856093
+  %v33 = bitcast i32 %v16 to i32
+  %v34 = mul i32 %v33, 19349663
+  %v35 = xor i32 %v32, %v34
+  %v36 = bitcast i32 %v17 to i32
+  %v37 = mul i32 %v36, 83492791
+  %v38 = xor i32 %v35, %v37
+  %v39 = and i32 %v38, %v10
+  br label %bb1
+bb1:
+  %v40 = phi i32 [ 0, %bb0 ], [ %v82, %bb33 ]
+  %v41 = icmp ult i32 %v40, %v30
+  %v42 = xor i1 %v41, 1
+  br i1 %v42, label %bb34, label %bb2
+bb2:
+  %v43 = add i32 %v39, %v40
+  %v44 = and i32 %v43, %v10
+  %v45 = zext i32 %v44 to i64
+  %v46 = mul i64 %v45, 2
+  %v47 = getelementptr inbounds i64, ptr %v9, i64 %v46
+  %v48 = getelementptr inbounds i64, ptr %v47, i64 1
+  %v49 = bitcast ptr %v48 to ptr
+  %v50 = bitcast ptr %v47 to ptr
+  %v51 = call i64 asm sideeffect "ld.relaxed.gpu.b64 $0, [$1];", "=l,l,~{memory}"(ptr %v50)
+  br label %bb3
+bb3:
+  %v52 = icmp eq i64 %v51, %v29
+  %v53 = xor i1 %v52, 1
+  br i1 %v53, label %bb7, label %bb4
+bb4:
+  %v54 = bitcast ptr %v48 to ptr
+  %v55 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v54)
+  br label %bb5
+bb5:
+  br label %bb6
+bb6:
+  br label %bb39
+bb7:
+  %v56 = icmp eq i64 %v51, 18446744073709551615
+  br i1 %v56, label %bb8, label %bb33
+bb8:
+  br label %bb9
+bb9:
+  %v57 = cmpxchg ptr %v50, i64 18446744073709551615, i64 %v29 syncscope("device") monotonic monotonic
+  %v58 = extractvalue { i64, i1 } %v57, 0
+  br label %bb41
+bb10:
+  unreachable
+bb11:
+  %v59 = extractvalue { i64, i64 } %v101, 1
+  %v60 = icmp eq i64 %v59, %v29
+  %v61 = xor i1 %v60, 1
+  br i1 %v61, label %bb32, label %bb29
+bb12:
+  br label %bb13
+bb13:
+  %v62 = bitcast ptr %v11 to ptr
+  %v63 = atomicrmw add ptr %v62, i32 1 syncscope("device") monotonic
+  br label %bb14
+bb14:
+  %v64 = icmp sge i32 %v63, %v12
+  %v65 = xor i1 %v64, 1
+  br i1 %v65, label %bb21, label %bb15
+bb15:
+  %v66 = bitcast ptr %v11 to ptr
+  %v67 = atomicrmw sub ptr %v66, i32 1 syncscope("device") monotonic
+  br label %bb16
+bb16:
+  br label %bb17
+bb17:
+  call void @llvm.nvvm.membar.gl() #0
+  br label %bb18
+bb18:
+  %v69 = atomicrmw xchg ptr %v50, i64 18446744073709551615 syncscope("device") monotonic
+  br label %bb19
+bb19:
+  %v70 = bitcast ptr %v13 to ptr
+  %v71 = atomicrmw add ptr %v70, i64 1 syncscope("device") monotonic
+  br label %bb20
+bb20:
+  br label %bb36
+bb21:
+  br label %bb22
+bb22:
+  %v72 = mul i32 %v63, 3
+  %v73 = sext i32 %v72 to i64
+  %v74 = getelementptr inbounds i32, ptr %v14, i64 %v73
+  store i32 %v15, ptr %v74, align 4
+  %v75 = getelementptr inbounds i32, ptr %v74, i64 1
+  store i32 %v16, ptr %v75, align 4
+  %v76 = getelementptr inbounds i32, ptr %v74, i64 2
+  store i32 %v17, ptr %v76, align 4
+  br label %bb23
+bb23:
+  br label %bb24
+bb24:
+  br label %bb25
+bb25:
+  call void @llvm.nvvm.membar.gl() #0
+  br label %bb26
+bb26:
+  %v78 = bitcast ptr %v48 to ptr
+  %v79 = atomicrmw xchg ptr %v78, i32 %v63 syncscope("device") monotonic
+  br label %bb27
+bb27:
+  br label %bb28
+bb28:
+  br label %bb36
+bb29:
+  %v80 = bitcast ptr %v48 to ptr
+  %v81 = call i32 asm sideeffect "ld.relaxed.gpu.b32 $0, [$1];", "=r,l,~{memory}"(ptr %v80)
+  br label %bb30
+bb30:
+  br label %bb31
+bb31:
+  br label %bb37
+bb32:
+  br label %bb33
+bb33:
+  %v82 = add i32 %v40, 1
+  br label %bb1
+bb34:
+  %v83 = bitcast ptr %v13 to ptr
+  %v84 = atomicrmw add ptr %v83, i64 1 syncscope("device") monotonic
+  br label %bb35
+bb35:
+  br label %bb40
+bb36:
+  %v85 = phi i32 [ 4294967295, %bb20 ], [ %v63, %bb28 ]
+  br label %bb37
+bb37:
+  %v86 = phi i32 [ %v81, %bb31 ], [ %v85, %bb36 ]
+  br label %bb38
+bb38:
+  br label %bb39
+bb39:
+  %v87 = phi i32 [ %v55, %bb6 ], [ %v86, %bb38 ]
+  br label %bb40
+bb40:
+  %v88 = phi i32 [ 4294967295, %bb35 ], [ %v87, %bb39 ]
+  ret i32 %v88
+bb41:
+  %v89 = icmp eq i64 %v58, 18446744073709551615
+  br i1 %v89, label %bb42, label %bb43
+bb42:
+  %v90 = insertvalue { i64, i64 } undef, i64 0, 0
+  %v91 = insertvalue { i64, i64 } %v90, i64 %v58, 1
+  %v92 = extractvalue { i64, i64 } %v91, 0
+  %v93 = extractvalue { i64, i64 } %v91, 1
+  br label %bb44
+bb43:
+  %v94 = insertvalue { i64, i64 } undef, i64 1, 0
+  %v95 = insertvalue { i64, i64 } %v94, i64 %v58, 1
+  %v96 = extractvalue { i64, i64 } %v95, 0
+  %v97 = extractvalue { i64, i64 } %v95, 1
+  br label %bb44
+bb44:
+  %v98 = phi i64 [ %v92, %bb42 ], [ %v96, %bb43 ]
+  %v99 = phi i64 [ %v93, %bb42 ], [ %v97, %bb43 ]
+  %v100 = insertvalue { i64, i64 } undef, i64 %v98, 0
+  %v101 = insertvalue { i64, i64 } %v100, i64 %v99, 1
+  %v102 = extractvalue { i64, i64 } %v101, 0
+  %v103 = bitcast i64 %v102 to i64
+  %v104 = icmp eq i64 %v103, 0
+  br i1 %v104, label %bb12, label %bb45
+bb45:
+  %v105 = icmp eq i64 %v103, 1
+  br i1 %v105, label %bb11, label %bb10
 }
 
 declare i32 @llvm.nvvm.read.ptx.sreg.ntid.y()
@@ -964,13 +2793,18 @@ bb0:
 }
 
 
-@llvm.used = appending global [2 x ptr] [ptr @alloc_kernel, ptr @update_kernel], section "llvm.metadata"
+@llvm.used = appending global [7 x ptr] [ptr @alloc_kernel, ptr @alloc_kernel_nocas, ptr @alloc_kernel_nocount, ptr @alloc_kernel_nofence, ptr @alloc_kernel_nopublish, ptr @alloc_kernel_nospin, ptr @update_kernel], section "llvm.metadata"
 
 attributes #0 = { convergent }
 
 !0 = !{ptr @update_kernel, !"kernel", i32 1}
-!1 = !{ptr @alloc_kernel, !"kernel", i32 1}
-!nvvm.annotations = !{!0, !1}
+!1 = !{ptr @alloc_kernel_nofence, !"kernel", i32 1}
+!2 = !{ptr @alloc_kernel_nocas, !"kernel", i32 1}
+!3 = !{ptr @alloc_kernel_nopublish, !"kernel", i32 1}
+!4 = !{ptr @alloc_kernel, !"kernel", i32 1}
+!5 = !{ptr @alloc_kernel_nocount, !"kernel", i32 1}
+!6 = !{ptr @alloc_kernel_nospin, !"kernel", i32 1}
+!nvvm.annotations = !{!0, !1, !2, !3, !4, !5, !6}
 
-!nvvmir.version = !{!2}
-!2 = !{i32 2, i32 0, i32 3, i32 2}
+!nvvmir.version = !{!7}
+!7 = !{i32 2, i32 0, i32 3, i32 2}

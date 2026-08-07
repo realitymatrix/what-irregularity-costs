@@ -138,7 +138,16 @@ mod kernels {
 
     /// Find or insert. Returns -1 when the pool is exhausted.
     #[inline(always)]
-    unsafe fn find_or_insert(
+    /// MEASUREMENT ONLY beyond the production instantiation.
+    ///
+    /// `CAS`, `SPIN` and `COUNT` are const so each variant specialises rather
+    /// than branching inside the probe loop; a runtime flag would change the
+    /// codegen being measured. The production kernel instantiates
+    /// `<true, true, true>`, which is byte-identical to the previous
+    /// non-generic function. Any other instantiation is deliberately WRONG and
+    /// exists only to price one component. See docs/A3-A4-GAP.md.
+    unsafe fn find_or_insert<const CAS: bool, const SPIN: bool, const COUNT: bool,
+                             const FENCE: bool, const PUBLISH: bool>(
         table: *mut i64,
         mask: u32,
         counters: *mut i32,
@@ -178,12 +187,18 @@ mod kernels {
                     // lives in one device's global memory. See docs/A3-A4-GAP.md.
                     let idx_atomic = DeviceAtomicI32::from_ptr(idx_ptr);
                     let mut idx = idx_atomic.load(AtomicOrdering::Relaxed);
-                    while idx < 0 {
-                        idx = idx_atomic.load(AtomicOrdering::Relaxed);
+                    if SPIN {
+                        while idx < 0 {
+                            idx = idx_atomic.load(AtomicOrdering::Relaxed);
+                        }
                     }
                     return idx;
                 }
                 if key == EMPTY_KEY {
+                    if !CAS {
+                        // Price the compare-exchange: probe and read, never insert.
+                        return -1;
+                    }
                     match key_atomic.compare_exchange(
                         EMPTY_KEY,
                         want,
@@ -191,8 +206,14 @@ mod kernels {
                     AtomicOrdering::Relaxed,
                     ) {
                         Ok(_) => {
-                            let idx = DeviceAtomicI32::from_ptr(counters)
-                                .fetch_add(1, AtomicOrdering::Relaxed);
+                            let idx = if COUNT {
+                                DeviceAtomicI32::from_ptr(counters)
+                                    .fetch_add(1, AtomicOrdering::Relaxed)
+                            } else {
+                                // Price the counter contention: a fixed slot.
+                                // Wrong, and only ever launched by the probe.
+                                (bx & 0x3ff).abs()
+                            };
                             if idx >= pool_capacity {
                                 DeviceAtomicI32::from_ptr(counters)
                                     .fetch_sub(1, AtomicOrdering::Relaxed);
@@ -202,31 +223,37 @@ mod kernels {
                             // also rejects ("Illegal instruction: fence"). The
                             // ordering comes from an explicit threadfence, the
                             // same construct A3 uses.
-                            threadfence();
+                            if FENCE { threadfence(); }
                             key_atomic.swap(EMPTY_KEY, AtomicOrdering::Relaxed);
                                 DeviceAtomicI64::from_ptr(drop_count)
                                     .fetch_add(1, AtomicOrdering::Relaxed);
                                 return -1;
                             }
-                            let bc = block_coord.add((idx * 3) as usize);
-                            bc.write(bx);
-                            bc.add(1).write(by);
-                            bc.add(2).write(bz);
+                            if PUBLISH {
+                                let bc = block_coord.add((idx * 3) as usize);
+                                bc.write(bx);
+                                bc.add(1).write(by);
+                                bc.add(2).write(bz);
+                            }
                             // Publish the index only after the coordinate writes
                         // are visible. Explicit threadfence + relaxed exchange,
                         // exactly what A3 does (__threadfence + atomicExch):
                         // a Release-ordered RMW would lower to an LLVM fence,
                         // which libNVVM rejects.
-                        threadfence();
-                        DeviceAtomicI32::from_ptr(idx_ptr).swap(idx, AtomicOrdering::Relaxed);
+                        if PUBLISH {
+                            if FENCE { threadfence(); }
+                            DeviceAtomicI32::from_ptr(idx_ptr).swap(idx, AtomicOrdering::Relaxed);
+                        }
                             return idx;
                         }
                         Err(actual) => {
                             if actual == want {
                                 let idx_atomic = DeviceAtomicI32::from_ptr(idx_ptr);
                                 let mut idx = idx_atomic.load(AtomicOrdering::Relaxed);
-                                while idx < 0 {
-                                    idx = idx_atomic.load(AtomicOrdering::Relaxed);
+                                if SPIN {
+                                    while idx < 0 {
+                                        idx = idx_atomic.load(AtomicOrdering::Relaxed);
+                                    }
                                 }
                                 return idx;
                             }
@@ -295,7 +322,380 @@ mod kernels {
                 let cz = ((vz as f32) + 0.5) * voxel_size;
                 let (ex, ey, ez) = (cx - cam_x, cy - cam_y, cz - cam_z);
                 if dist - (ex * ex + ey * ey + ez * ez).sqrt() >= -trunc {
-                    find_or_insert(
+                    find_or_insert::<true, true, true, true, true>(
+                        table.as_ptr() as *mut i64,
+                        hash_mask,
+                        counters.as_ptr() as *mut i32,
+                        pool_capacity,
+                        drop_count.as_ptr() as *mut i64,
+                        block_coord.as_ptr() as *mut i32,
+                        floor_div(vx, BLOCK_DIM),
+                        floor_div(vy, BLOCK_DIM),
+                        floor_div(vz, BLOCK_DIM),
+                    );
+                }
+                s += 1;
+            }
+        }
+    }
+
+    /// MEASUREMENT ONLY, and deliberately incorrect. Insert normally but never wait for a peer to publish `block_idx`. Returns a
+    /// stale -1 for a block another thread is mid-inserting, so the block count
+    /// is wrong. Prices the publication spin.
+    ///
+    /// Exists to bisect the A4/A3 allocate gap; see docs/A3-A4-GAP.md.
+    #[kernel]
+    pub fn alloc_kernel_nospin(
+        positions: &[f32],
+        table: &[i64],
+        counters: &[i32],
+        block_coord: &[i32],
+        drop_count: &[i64],
+        n_points: i32,
+        pool_capacity: i32,
+        hash_mask: u32,
+        voxel_size: f32,
+        trunc: f32,
+        cam_x: f32,
+        cam_y: f32,
+        cam_z: f32,
+        radius_sq: f32,
+    ) {
+        let i = thread::index_1d().get() as i32;
+        if i >= n_points {
+            return;
+        }
+        unsafe {
+            let p = positions.as_ptr().add((i * 3) as usize);
+            let (px, py, pz) = (*p, *p.add(1), *p.add(2));
+            let (dx, dy, dz) = (px - cam_x, py - cam_y, pz - cam_z);
+            let d2 = dx * dx + dy * dy + dz * dz;
+            if radius_sq > 0.0 && d2 > radius_sq {
+                return;
+            }
+            let dist = d2.sqrt();
+            if !(dist > 1e-6) {
+                return;
+            }
+            let (ux, uy, uz) = (dx / dist, dy / dist, dz / dist);
+            let inv_voxel = 1.0f32 / voxel_size;
+            let steps = ((trunc * inv_voxel).ceil() as i32).max(1);
+
+            let mut s = -steps;
+            while s <= steps {
+                let t = (s as f32) * voxel_size;
+                let vx = ((px + ux * t) * inv_voxel).floor() as i32;
+                let vy = ((py + uy * t) * inv_voxel).floor() as i32;
+                let vz = ((pz + uz * t) * inv_voxel).floor() as i32;
+
+                // Same occlusion cull as the update pass. Allocation must apply
+                // exactly the same gate, or the pool fills with blocks that
+                // never receive a contribution and the block count diverges
+                // from the other arms while the meshes still match.
+                let cx = ((vx as f32) + 0.5) * voxel_size;
+                let cy = ((vy as f32) + 0.5) * voxel_size;
+                let cz = ((vz as f32) + 0.5) * voxel_size;
+                let (ex, ey, ez) = (cx - cam_x, cy - cam_y, cz - cam_z);
+                if dist - (ex * ex + ey * ey + ez * ez).sqrt() >= -trunc {
+                    find_or_insert::<true, false, true, true, true>(
+                        table.as_ptr() as *mut i64,
+                        hash_mask,
+                        counters.as_ptr() as *mut i32,
+                        pool_capacity,
+                        drop_count.as_ptr() as *mut i64,
+                        block_coord.as_ptr() as *mut i32,
+                        floor_div(vx, BLOCK_DIM),
+                        floor_div(vy, BLOCK_DIM),
+                        floor_div(vz, BLOCK_DIM),
+                    );
+                }
+                s += 1;
+            }
+        }
+    }
+
+    /// MEASUREMENT ONLY, and deliberately incorrect. Insert normally but never wait for a peer to publish `block_idx`. Returns a
+    /// stale -1 for a block another thread is mid-inserting, so the block count
+    /// is wrong. Prices the publication spin.
+    ///
+    /// Exists to bisect the A4/A3 allocate gap; see docs/A3-A4-GAP.md.
+    #[kernel]
+    pub fn alloc_kernel_nofence(
+        positions: &[f32],
+        table: &[i64],
+        counters: &[i32],
+        block_coord: &[i32],
+        drop_count: &[i64],
+        n_points: i32,
+        pool_capacity: i32,
+        hash_mask: u32,
+        voxel_size: f32,
+        trunc: f32,
+        cam_x: f32,
+        cam_y: f32,
+        cam_z: f32,
+        radius_sq: f32,
+    ) {
+        let i = thread::index_1d().get() as i32;
+        if i >= n_points {
+            return;
+        }
+        unsafe {
+            let p = positions.as_ptr().add((i * 3) as usize);
+            let (px, py, pz) = (*p, *p.add(1), *p.add(2));
+            let (dx, dy, dz) = (px - cam_x, py - cam_y, pz - cam_z);
+            let d2 = dx * dx + dy * dy + dz * dz;
+            if radius_sq > 0.0 && d2 > radius_sq {
+                return;
+            }
+            let dist = d2.sqrt();
+            if !(dist > 1e-6) {
+                return;
+            }
+            let (ux, uy, uz) = (dx / dist, dy / dist, dz / dist);
+            let inv_voxel = 1.0f32 / voxel_size;
+            let steps = ((trunc * inv_voxel).ceil() as i32).max(1);
+
+            let mut s = -steps;
+            while s <= steps {
+                let t = (s as f32) * voxel_size;
+                let vx = ((px + ux * t) * inv_voxel).floor() as i32;
+                let vy = ((py + uy * t) * inv_voxel).floor() as i32;
+                let vz = ((pz + uz * t) * inv_voxel).floor() as i32;
+
+                // Same occlusion cull as the update pass. Allocation must apply
+                // exactly the same gate, or the pool fills with blocks that
+                // never receive a contribution and the block count diverges
+                // from the other arms while the meshes still match.
+                let cx = ((vx as f32) + 0.5) * voxel_size;
+                let cy = ((vy as f32) + 0.5) * voxel_size;
+                let cz = ((vz as f32) + 0.5) * voxel_size;
+                let (ex, ey, ez) = (cx - cam_x, cy - cam_y, cz - cam_z);
+                if dist - (ex * ex + ey * ey + ez * ez).sqrt() >= -trunc {
+                    find_or_insert::<true, true, true, false, true>(
+                        table.as_ptr() as *mut i64,
+                        hash_mask,
+                        counters.as_ptr() as *mut i32,
+                        pool_capacity,
+                        drop_count.as_ptr() as *mut i64,
+                        block_coord.as_ptr() as *mut i32,
+                        floor_div(vx, BLOCK_DIM),
+                        floor_div(vy, BLOCK_DIM),
+                        floor_div(vz, BLOCK_DIM),
+                    );
+                }
+                s += 1;
+            }
+        }
+    }
+
+    /// MEASUREMENT ONLY, and deliberately incorrect. Insert normally but never wait for a peer to publish `block_idx`. Returns a
+    /// stale -1 for a block another thread is mid-inserting, so the block count
+    /// is wrong. Prices the publication spin.
+    ///
+    /// Exists to bisect the A4/A3 allocate gap; see docs/A3-A4-GAP.md.
+    #[kernel]
+    pub fn alloc_kernel_nopublish(
+        positions: &[f32],
+        table: &[i64],
+        counters: &[i32],
+        block_coord: &[i32],
+        drop_count: &[i64],
+        n_points: i32,
+        pool_capacity: i32,
+        hash_mask: u32,
+        voxel_size: f32,
+        trunc: f32,
+        cam_x: f32,
+        cam_y: f32,
+        cam_z: f32,
+        radius_sq: f32,
+    ) {
+        let i = thread::index_1d().get() as i32;
+        if i >= n_points {
+            return;
+        }
+        unsafe {
+            let p = positions.as_ptr().add((i * 3) as usize);
+            let (px, py, pz) = (*p, *p.add(1), *p.add(2));
+            let (dx, dy, dz) = (px - cam_x, py - cam_y, pz - cam_z);
+            let d2 = dx * dx + dy * dy + dz * dz;
+            if radius_sq > 0.0 && d2 > radius_sq {
+                return;
+            }
+            let dist = d2.sqrt();
+            if !(dist > 1e-6) {
+                return;
+            }
+            let (ux, uy, uz) = (dx / dist, dy / dist, dz / dist);
+            let inv_voxel = 1.0f32 / voxel_size;
+            let steps = ((trunc * inv_voxel).ceil() as i32).max(1);
+
+            let mut s = -steps;
+            while s <= steps {
+                let t = (s as f32) * voxel_size;
+                let vx = ((px + ux * t) * inv_voxel).floor() as i32;
+                let vy = ((py + uy * t) * inv_voxel).floor() as i32;
+                let vz = ((pz + uz * t) * inv_voxel).floor() as i32;
+
+                // Same occlusion cull as the update pass. Allocation must apply
+                // exactly the same gate, or the pool fills with blocks that
+                // never receive a contribution and the block count diverges
+                // from the other arms while the meshes still match.
+                let cx = ((vx as f32) + 0.5) * voxel_size;
+                let cy = ((vy as f32) + 0.5) * voxel_size;
+                let cz = ((vz as f32) + 0.5) * voxel_size;
+                let (ex, ey, ez) = (cx - cam_x, cy - cam_y, cz - cam_z);
+                if dist - (ex * ex + ey * ey + ez * ez).sqrt() >= -trunc {
+                    find_or_insert::<true, false, true, false, false>(
+                        table.as_ptr() as *mut i64,
+                        hash_mask,
+                        counters.as_ptr() as *mut i32,
+                        pool_capacity,
+                        drop_count.as_ptr() as *mut i64,
+                        block_coord.as_ptr() as *mut i32,
+                        floor_div(vx, BLOCK_DIM),
+                        floor_div(vy, BLOCK_DIM),
+                        floor_div(vz, BLOCK_DIM),
+                    );
+                }
+                s += 1;
+            }
+        }
+    }
+
+    /// MEASUREMENT ONLY, and deliberately incorrect. Probe and read, never compare-exchange, so nothing is ever inserted.
+    /// Prices the CAS and everything downstream of a successful claim.
+    ///
+    /// Exists to bisect the A4/A3 allocate gap; see docs/A3-A4-GAP.md.
+    #[kernel]
+    pub fn alloc_kernel_nocas(
+        positions: &[f32],
+        table: &[i64],
+        counters: &[i32],
+        block_coord: &[i32],
+        drop_count: &[i64],
+        n_points: i32,
+        pool_capacity: i32,
+        hash_mask: u32,
+        voxel_size: f32,
+        trunc: f32,
+        cam_x: f32,
+        cam_y: f32,
+        cam_z: f32,
+        radius_sq: f32,
+    ) {
+        let i = thread::index_1d().get() as i32;
+        if i >= n_points {
+            return;
+        }
+        unsafe {
+            let p = positions.as_ptr().add((i * 3) as usize);
+            let (px, py, pz) = (*p, *p.add(1), *p.add(2));
+            let (dx, dy, dz) = (px - cam_x, py - cam_y, pz - cam_z);
+            let d2 = dx * dx + dy * dy + dz * dz;
+            if radius_sq > 0.0 && d2 > radius_sq {
+                return;
+            }
+            let dist = d2.sqrt();
+            if !(dist > 1e-6) {
+                return;
+            }
+            let (ux, uy, uz) = (dx / dist, dy / dist, dz / dist);
+            let inv_voxel = 1.0f32 / voxel_size;
+            let steps = ((trunc * inv_voxel).ceil() as i32).max(1);
+
+            let mut s = -steps;
+            while s <= steps {
+                let t = (s as f32) * voxel_size;
+                let vx = ((px + ux * t) * inv_voxel).floor() as i32;
+                let vy = ((py + uy * t) * inv_voxel).floor() as i32;
+                let vz = ((pz + uz * t) * inv_voxel).floor() as i32;
+
+                // Same occlusion cull as the update pass. Allocation must apply
+                // exactly the same gate, or the pool fills with blocks that
+                // never receive a contribution and the block count diverges
+                // from the other arms while the meshes still match.
+                let cx = ((vx as f32) + 0.5) * voxel_size;
+                let cy = ((vy as f32) + 0.5) * voxel_size;
+                let cz = ((vz as f32) + 0.5) * voxel_size;
+                let (ex, ey, ez) = (cx - cam_x, cy - cam_y, cz - cam_z);
+                if dist - (ex * ex + ey * ey + ez * ez).sqrt() >= -trunc {
+                    find_or_insert::<false, true, true, true, true>(
+                        table.as_ptr() as *mut i64,
+                        hash_mask,
+                        counters.as_ptr() as *mut i32,
+                        pool_capacity,
+                        drop_count.as_ptr() as *mut i64,
+                        block_coord.as_ptr() as *mut i32,
+                        floor_div(vx, BLOCK_DIM),
+                        floor_div(vy, BLOCK_DIM),
+                        floor_div(vz, BLOCK_DIM),
+                    );
+                }
+                s += 1;
+            }
+        }
+    }
+
+    /// MEASUREMENT ONLY, and deliberately incorrect. Insert with the CAS but derive the pool index from the block coordinate
+    /// instead of the shared counter. Prices contention on that one address.
+    ///
+    /// Exists to bisect the A4/A3 allocate gap; see docs/A3-A4-GAP.md.
+    #[kernel]
+    pub fn alloc_kernel_nocount(
+        positions: &[f32],
+        table: &[i64],
+        counters: &[i32],
+        block_coord: &[i32],
+        drop_count: &[i64],
+        n_points: i32,
+        pool_capacity: i32,
+        hash_mask: u32,
+        voxel_size: f32,
+        trunc: f32,
+        cam_x: f32,
+        cam_y: f32,
+        cam_z: f32,
+        radius_sq: f32,
+    ) {
+        let i = thread::index_1d().get() as i32;
+        if i >= n_points {
+            return;
+        }
+        unsafe {
+            let p = positions.as_ptr().add((i * 3) as usize);
+            let (px, py, pz) = (*p, *p.add(1), *p.add(2));
+            let (dx, dy, dz) = (px - cam_x, py - cam_y, pz - cam_z);
+            let d2 = dx * dx + dy * dy + dz * dz;
+            if radius_sq > 0.0 && d2 > radius_sq {
+                return;
+            }
+            let dist = d2.sqrt();
+            if !(dist > 1e-6) {
+                return;
+            }
+            let (ux, uy, uz) = (dx / dist, dy / dist, dz / dist);
+            let inv_voxel = 1.0f32 / voxel_size;
+            let steps = ((trunc * inv_voxel).ceil() as i32).max(1);
+
+            let mut s = -steps;
+            while s <= steps {
+                let t = (s as f32) * voxel_size;
+                let vx = ((px + ux * t) * inv_voxel).floor() as i32;
+                let vy = ((py + uy * t) * inv_voxel).floor() as i32;
+                let vz = ((pz + uz * t) * inv_voxel).floor() as i32;
+
+                // Same occlusion cull as the update pass. Allocation must apply
+                // exactly the same gate, or the pool fills with blocks that
+                // never receive a contribution and the block count diverges
+                // from the other arms while the meshes still match.
+                let cx = ((vx as f32) + 0.5) * voxel_size;
+                let cy = ((vy as f32) + 0.5) * voxel_size;
+                let cz = ((vz as f32) + 0.5) * voxel_size;
+                let (ex, ey, ez) = (cx - cam_x, cy - cam_y, cz - cam_z);
+                if dist - (ex * ex + ey * ey + ez * ez).sqrt() >= -trunc {
+                    find_or_insert::<true, true, false, true, true>(
                         table.as_ptr() as *mut i64,
                         hash_mask,
                         counters.as_ptr() as *mut i32,
@@ -572,6 +972,286 @@ pub unsafe extern "C" fn a4_allocate_blocks(
     // SAFETY: shapes and buffer extents match the kernel's accesses.
     let res = unsafe {
         m.module.alloc_kernel(
+            &stream,
+            cfg_for(n_points),
+            pos.get(),
+            table.get(),
+            counters.get(),
+            coords.get(),
+            drops.get(),
+            n_points,
+            v.pool_capacity,
+            v.hash_mask,
+            v.voxel_size_m,
+            v.trunc_m,
+            cam_x,
+            cam_y,
+            cam_z,
+            rsq,
+        )
+    };
+    if res.is_ok() { 0 } else { 3 }
+}
+
+/// MEASUREMENT ONLY: launches a deliberately incorrect variant to price
+/// one component of the allocate path. Never call this for real work.
+///
+/// # Safety
+/// See `a4_allocate_blocks`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn a4_allocate_nospin(
+    view: *const DeviceViewC,
+    d_positions: u64,
+    n_points: i32,
+    cam_x: f32,
+    cam_y: f32,
+    cam_z: f32,
+    radius_m: f32,
+) -> i32 {
+    let Some(m) = module() else { return 1 };
+    if view.is_null() || n_points <= 0 {
+        return 2;
+    }
+    let v = unsafe { &*view };
+    let n = n_points as usize;
+    let pool = v.pool_capacity as usize;
+    let table_len = ((v.hash_mask as usize) + 1) * 2; // 2 i64 words per slot
+
+    let pos = unsafe { Borrowed::<f32>::new(d_positions, n * 3, m.ctx.clone()) };
+    let table = unsafe { Borrowed::<i64>::new(v.table, table_len, m.ctx.clone()) };
+    let counters = unsafe { Borrowed::<i32>::new(v.block_count, 1, m.ctx.clone()) };
+    let coords = unsafe { Borrowed::<i32>::new(v.block_coord, pool * 3, m.ctx.clone()) };
+    let drops = unsafe { Borrowed::<i64>::new(v.drop_count, 1, m.ctx.clone()) };
+
+    let rsq = if radius_m > 0.0 { radius_m * radius_m } else { 0.0 };
+    let stream = m.ctx.default_stream();
+    // SAFETY: shapes and buffer extents match the kernel's accesses.
+    let res = unsafe {
+        m.module.alloc_kernel_nospin(
+            &stream,
+            cfg_for(n_points),
+            pos.get(),
+            table.get(),
+            counters.get(),
+            coords.get(),
+            drops.get(),
+            n_points,
+            v.pool_capacity,
+            v.hash_mask,
+            v.voxel_size_m,
+            v.trunc_m,
+            cam_x,
+            cam_y,
+            cam_z,
+            rsq,
+        )
+    };
+    if res.is_ok() { 0 } else { 3 }
+}
+
+/// MEASUREMENT ONLY: launches a deliberately incorrect variant to price
+/// one component of the allocate path. Never call this for real work.
+///
+/// # Safety
+/// See `a4_allocate_blocks`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn a4_allocate_nopublish(
+    view: *const DeviceViewC,
+    d_positions: u64,
+    n_points: i32,
+    cam_x: f32,
+    cam_y: f32,
+    cam_z: f32,
+    radius_m: f32,
+) -> i32 {
+    let Some(m) = module() else { return 1 };
+    if view.is_null() || n_points <= 0 {
+        return 2;
+    }
+    let v = unsafe { &*view };
+    let n = n_points as usize;
+    let pool = v.pool_capacity as usize;
+    let table_len = ((v.hash_mask as usize) + 1) * 2; // 2 i64 words per slot
+
+    let pos = unsafe { Borrowed::<f32>::new(d_positions, n * 3, m.ctx.clone()) };
+    let table = unsafe { Borrowed::<i64>::new(v.table, table_len, m.ctx.clone()) };
+    let counters = unsafe { Borrowed::<i32>::new(v.block_count, 1, m.ctx.clone()) };
+    let coords = unsafe { Borrowed::<i32>::new(v.block_coord, pool * 3, m.ctx.clone()) };
+    let drops = unsafe { Borrowed::<i64>::new(v.drop_count, 1, m.ctx.clone()) };
+
+    let rsq = if radius_m > 0.0 { radius_m * radius_m } else { 0.0 };
+    let stream = m.ctx.default_stream();
+    // SAFETY: shapes and buffer extents match the kernel's accesses.
+    let res = unsafe {
+        m.module.alloc_kernel_nopublish(
+            &stream,
+            cfg_for(n_points),
+            pos.get(),
+            table.get(),
+            counters.get(),
+            coords.get(),
+            drops.get(),
+            n_points,
+            v.pool_capacity,
+            v.hash_mask,
+            v.voxel_size_m,
+            v.trunc_m,
+            cam_x,
+            cam_y,
+            cam_z,
+            rsq,
+        )
+    };
+    if res.is_ok() { 0 } else { 3 }
+}
+
+/// MEASUREMENT ONLY: launches a deliberately incorrect variant to price
+/// one component of the allocate path. Never call this for real work.
+///
+/// # Safety
+/// See `a4_allocate_blocks`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn a4_allocate_nofence(
+    view: *const DeviceViewC,
+    d_positions: u64,
+    n_points: i32,
+    cam_x: f32,
+    cam_y: f32,
+    cam_z: f32,
+    radius_m: f32,
+) -> i32 {
+    let Some(m) = module() else { return 1 };
+    if view.is_null() || n_points <= 0 {
+        return 2;
+    }
+    let v = unsafe { &*view };
+    let n = n_points as usize;
+    let pool = v.pool_capacity as usize;
+    let table_len = ((v.hash_mask as usize) + 1) * 2; // 2 i64 words per slot
+
+    let pos = unsafe { Borrowed::<f32>::new(d_positions, n * 3, m.ctx.clone()) };
+    let table = unsafe { Borrowed::<i64>::new(v.table, table_len, m.ctx.clone()) };
+    let counters = unsafe { Borrowed::<i32>::new(v.block_count, 1, m.ctx.clone()) };
+    let coords = unsafe { Borrowed::<i32>::new(v.block_coord, pool * 3, m.ctx.clone()) };
+    let drops = unsafe { Borrowed::<i64>::new(v.drop_count, 1, m.ctx.clone()) };
+
+    let rsq = if radius_m > 0.0 { radius_m * radius_m } else { 0.0 };
+    let stream = m.ctx.default_stream();
+    // SAFETY: shapes and buffer extents match the kernel's accesses.
+    let res = unsafe {
+        m.module.alloc_kernel_nofence(
+            &stream,
+            cfg_for(n_points),
+            pos.get(),
+            table.get(),
+            counters.get(),
+            coords.get(),
+            drops.get(),
+            n_points,
+            v.pool_capacity,
+            v.hash_mask,
+            v.voxel_size_m,
+            v.trunc_m,
+            cam_x,
+            cam_y,
+            cam_z,
+            rsq,
+        )
+    };
+    if res.is_ok() { 0 } else { 3 }
+}
+
+/// MEASUREMENT ONLY: launches a deliberately incorrect variant to price
+/// one component of the allocate path. Never call this for real work.
+///
+/// # Safety
+/// See `a4_allocate_blocks`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn a4_allocate_nocas(
+    view: *const DeviceViewC,
+    d_positions: u64,
+    n_points: i32,
+    cam_x: f32,
+    cam_y: f32,
+    cam_z: f32,
+    radius_m: f32,
+) -> i32 {
+    let Some(m) = module() else { return 1 };
+    if view.is_null() || n_points <= 0 {
+        return 2;
+    }
+    let v = unsafe { &*view };
+    let n = n_points as usize;
+    let pool = v.pool_capacity as usize;
+    let table_len = ((v.hash_mask as usize) + 1) * 2; // 2 i64 words per slot
+
+    let pos = unsafe { Borrowed::<f32>::new(d_positions, n * 3, m.ctx.clone()) };
+    let table = unsafe { Borrowed::<i64>::new(v.table, table_len, m.ctx.clone()) };
+    let counters = unsafe { Borrowed::<i32>::new(v.block_count, 1, m.ctx.clone()) };
+    let coords = unsafe { Borrowed::<i32>::new(v.block_coord, pool * 3, m.ctx.clone()) };
+    let drops = unsafe { Borrowed::<i64>::new(v.drop_count, 1, m.ctx.clone()) };
+
+    let rsq = if radius_m > 0.0 { radius_m * radius_m } else { 0.0 };
+    let stream = m.ctx.default_stream();
+    // SAFETY: shapes and buffer extents match the kernel's accesses.
+    let res = unsafe {
+        m.module.alloc_kernel_nocas(
+            &stream,
+            cfg_for(n_points),
+            pos.get(),
+            table.get(),
+            counters.get(),
+            coords.get(),
+            drops.get(),
+            n_points,
+            v.pool_capacity,
+            v.hash_mask,
+            v.voxel_size_m,
+            v.trunc_m,
+            cam_x,
+            cam_y,
+            cam_z,
+            rsq,
+        )
+    };
+    if res.is_ok() { 0 } else { 3 }
+}
+
+/// MEASUREMENT ONLY: launches a deliberately incorrect variant to price
+/// one component of the allocate path. Never call this for real work.
+///
+/// # Safety
+/// See `a4_allocate_blocks`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn a4_allocate_nocount(
+    view: *const DeviceViewC,
+    d_positions: u64,
+    n_points: i32,
+    cam_x: f32,
+    cam_y: f32,
+    cam_z: f32,
+    radius_m: f32,
+) -> i32 {
+    let Some(m) = module() else { return 1 };
+    if view.is_null() || n_points <= 0 {
+        return 2;
+    }
+    let v = unsafe { &*view };
+    let n = n_points as usize;
+    let pool = v.pool_capacity as usize;
+    let table_len = ((v.hash_mask as usize) + 1) * 2; // 2 i64 words per slot
+
+    let pos = unsafe { Borrowed::<f32>::new(d_positions, n * 3, m.ctx.clone()) };
+    let table = unsafe { Borrowed::<i64>::new(v.table, table_len, m.ctx.clone()) };
+    let counters = unsafe { Borrowed::<i32>::new(v.block_count, 1, m.ctx.clone()) };
+    let coords = unsafe { Borrowed::<i32>::new(v.block_coord, pool * 3, m.ctx.clone()) };
+    let drops = unsafe { Borrowed::<i64>::new(v.drop_count, 1, m.ctx.clone()) };
+
+    let rsq = if radius_m > 0.0 { radius_m * radius_m } else { 0.0 };
+    let stream = m.ctx.default_stream();
+    // SAFETY: shapes and buffer extents match the kernel's accesses.
+    let res = unsafe {
+        m.module.alloc_kernel_nocount(
             &stream,
             cfg_for(n_points),
             pos.get(),

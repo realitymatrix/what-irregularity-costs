@@ -175,11 +175,77 @@ by contention that a static count cannot see. Confirming it needs the counters
 above, or a variant experiment that removes the remaining `read_volatile` calls
 entirely and accepts the correctness loss to isolate their cost.
 
+## The bisect: it is the compare-exchange and the spin
+
+Run 2026-08-07 with `bench/probe_a4_bisect.cu`, at `pts-20k` where the excess is
+5.9x and therefore unmissable. Each variant is the real kernel with one
+component disabled through a const generic, so the geometry walk and probe loop
+are byte-identical and the delta is attributable. Every variant is deliberately
+incorrect and exists only to be timed.
+
+Two facts set this up. The excess is a **fixed cost, not a multiplier**: raising
+the batch from 8 to 64 amortises A3 (0.005 to 0.003 ms) and leaves A4 pinned at
+0.021, which rules out host enqueue, FFI and stream lookup, since all of those
+would amortise. And it is **specific to the insert path**: at the same cell the
+update kernel is a flat 1.15x with no floor. That shape also explains the
+workload dependence. `pts-20k` through `pts-1280k` are all the same R=0.5
+sphere, so the block count and therefore the insert count are constant while the
+point count varies 64x; a per-insert cost necessarily looks like a fixed offset
+across that axis.
+
+| variant | p50 ms | x/A3 | share of excess recovered |
+|---|---|---|---|
+| A3 CUDA C++ | 0.0035 | 1.00 | — |
+| A4 full | 0.0207 | 5.91 | — |
+| A4 minus CAS (probe and read only) | 0.0062 | 1.77 | 84% |
+| A4 minus publish (CAS and counter, no spin) | 0.0144 | 4.12 | 36% |
+| A4 minus spin | 0.0151 | 4.32 | 33% |
+| A4 minus fence | 0.0196 | 5.59 | 7% |
+| A4 minus counter | 0.0200 | 5.71 | 4% |
+
+Differencing the variants decomposes the 0.0172 ms excess:
+
+| component | cost | share |
+|---|---|---|
+| the compare-exchange itself | ~0.0075 | **44%** |
+| the publication spin | 0.0056 | **33%** |
+| the probe path, before any insert | 0.0027 | 16% |
+| `threadfence` | ~0.0012 | 7% |
+| the shared block counter | ~0.0007 | 4% |
+| publishing coordinates and index | ~0.0007 | 4% |
+
+The shares sum to over 100% because the components interact: removing the CAS
+also removes every insert, so no thread ever waits on a publication, which is
+why `-cas` subsumes most of `-spin`. Treat them as an ordering of suspects, not
+as an additive budget.
+
+**Ruled out by this:** the shared counter, the fence, and the coordinate and
+index publication. Each is worth under a tenth of the gap, and the fence result
+is worth stating twice because A4 emits two `MEMBAR.SC.GPU` against A3's one,
+which looked like a lead and is not.
+
+**Not ruled out, and now the whole question:** why A4's `atom.cas.b64` costs
+more than A3's, when both emit `ATOMG.E.CAS.64.STRONG.GPU` at the same scope
+and both insert exactly 1160 blocks. Two hypotheses remain and this method
+cannot separate them:
+
+1. The same number of compare-exchanges, each slower, for example because of
+   how they are scheduled against the surrounding loads.
+2. More compare-exchanges attempted, for example because the two arms diverge
+   differently within a warp and retry more often.
+
+Distinguishing them needs either a device-side counter of CAS attempts added to
+both arms, or `ncu`'s warp stall reasons. The counter is the cheaper experiment
+and does not need root.
+
 ## What this does and does not license saying
 
 Established: A4 is slower on both stages under batched timing; it is not a
 register-pressure or occupancy effect; the update gap tracks a 1.62x
-instruction-count difference; `clamp` is not the cause.
+instruction-count difference; `clamp` is not the cause; memory-ordering scope
+is not the cause; and the allocate excess is a fixed per-insert cost that lives
+in the compare-exchange (44%) and the publication spin (33%), not in the
+counter, the fence or the publication itself.
 
 Not established: why Rust-to-PTX emits 62% more instructions for the same
 source algorithm, and why allocate is slower at parity of instruction count.

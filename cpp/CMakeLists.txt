@@ -88,6 +88,11 @@ if(OSN_TSDF_CUDA)
         target_include_directories(probe_a4_tail PRIVATE tests)
         target_link_libraries(probe_a4_tail PRIVATE osn_tsdf ${A4_LIB} CUDA::cuda_driver dl pthread)
 
+        # Prices the three components of A4's allocate path one at a time.
+        add_executable(probe_a4_bisect bench/probe_a4_bisect.cu)
+        target_include_directories(probe_a4_bisect PRIVATE tests)
+        target_link_libraries(probe_a4_bisect PRIVATE osn_tsdf ${A4_LIB} CUDA::cuda_driver dl pthread)
+
         # Splits the extract measurement into kernel, allocation and PCIe
         # readback. Needed to decide whether extraction can join the language
         # comparison at all; see docs/ARM-SCOPE.md.
