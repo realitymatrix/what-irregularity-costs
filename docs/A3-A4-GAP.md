@@ -286,6 +286,56 @@ Splitting the remaining excess at 1.28M by path:
 So roughly a quarter of the gap is a mildly slower baseline path and three
 quarters is the insert machinery, almost all of it the spin.
 
+### Attempted and FAILED: publishing key and index in one 128-bit exchange
+
+Implemented 2026-08-07 and it does not work. The reason is worth more than the
+fix would have been.
+
+The idea was sound: publish the key and the block index atomically so a reader
+that sees a key is guaranteed to see its index, removing the wait rather than
+making it cheaper. `atom.global.acq_rel.gpu.cas.b128` exists on sm_90 and later
+and is reachable from Rust through `ptx_asm!`, using a `.b128` temporary and
+`mov.b128` to pack from two 64-bit registers.
+
+**The instruction is fine.** `bench/probe_cas128_selftest.cu` exercises it in
+isolation, one thread, one 16-byte cell preset to (-1, -1, 0) exchanged to
+(42, 7): it matches and writes correctly.
+
+**The algorithm is not.** The index is part of the value being written, so it
+must be reserved before the exchange, and a thread that loses the slot holds an
+index it cannot use. The intended mitigation was to reserve only on observing an
+empty slot, assuming later threads would match the existing key instead. That
+assumption fails at precisely the contention this was meant to fix: at kernel
+start the table is empty, and every thread targeting a block observes an empty
+slot before any exchange lands, so they all reserve. Measured at 320k points:
+
+| arm | blocks | dropped points | vertices |
+|---|---|---|---|
+| A3 CUDA C++ | 1,160 | 0 | 846,288 |
+| A4, 64-bit CAS (production) | 1,160 | 0 | 846,288 |
+| A4, 128-bit CAS | **65,536** (the whole pool) | **2,301,947** | none |
+
+The give-back, a compare-exchange returning the counter from `claimed + 1` to
+`claimed`, only succeeds for the last reserver and recovers almost nothing.
+
+Substituting a plain 64-bit compare-exchange while keeping the reserve-first
+structure saturates the pool identically, which is what isolates the fault to
+the algorithm rather than to the inline PTX.
+
+So there is no re-measurement to report: the variant never produces a correct
+volume, and timing an arm that drops 2.3M points would be meaningless.
+
+**What this rules out and what it leaves.** Any scheme that makes the index part
+of the published value has to reserve speculatively, and speculative reservation
+is unworkable when a whole warp can observe the same empty slot. Removing the
+spin therefore needs an index that does not require reservation. Deriving the
+block index from the hash slot does exactly that: no counter, no publication, no
+wait, and a reader that matches a key knows the index immediately. The cost is
+sizing the voxel pool to the table rather than to the block count, which at the
+current 2x table-to-pool ratio doubles voxel memory. That is the experiment to
+run next, and it is a change to the shared data structure, so it would apply to
+every arm.
+
 ### What this makes actionable
 
 The spin exists to cover a window: a reader can see a published key before the

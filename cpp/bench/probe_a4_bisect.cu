@@ -41,6 +41,7 @@ int32_t a4_allocate_nocas(const OsnTsdfDeviceView*, uint64_t, int32_t, float, fl
 int32_t a4_allocate_nocount(const OsnTsdfDeviceView*, uint64_t, int32_t, float, float, float, float);
 int32_t a4_allocate_nofence(const OsnTsdfDeviceView*, uint64_t, int32_t, float, float, float, float);
 int32_t a4_allocate_nopublish(const OsnTsdfDeviceView*, uint64_t, int32_t, float, float, float, float);
+int32_t a4_allocate_cas128(const OsnTsdfDeviceView*, uint64_t, int32_t, float, float, float, float);
 }
 
 namespace {
@@ -115,15 +116,16 @@ int main(int argc, char** argv) {
         {"A4 -count", a4_allocate_nocount, "no shared counter atomicAdd"},
         {"A4 -fence", a4_allocate_nofence, "no threadfence before publishing idx"},
         {"A4 -publish", a4_allocate_nopublish, "CAS + counter, but never publish (no spin)"},
+        {"A4 cas128", a4_allocate_cas128, "CORRECT: publish key+idx in one 128b CAS"},
     };
 
     Timer t;
-    std::vector<double> samples[8];
+    std::vector<double> samples[9];
     // Interleave, as the main harness does: a per-arm block would let clock ramp
     // masquerade as a difference between variants.
     for (int i = 0; i < reps + 5; ++i) {
-        for (int k = 0; k < 8; ++k) {
-            const int a = (i + k) % 8;
+        for (int k = 0; k < 9; ++k) {
+            const int a = (i + k) % 9;
             for (int j = 0; j < BATCH; ++j) osn_tsdf_cuda_reset(vols[j]);
             cudaDeviceSynchronize();
             t.start();
@@ -144,7 +146,7 @@ int main(int argc, char** argv) {
     const double a4 = median(samples[2]);
     std::printf("  %-11s %-32s %9s %8s %s\n", "arm", "what", "p50 ms", "x/A3", "recovered");
     std::printf("  ------------------------------------------------------------------------------\n");
-    for (int a = 0; a < 8; ++a) {
+    for (int a = 0; a < 9; ++a) {
         const double m = median(samples[a]);
         // How much of the A4-minus-A3 excess this variant gives back.
         const double recovered = (a4 - a3) > 0 ? 100.0 * (a4 - m) / (a4 - a3) : 0.0;

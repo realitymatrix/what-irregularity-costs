@@ -30,7 +30,7 @@
 use cuda_core::{CudaContext, LaunchConfig};
 use cuda_device::atomic::{AtomicOrdering, DeviceAtomicF32, DeviceAtomicI32, DeviceAtomicI64};
 use cuda_device::fence::threadfence;
-use cuda_device::{kernel, thread};
+use cuda_device::{kernel, ptx_asm, thread};
 use cuda_host::cuda_module;
 
 /// Must match `osn_tsdf::kBlockDim`. 8^3 = 512 voxels per block.
@@ -277,6 +277,205 @@ mod kernels {
         }
 }
 
+    /// Find or insert, publishing the key and the block index in ONE 128-bit
+    /// compare-exchange.
+    ///
+    /// The spin in `find_or_insert` exists to cover a window: the key is
+    /// published by a 64-bit CAS and the index by a later store, so a reader can
+    /// see a key whose index is still -1 and must wait. Measured, that wait is
+    /// 75% to 83% of the whole A4/A3 allocate gap at realistic point counts
+    /// (docs/A3-A4-GAP.md). Publishing both words atomically removes the window
+    /// rather than making the wait cheaper, so a visible key implies a visible
+    /// index and no reader ever waits.
+    ///
+    /// DOES NOT WORK, and the reason is the point of keeping it.
+    ///
+    /// The pool index must be reserved BEFORE the exchange, since it is part of
+    /// the value being written, so a thread that loses the slot holds an index
+    /// it cannot use. The intended mitigation was to reserve only when a slot is
+    /// actually observed empty, on the assumption that once a block exists later
+    /// threads match its key and never reserve.
+    ///
+    /// That assumption fails at exactly the contention this is meant to fix. At
+    /// kernel start the table is empty and every thread targeting a given block
+    /// observes an empty slot before any exchange lands, so they all reserve.
+    /// Measured at 320k points: 65,536 reservations (the whole pool) against
+    /// 1,160 real blocks, and 2.3M dropped points. The best-effort give-back,
+    /// a compare-exchange returning the counter from `claimed + 1` to `claimed`,
+    /// only succeeds for the last reserver and so recovers almost nothing.
+    ///
+    /// The 128-bit instruction itself is fine: `bench/probe_cas128_selftest.cu`
+    /// exercises `atom.global.acq_rel.gpu.cas.b128` in isolation and it matches
+    /// and writes correctly. Substituting a plain 64-bit compare-exchange here
+    /// while keeping the reserve-first structure saturates the pool identically,
+    /// which is what isolates the fault to the algorithm.
+    ///
+    /// Removing the spin therefore needs an index that does not have to be
+    /// reserved in advance: deriving the block index from the hash slot would
+    /// do it, at the cost of sizing the voxel pool to the table rather than to
+    /// the block count.
+    ///
+    /// Entry layout is (i64 key, i32 block_idx, i32 pad), so the low 64 bits are
+    /// the key and the high 64 bits are the index in their low half. Empty is
+    /// (-1, -1, 0), hence an expected high word of 0x0000_0000_FFFF_FFFF.
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn find_or_insert_128(
+        table: *mut i64,
+        mask: u32,
+        counters: *mut i32,
+        pool_capacity: i32,
+        drop_count: *mut i64,
+        block_coord: *mut i32,
+        bx: i32,
+        by: i32,
+        bz: i32,
+    ) -> i32 {
+        unsafe {
+            let want = pack(bx, by, bz);
+            let size = mask + 1;
+            let start = hash_block(bx, by, bz, mask);
+            let mut probe: u32 = 0;
+            // Reserved lazily, kept across probes so a collision on a different
+            // key does not reserve twice.
+            let mut claimed: i32 = -1;
+
+            while probe < size {
+                let slot = ((start + probe) & mask) as usize;
+                let key_ptr = table.add(slot * 2);
+                let idx_ptr = key_ptr.add(1) as *mut i32;
+
+                // Acquire: pairs with the release in the exchange below, so
+                // seeing the key guarantees seeing the index written with it.
+                let key = DeviceAtomicI64::from_ptr(key_ptr).load(AtomicOrdering::Acquire);
+
+                if key == want {
+                    return DeviceAtomicI32::from_ptr(idx_ptr).load(AtomicOrdering::Relaxed);
+                }
+
+                if key == EMPTY_KEY {
+                    if claimed < 0 {
+                        let idx = DeviceAtomicI32::from_ptr(counters)
+                            .fetch_add(1, AtomicOrdering::Relaxed);
+                        if idx >= pool_capacity {
+                            DeviceAtomicI32::from_ptr(counters)
+                                .fetch_sub(1, AtomicOrdering::Relaxed);
+                            DeviceAtomicI64::from_ptr(drop_count)
+                                .fetch_add(1, AtomicOrdering::Relaxed);
+                            return -1;
+                        }
+                        // Safe before publication: the index is unreachable
+                        // until the exchange makes it visible.
+                        let bc = block_coord.add((idx * 3) as usize);
+                        bc.write(bx);
+                        bc.add(1).write(by);
+                        bc.add(2).write(bz);
+                        claimed = idx;
+                    }
+
+                    let exp_lo: u64 = EMPTY_KEY as u64;
+                    let exp_hi: u64 = 0x0000_0000_FFFF_FFFF;
+                    let des_lo: u64 = want as u64;
+                    let des_hi: u64 = claimed as u32 as u64;
+                    let mut old_lo: u64 = 0;
+                    let mut old_hi: u64 = 0;
+                    // `atom.cas.b128` takes .b128 register operands, not a pair
+                    // of .b64s, so the value is packed into a .b128 temporary
+                    // with `mov.b128` and unpacked the same way. Every inline
+                    // operand therefore stays 64-bit.
+                    ptx_asm!(
+                        // `cvta.to.global` first: the pointer is generic, and
+                        // passing a generic address to a `.global` atomic is
+                        // undefined. Without it the exchange never matches, the
+                        // pool saturates and every point is dropped.
+                        "{ .reg .b128 t, e, d;\n\t\
+                           .reg .u64 g;\n\t\
+                           cvta.to.global.u64 g, %6;\n\t\
+                           mov.b128 e, {%2, %3};\n\t\
+                           mov.b128 d, {%4, %5};\n\t\
+                           atom.global.acq_rel.gpu.cas.b128 t, [g], e, d;\n\t\
+                           mov.b128 {%0, %1}, t; }",
+                        out("=l") old_lo,
+                        out("=l") old_hi,
+                        in("l") exp_lo,
+                        in("l") exp_hi,
+                        in("l") des_lo,
+                        in("l") des_hi,
+                        in("l") key_ptr as u64,
+                        clobber("memory")
+                    );
+
+                    if old_lo == exp_lo {
+                        return claimed;
+                    }
+                    if old_lo as i64 == want {
+                        // Lost to a peer inserting the same block. Its index is
+                        // already in the value we read back, so still no wait.
+                        // `claimed` is now spare; best-effort give-back only
+                        // succeeds if nothing else has reserved since.
+                        DeviceAtomicI32::from_ptr(counters)
+                            .compare_exchange(
+                                claimed + 1,
+                                claimed,
+                                AtomicOrdering::Relaxed,
+                                AtomicOrdering::Relaxed,
+                            )
+                            .ok();
+                        return (old_hi & 0xFFFF_FFFF) as i32;
+                    }
+                }
+                probe += 1;
+            }
+            DeviceAtomicI64::from_ptr(drop_count).fetch_add(1, AtomicOrdering::Relaxed);
+            -1
+        }
+    }
+
+    /// Self-test for `atom.cas.b128` through `ptx_asm!`.
+    ///
+    /// One thread, one 16-byte cell preset to (-1, -1, 0), one exchange to
+    /// (42, 7). Writes back the value the exchange returned and the resulting
+    /// memory, so the host can see whether the instruction ran at all. Exists
+    /// because the 128-bit insert saturated the pool, which is what a CAS that
+    /// never matches looks like from the outside.
+    #[kernel]
+    pub fn cas128_selftest(cell: &[i64], out: &[i64]) {
+        let tid = thread::threadIdx_x();
+        if tid != 0 {
+            return;
+        }
+        unsafe {
+            let p = cell.as_ptr() as *mut i64;
+            let exp_lo: u64 = (-1i64) as u64;
+            let exp_hi: u64 = 0x0000_0000_FFFF_FFFF;
+            let des_lo: u64 = 42;
+            let des_hi: u64 = 7;
+            let mut old_lo: u64 = 0xDEAD;
+            let mut old_hi: u64 = 0xBEEF;
+            ptx_asm!(
+                "{ .reg .b128 t, e, d;\n\t\
+                   .reg .u64 g;\n\t\
+                   cvta.to.global.u64 g, %6;\n\t\
+                   mov.b128 e, {%2, %3};\n\t\
+                   mov.b128 d, {%4, %5};\n\t\
+                   atom.global.acq_rel.gpu.cas.b128 t, [g], e, d;\n\t\
+                   mov.b128 {%0, %1}, t; }",
+                out("=l") old_lo,
+                out("=l") old_hi,
+                in("l") exp_lo,
+                in("l") exp_hi,
+                in("l") des_lo,
+                in("l") des_hi,
+                in("l") p as u64,
+                clobber("memory")
+            );
+            let o = out.as_ptr() as *mut i64;
+            o.write(old_lo as i64);
+            o.add(1).write(old_hi as i64);
+            o.add(2).write(p.read());
+            o.add(3).write(p.add(1).read());
+        }
+    }
+
     /// Pass 1: allocate every block the batch's truncation band touches.
     #[kernel]
     pub fn alloc_kernel(
@@ -332,6 +531,79 @@ mod kernels {
                 let (ex, ey, ez) = (cx - cam_x, cy - cam_y, cz - cam_z);
                 if dist - (ex * ex + ey * ey + ez * ez).sqrt() >= -trunc {
                     find_or_insert::<true, true, true, true, true, false>(
+                        table.as_ptr() as *mut i64,
+                        hash_mask,
+                        counters.as_ptr() as *mut i32,
+                        pool_capacity,
+                        drop_count.as_ptr() as *mut i64,
+                        block_coord.as_ptr() as *mut i32,
+                        floor_div(vx, BLOCK_DIM),
+                        floor_div(vy, BLOCK_DIM),
+                        floor_div(vz, BLOCK_DIM),
+                    );
+                }
+                s += 1;
+            }
+        }
+    }
+
+    /// Pass 1, publishing key and index in one 128-bit exchange so no reader
+    /// ever waits. See `find_or_insert_128`. Correct, but may report a block
+    /// count above A3's if any reserved index is leaked.
+    #[kernel]
+    pub fn alloc_kernel_cas128(
+        positions: &[f32],
+        table: &[i64],
+        counters: &[i32],
+        block_coord: &[i32],
+        drop_count: &[i64],
+        n_points: i32,
+        pool_capacity: i32,
+        hash_mask: u32,
+        voxel_size: f32,
+        trunc: f32,
+        cam_x: f32,
+        cam_y: f32,
+        cam_z: f32,
+        radius_sq: f32,
+    ) {
+        let i = thread::index_1d().get() as i32;
+        if i >= n_points {
+            return;
+        }
+        unsafe {
+            let p = positions.as_ptr().add((i * 3) as usize);
+            let (px, py, pz) = (*p, *p.add(1), *p.add(2));
+            let (dx, dy, dz) = (px - cam_x, py - cam_y, pz - cam_z);
+            let d2 = dx * dx + dy * dy + dz * dz;
+            if radius_sq > 0.0 && d2 > radius_sq {
+                return;
+            }
+            let dist = d2.sqrt();
+            if !(dist > 1e-6) {
+                return;
+            }
+            let (ux, uy, uz) = (dx / dist, dy / dist, dz / dist);
+            let inv_voxel = 1.0f32 / voxel_size;
+            let steps = ((trunc * inv_voxel).ceil() as i32).max(1);
+
+            let mut s = -steps;
+            while s <= steps {
+                let t = (s as f32) * voxel_size;
+                let vx = ((px + ux * t) * inv_voxel).floor() as i32;
+                let vy = ((py + uy * t) * inv_voxel).floor() as i32;
+                let vz = ((pz + uz * t) * inv_voxel).floor() as i32;
+
+                // Same occlusion cull as the update pass. Allocation must apply
+                // exactly the same gate, or the pool fills with blocks that
+                // never receive a contribution and the block count diverges
+                // from the other arms while the meshes still match.
+                let cx = ((vx as f32) + 0.5) * voxel_size;
+                let cy = ((vy as f32) + 0.5) * voxel_size;
+                let cz = ((vz as f32) + 0.5) * voxel_size;
+                let (ex, ey, ez) = (cx - cam_x, cy - cam_y, cz - cam_z);
+                if dist - (ex * ex + ey * ey + ez * ez).sqrt() >= -trunc {
+                    find_or_insert_128(
                         table.as_ptr() as *mut i64,
                         hash_mask,
                         counters.as_ptr() as *mut i32,
@@ -1007,6 +1279,24 @@ fn module() -> Option<&'static Loaded> {
         .as_ref()
 }
 
+/// Runs the 128-bit compare-exchange self-test. `cell` is a 16-byte device
+/// allocation preset to (-1, -1, 0); `out` receives four i64: the two words the
+/// exchange returned, then the two words the cell holds afterwards.
+///
+/// # Safety
+/// Both pointers must be live device allocations of the stated size.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn a4_cas128_selftest(cell: u64, out: u64) -> i32 {
+    let Some(m) = module() else { return 1 };
+    let c = unsafe { Borrowed::<i64>::new(cell, 2, m.ctx.clone()) };
+    let o = unsafe { Borrowed::<i64>::new(out, 4, m.ctx.clone()) };
+    let stream = m.ctx.default_stream();
+    let cfg = LaunchConfig { grid_dim: (1, 1, 1), block_dim: (32, 1, 1), shared_mem_bytes: 0 };
+    // SAFETY: shapes and extents match the kernel.
+    let r = unsafe { m.module.cas128_selftest(&stream, cfg, c.get(), o.get()) };
+    if r.is_ok() { 0 } else { 2 }
+}
+
 /// 0 on success. Loads the device module; safe to call repeatedly.
 #[unsafe(no_mangle)]
 pub extern "C" fn a4_init() -> i32 {
@@ -1114,6 +1404,62 @@ pub unsafe extern "C" fn a4_allocate_nospin(
     // SAFETY: shapes and buffer extents match the kernel's accesses.
     let res = unsafe {
         m.module.alloc_kernel_nospin(
+            &stream,
+            cfg_for(n_points),
+            pos.get(),
+            table.get(),
+            counters.get(),
+            coords.get(),
+            drops.get(),
+            n_points,
+            v.pool_capacity,
+            v.hash_mask,
+            v.voxel_size_m,
+            v.trunc_m,
+            cam_x,
+            cam_y,
+            cam_z,
+            rsq,
+        )
+    };
+    if res.is_ok() { 0 } else { 3 }
+}
+
+/// Correct alternative implementation: publishes key and index in one
+/// 128-bit exchange, so no reader waits. See `find_or_insert_128`.
+///
+/// # Safety
+/// See `a4_allocate_blocks`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn a4_allocate_cas128(
+    view: *const DeviceViewC,
+    d_positions: u64,
+    n_points: i32,
+    cam_x: f32,
+    cam_y: f32,
+    cam_z: f32,
+    radius_m: f32,
+) -> i32 {
+    let Some(m) = module() else { return 1 };
+    if view.is_null() || n_points <= 0 {
+        return 2;
+    }
+    let v = unsafe { &*view };
+    let n = n_points as usize;
+    let pool = v.pool_capacity as usize;
+    let table_len = ((v.hash_mask as usize) + 1) * 2; // 2 i64 words per slot
+
+    let pos = unsafe { Borrowed::<f32>::new(d_positions, n * 3, m.ctx.clone()) };
+    let table = unsafe { Borrowed::<i64>::new(v.table, table_len, m.ctx.clone()) };
+    let counters = unsafe { Borrowed::<i32>::new(v.block_count, 1, m.ctx.clone()) };
+    let coords = unsafe { Borrowed::<i32>::new(v.block_coord, pool * 3, m.ctx.clone()) };
+    let drops = unsafe { Borrowed::<i64>::new(v.drop_count, 1, m.ctx.clone()) };
+
+    let rsq = if radius_m > 0.0 { radius_m * radius_m } else { 0.0 };
+    let stream = m.ctx.default_stream();
+    // SAFETY: shapes and buffer extents match the kernel's accesses.
+    let res = unsafe {
+        m.module.alloc_kernel_cas128(
             &stream,
             cfg_for(n_points),
             pos.get(),

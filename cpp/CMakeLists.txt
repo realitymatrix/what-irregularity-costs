@@ -88,6 +88,15 @@ if(OSN_TSDF_CUDA)
         target_include_directories(probe_a4_tail PRIVATE tests)
         target_link_libraries(probe_a4_tail PRIVATE osn_tsdf ${A4_LIB} CUDA::cuda_driver dl pthread)
 
+        # Does atom.cas.b128 work at all through ptx_asm!?
+        add_executable(probe_cas128_selftest bench/probe_cas128_selftest.cu)
+        target_link_libraries(probe_cas128_selftest PRIVATE osn_tsdf ${A4_LIB} CUDA::cuda_driver dl pthread)
+
+        # Correctness of the 128-bit-CAS insert against the 64-bit one.
+        add_executable(probe_cas128_check bench/probe_cas128_check.cu)
+        target_include_directories(probe_cas128_check PRIVATE tests)
+        target_link_libraries(probe_cas128_check PRIVATE osn_tsdf ${A4_LIB} CUDA::cuda_driver dl pthread)
+
         # Dynamic CAS attempt count, both arms, identical switch.
         add_executable(probe_cas_count bench/probe_cas_count.cu)
         target_include_directories(probe_cas_count PRIVATE tests)
