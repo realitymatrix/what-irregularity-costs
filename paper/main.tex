@@ -95,8 +95,7 @@ We implement this kernel five times. Two of the implementations are CPU and
 third-party baselines used to establish correctness; three are the comparison
 proper: CUDA C++, Rust compiled through NVIDIA's \texttt{cuda-oxide}, and
 Triton. All three operate on identical device memory with an identical hash
-layout, so the comparison measures how each language expresses the algorithm
-rather than which algorithm each language made convenient.
+layout, so what varies between them is the source language and nothing else.
 
 \paragraph{Contributions.}
 \begin{enumerate}
@@ -108,8 +107,8 @@ rather than which algorithm each language made convenient.
         (Section~\ref{sec:attribution}), including one that no instruction count
         reveals and that required hardware performance counters to find.
   \item A catalogue of what each language cannot say
-        (Section~\ref{sec:expressiveness}), each item encountered while
-        implementing the algorithm rather than constructed to make a point.
+        (Section~\ref{sec:expressiveness}), catalogued from what the
+        implementation work forced rather than from a wish list.
   \item A measurement methodology and its failure modes
         (Section~\ref{sec:method}), reported because three of the errors it
         caught would have produced a confidently wrong conclusion rather than a
@@ -429,8 +428,8 @@ batch size is not comparable to one that was not.
 \subsection{What went wrong anyway}
 
 Roughly a dozen errors were caught during this work. Most produced a wrong
-magnitude. Three produced a reversed or null conclusion, and two of those were
-caught only after the wrong number had been written down.
+magnitude. Three produced a reversed or null conclusion, and two of those survived
+long enough to be written up.
 
 \paragraph{A workload asymmetry made the slower arm look faster.} Colour
 accumulation was implemented in three arms and not the fourth, a 40\% difference
@@ -456,10 +455,9 @@ the whole matrix detects it, which is why the sweep runs three passes and report
 medians.
 
 A fourth is worth listing because it was a stage-level rather than an arm-level
-error. The extraction stage's reported time was 82\% to 97\% device-to-host
-transfer over PCIe links of differing width, so its apparent $6.9\times$
-difference between the two GPUs was the motherboard. Actual compute differed by
-$1.24\times$.
+error, and because it shows the same failure at a different granularity: the
+extraction stage's reported time turned out to be mostly bus traffic rather than
+compute (Section~\ref{sec:workload}).
 
 \subsection{What this suggests}
 
@@ -609,8 +607,8 @@ bound of 32.
 \texttt{tl.atomic\_add}, the compare-exchange has no mask parameter, so lanes
 that have already resolved cannot be suppressed and still issue an exchange
 somewhere. They must be aimed at a scratch address holding a sentinel that can
-never satisfy the compare. This is a data structure with no counterpart in the
-CUDA implementation, and the programmer must size and index it.
+never satisfy the compare. The programmer thereby acquires a structure the CUDA
+version does not have, along with its sizing and its indexing.
 
 The two compound: the bound sets how many iterations run, and the mask
 restriction sets what each wasted iteration costs. Replacing the exchange with a
@@ -712,10 +710,9 @@ the natural way to read shared state inherits this.
 
 Both are reported because they bound the space of fixes.
 
-\paragraph{Publishing key and index atomically.} The publication wait exists
-because a block's identity is known before insertion while its location is
-assigned by a counter and known only after winning. A 128-bit compare-exchange
-would publish both at once and remove the wait. The instruction works in
+\paragraph{Publishing key and index atomically.} A 128-bit compare-exchange
+would publish both words at once and close the window described in
+Section~\ref{sec:workload}, removing the wait. The instruction works in
 isolation; the algorithm does not. The location must be reserved before the
 exchange, so a thread that loses the slot holds one it cannot use, and at kernel
 start every thread targeting a block observes the same empty slot before any
@@ -737,10 +734,12 @@ that only a symmetric re-run detects.
 
 \subsection{The residual}
 
-After the fix, allocate is $1.12$--$1.33\times$ and that part is not attributed.
-We report it as unattributed rather than assigning it to the nearest available
-cause, which for most of this project would have been the wrong one eleven times
-running.
+After the fix, Rust's allocate stage spans $1.02$--$1.69\times$ across the
+sweep with a median of $1.21\times$, excluding the smallest cell, where the
+kernel is short enough that launch effects dominate and the ratio reaches
+$3.34\times$. That residual is not attributed. We report it as unattributed
+rather than assigning it to the nearest available cause, which over the course of
+this project would have been the wrong one eleven times running.
 
 \section{What each language cannot say}
 \label{sec:expressiveness}
@@ -896,25 +895,20 @@ across streaming multiprocessors, which holds on every current architecture. We
 claim the ranking and its causes generalise, and that the numbers attached to
 them do not. Nothing in the argument rests on a magnitude.
 
-The two-card axis is a partial mitigation rather than a substitute. It varies
-machine width at fixed code generation, and the ratios agree closely between the
-cards, which rules out their being an artefact of one machine's balance. An
-earlier version of these numbers halved between the two cards, and that turned
-out to be a symptom rather than a finding.
+The two-card axis is a partial mitigation rather than a substitute: it varies
+machine width at fixed code generation, which rules out the ratios being an
+artefact of one machine's balance but says nothing about a different generation.
 
-\paragraph{The sharpest prediction is untested.} The Triton explanation predicts
-that its advantage should shrink as the hash table fills, because CUDA C++ pays
-actual probe depth while Triton pays a fixed bound. The data structure prevents
-the test: the table is sized at twice the pool and the pool must hold every
-block, so the reachable load factor caps at 0.283, over which range CUDA's
-expected probe count moves only from 1.02 to 1.39. Reaching the regime where
-probe chains genuinely lengthen requires decoupling table size from pool
-capacity, which changes the shared data structure and therefore every arm. We
-report the prediction as untested rather than unsupported.
+\paragraph{The sharpest prediction is untested.} As Section~\ref{sec:results}
+describes, the load factor reachable in this data structure caps at 0.283, which
+is too low to exercise the regime the Triton explanation makes its strongest
+prediction about. Testing it requires decoupling table size from pool capacity,
+which changes the shared structure and therefore every arm. The prediction is
+untested rather than unsupported.
 
 \paragraph{An unattributed residual.} After the fix in
-Section~\ref{sec:attribution}, Rust's allocate stage remains $1.12$--$1.33\times$
-CUDA C++, and we do not know why. Given that eleven prior hypotheses about this
+Section~\ref{sec:attribution}, Rust's allocate stage remains $1.02$--$1.69\times$
+CUDA C++ with a median of $1.21\times$, and we do not know why. Given that eleven prior hypotheses about this
 same gap were each plausible and each wrong, we prefer to leave it open than to
 assign it to whichever cause is nearest.
 
@@ -1042,7 +1036,7 @@ lengthen requires decoupling the table size from the pool capacity, and would
 test the sharpest prediction the Triton explanation makes. A second architecture
 would establish whether the magnitudes hold across a hardware generation; we
 expect the mechanisms to and the numbers not to. And the residual
-$1.12$--$1.33\times$ on Rust's allocate stage remains open, which we note with
+$1.02$--$1.69\times$ on Rust's allocate stage remains open, which we note with
 some caution, having been confidently wrong about this particular gap eleven
 times already.
 
