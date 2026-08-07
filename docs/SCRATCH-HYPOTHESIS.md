@@ -114,12 +114,54 @@ That last sentence is the finding. A benchmark on one GPU reports 1.8 ms and
 looks reasonable. Only the second device shows the kernel had stopped scaling,
 and only varying a parameter of the workaround shows why.
 
+## The full sweep, re-run at 65,536 slots
+
+`results/sweep_20260807_084011/`, three passes per device, medians across
+passes. Allocate, p50 ms:
+
+| cell | A3 5070Ti | A5 5070Ti | A5/A3 | A3 5060 | A5 5060 | A5/A3 | A5 scaling |
+|---|---|---|---|---|---|---|---|
+| pts-20k | 0.0052 | 0.0853 | 16.4x | 0.0083 | 0.0949 | 11.4x | 1.11x |
+| pts-80k | 0.0106 | 0.1496 | 14.2x | 0.0191 | 0.3094 | 16.2x | 2.07x |
+| base | 0.0279 | 0.5277 | 18.9x | 0.0541 | 0.9642 | 17.8x | 1.83x |
+| pts-720k | 0.0518 | 1.2218 | 23.6x | 0.1026 | 2.1465 | 20.9x | 1.76x |
+| pts-1280k | 0.0799 | 2.0973 | 26.2x | 0.1677 | 3.8446 | 22.9x | 1.83x |
+| r-0.25 | 0.0238 | 0.5280 | 22.2x | 0.0443 | 0.9666 | 21.8x | 1.83x |
+| r-1.0 | 0.0331 | 0.5363 | 16.2x | 0.0614 | 0.9683 | 15.8x | 1.81x |
+| r-2.0 | 0.0606 | 0.5487 | 9.1x | 0.0884 | 0.9831 | 11.1x | 1.80x* |
+| lf-sparse | 0.0286 | 0.5313 | 18.5x | 0.0503 | 0.9634 | 19.2x | 1.81x |
+| plane-320k | 0.0295 | 0.5351 | 18.1x | 0.0533 | 0.9637 | 18.1x | 1.80x |
+
+\* `r-2.0` runs at batch 4 on the 8 GiB card against 8 on the 16 GiB one, so
+its cross-device row is not comparable and the report says so.
+
+**A5 now scales on every cell**, 1.76x to 2.07x, against 1.60x to 2.10x for A3.
+The single exception is `pts-20k` at 1.11x, where the kernel is 0.085 ms and
+launch overhead dominates for every arm. Before the fix A5 was 0.89x to 1.07x
+everywhere.
+
+**The ratio became device-independent.** Per-cell, the two cards now agree
+closely: 18.9 vs 17.8 at base, 22.2 vs 21.8 at r-0.25, 18.1 vs 18.1 at
+plane-320k. Previously they differed by roughly 2x on every cell. A ratio that
+survives a change of machine is a much better candidate for a language property
+than one that does not.
+
+**It is still workload-dependent**, 9.1x to 26.2x, and monotonic in the ways
+the axes predict: rising with point count (more inert CASes per resolved lane)
+and falling with extent (more blocks, so fewer lanes resolve early and the
+wasted work is a smaller share). Those are opposite levers and they move the
+ratio in opposite directions, which is the shape the mechanism predicts.
+
+The honest headline is therefore a range with the regime named, not a single
+number: **Triton's allocate costs 9x to 26x CUDA C++ on this workload family,
+about 19x at the baseline cell, on both cards.**
+
 ## Follow-up
 
 * The default in `bench_arms` remains `OSN_TRITON_BLOCK - 1` (256), so
-  historical numbers remain reproducible. The sweep should be re-run at 65,536
-  and the paper's tables regenerated from that, with the 256-slot row kept as
-  the "obvious implementation" comparison.
+  historical numbers remain reproducible. Published tables should come from the
+  65,536 run, with the 256-slot row kept as the "obvious implementation"
+  comparison.
 * `MAX_PROBE` interacts with this: the probe bound sets how many inert CASes
   each resolved lane issues. The `MAX_PROBE = 32` measurements were taken at 256
   slots and are therefore also pessimistic.

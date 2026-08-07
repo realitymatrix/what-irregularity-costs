@@ -238,6 +238,16 @@ int g_label = -1;
 /// docs/SCRATCH-HYPOTHESIS.md.
 int32_t g_scratch_mask = OSN_TRITON_BLOCK - 1;
 
+/// Identifies one pass over the matrix, so repeated passes can be compared.
+///
+/// Repeating the whole sweep is the only way to bound p50 stability. Within a
+/// single pass the allocate stage looks tighter than it is: cell r-2.0 reported
+/// a p50 of 0.047 ms in one pass and 0.060 in each of three reruns, a 30% swing,
+/// and no within-pass statistic flagged it, because that pass's samples were
+/// consistently in the fast mode. Neither p95/p50 nor p50/min separates a
+/// bimodal cell from a merely wide one after the fact.
+int g_run_id = 0;
+
 std::string nvsmi(const char* query) {
     char cmd[512];
     std::snprintf(cmd, sizeof(cmd),
@@ -318,7 +328,11 @@ uint32_t next_pow2_u(uint32_t v) {
 /// exceed an 8 GiB card, and silently falling back to a smaller BATCH without
 /// saying so would change what is being measured.
 size_t volume_bytes(int32_t pool_blocks) {
-    const uint32_t table = next_pow2_u((uint32_t)pool_blocks * 2u) + 256u;
+    // kScratchSlots, not 256: the scratch region is 16 MiB per volume since the
+    // region size became a runtime parameter, and omitting it here understates
+    // every cell by that much times BATCH, which is enough to OOM the 8 GiB
+    // card on the larger cells.
+    const uint32_t table = next_pow2_u((uint32_t)pool_blocks * 2u) + kScratchSlots;
     return (size_t)table * 16u                                       // hash entries
            + (size_t)pool_blocks * kBlockVoxels * 5u * sizeof(float)  // tsdf, w, r, g, b
            + (size_t)pool_blocks * 3u * sizeof(int32_t)               // block_coord
@@ -618,6 +632,7 @@ int main(int argc, char** argv) {
         auto next = [&]() -> const char* { return i + 1 < argc ? argv[++i] : ""; };
         if (a == "--device") g_device = std::atoi(next());
         else if (a == "--device-label") g_label = std::atoi(next());
+        else if (a == "--run-id") g_run_id = std::atoi(next());
         else if (a == "--scratch-slots") {
             const int32_t v = std::atoi(next());
             if (v < 1 || (v & (v - 1)) != 0) {
@@ -826,17 +841,18 @@ int main(int argc, char** argv) {
         FILE* f = fopen(csv_path.c_str(), append ? "a" : "w");
         if (f) {
             if (!append || ftell(f) == 0)
-                fprintf(f, "device,device_name,sm,sm_count,cell,axis,points,voxel_m,pool_blocks,"
-                           "blocks,load_factor,batch,arm,stage,p50_ms,p95_ms,p99_ms,min_ms,"
-                           "mean_ms,n,gpu_state\n");
+                fprintf(f, "run,device,device_name,sm,sm_count,cell,axis,points,voxel_m,"
+                           "pool_blocks,blocks,load_factor,batch,scratch_slots,arm,stage,"
+                           "p50_ms,p95_ms,p99_ms,min_ms,mean_ms,n,gpu_state\n");
             for (const auto& r : rows)
                 fprintf(f,
-                        "%d,\"%s\",%d%d,%d,%s,%s,%d,%.6f,%d,%d,%.6f,%d,%s,%s,"
+                        "%d,%d,\"%s\",%d%d,%d,%s,%s,%d,%.6f,%d,%d,%.6f,%d,%d,%s,%s,"
                         "%.6f,%.6f,%.6f,%.6f,%.6f,%d,\"%s\"\n",
-                        g_label, prop.name, prop.major, prop.minor, prop.multiProcessorCount,
-                        r.cell.c_str(), r.axis.c_str(), r.points, voxel, r.pool, r.blocks,
-                        r.load_factor, r.batch, r.arm.c_str(), r.stage.c_str(), r.s.p50, r.s.p95,
-                        r.s.p99, r.s.min, r.s.mean, r.s.n, r.gpu.c_str());
+                        g_run_id, g_label, prop.name, prop.major, prop.minor,
+                        prop.multiProcessorCount, r.cell.c_str(), r.axis.c_str(), r.points, voxel,
+                        r.pool, r.blocks, r.load_factor, r.batch, g_scratch_mask + 1,
+                        r.arm.c_str(), r.stage.c_str(), r.s.p50, r.s.p95, r.s.p99, r.s.min,
+                        r.s.mean, r.s.n, r.gpu.c_str());
             fclose(f);
             std::printf("  wrote %s (%zu rows%s)\n", csv_path.c_str(), rows.size(),
                         append ? ", appended" : "");

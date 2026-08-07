@@ -10,6 +10,28 @@
 
 namespace osn_tsdf {
 
+/// Scratch slots appended to the hash table, for the Triton arm's inert CASes.
+///
+/// Sized for the largest region any experiment asks for, not for the region
+/// actually used: the kernel takes a runtime mask, so the *used* region is
+/// chosen per launch and only this allocation has to be big enough. Costs
+/// 16 MiB per volume, small beside the voxel pool.
+///
+/// The size is load-bearing, not a tuning knob. `tl.atomic_cas` takes no mask,
+/// so every resolved lane still issues a CAS somewhere; with the original
+/// 256-slot region every program in the grid collided on the same 256
+/// addresses. That was measured to be the entire reason arm A5's allocate
+/// failed to scale with SM count while the other arms tracked the machine, and
+/// sizing it properly made the kernel 3.5x faster. See
+/// docs/SCRATCH-HYPOTHESIS.md.
+///
+/// Anything sizing a volume must account for this, or it will underestimate by
+/// 16 MiB per volume.
+#ifndef OSN_TSDF_SCRATCH_SLOTS
+#define OSN_TSDF_SCRATCH_SLOTS (1u << 20)
+#endif
+inline constexpr uint32_t kScratchSlots = OSN_TSDF_SCRATCH_SLOTS;
+
 /// Voxels per side of a block. Compile-time so indexing folds to shifts.
 ///
 /// 8 gives 512 voxels per block: small enough that a block is a cheap

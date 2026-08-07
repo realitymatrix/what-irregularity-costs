@@ -36,8 +36,14 @@ CSV="$OUT/sweep.csv"
 CSV_ABS="$(cd "$(dirname "$CSV")" && pwd)/$(basename "$CSV")"
 BIN_ABS="$(cd "$(dirname "$BIN")" && pwd)/$(basename "$BIN")"
 
+# Passes over the whole matrix. More than one is not optional for a published
+# number: within a single pass the allocate stage looks tighter than it is, and
+# cell r-2.0 reported a p50 of 0.047 ms in one pass against 0.060 in three
+# reruns without any within-pass statistic flagging it.
+REPEATS="${SWEEP_REPEATS:-3}"
+
 mapfile -t DEVICES < <(nvidia-smi --query-gpu=index --format=csv,noheader)
-echo "sweeping ${#DEVICES[@]} device(s) -> $CSV"
+echo "sweeping ${#DEVICES[@]} device(s) x $REPEATS pass(es) -> $CSV"
 
 # Record the machine state alongside the numbers. Without this the CSV is not
 # reproducible six months from now: driver and toolkit versions change what the
@@ -57,12 +63,14 @@ echo "sweeping ${#DEVICES[@]} device(s) -> $CSV"
                --format=csv
 } > "$OUT/environment.txt"
 
+first=1
+for run in $(seq 1 "$REPEATS"); do
 for d in "${DEVICES[@]}"; do
     echo
-    echo "################ device $d ################"
-    LOG="$OUT/device_${d}.log"
-    # First device writes the header, the rest append.
-    if [[ "$d" == "${DEVICES[0]}" ]]; then unset OSN_BENCH_CSV_APPEND
+    echo "################ device $d, pass $run ################"
+    LOG="$OUT/device_${d}_run${run}.log"
+    # First invocation writes the header, the rest append.
+    if [[ "$first" == "1" ]]; then unset OSN_BENCH_CSV_APPEND; first=0
     else export OSN_BENCH_CSV_APPEND=1; fi
     # Select the device with CUDA_VISIBLE_DEVICES, not --device.
     #
@@ -79,11 +87,12 @@ for d in "${DEVICES[@]}"; do
     # the whole sweep before PIPESTATUS is ever read. rc 4 means some cells were
     # invalid, which is an expected outcome worth continuing past, not a fault.
     ( cd "$BUILD" && CUDA_VISIBLE_DEVICES="$d" "$BIN_ABS" --device 0 --device-label "$d" \
-        --csv "$CSV_ABS" "$@" ) 2>&1 | tee "$LOG" || true
+        --run-id "$run" --csv "$CSV_ABS" "$@" ) 2>&1 | tee "$LOG" || true
     rc="${PIPESTATUS[0]}"
     # rc 4 means some cells were invalid or skipped, which is reported in the
     # log and is not a reason to abandon the remaining devices.
     [[ "$rc" == "0" || "$rc" == "4" ]] || { echo "device $d failed (rc=$rc)" >&2; exit "$rc"; }
+done
 done
 
 echo
