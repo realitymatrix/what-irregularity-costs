@@ -659,10 +659,11 @@ One GPU reports 1.8\,ms and looks reasonable.
 \centering
 \small
 \input{tables/counters}
-\caption{Allocate kernel counters, 320k points, RTX 5070 Ti. Every count above
-the rule favours Rust or ties, and Rust was slower. The counters below the rule
-are where the difference actually lives. ``Rust, fixed'' is after the change
-described in this section.}
+\caption{Allocate kernel counters, 320k points, RTX 5070 Ti. Above the rule are
+counts of work: Rust does less on every one except static instruction count,
+where it is within 2\%, and it was still slower. Below the rule are the counters
+that show why. ``Rust, fixed'' is after the change described in this section; the
+dash marks a figure not recorded for that build.}
 \label{tab:counters}
 \end{table}
 
@@ -681,16 +682,27 @@ launch overhead. Several were eliminated by experiments that required
 substantial work, including one that needed a patch to the Rust compiler backend
 before it could be run at all (Section~\ref{sec:expressiveness}).
 
-Hardware counters located it in one run. Of the fourteen warp stall reasons,
-\texttt{long\_scoreboard}, the wait for a long-latency memory operation to
-return, was the \emph{only} one that worsened, and it worsened by more than the
+Hardware counters located it in one run. Across every stall reason the profiler
+reports, \texttt{long\_scoreboard}, the wait for a long-latency memory operation
+to return, was the \emph{only} one that worsened, and it worsened by more than the
 whole gap; every other reason favoured Rust. The cause was L1 residency:
 identical requests over identical sectors, but $1.70\times$ the sectors pushed
 through to L2, and an L1 hit rate of 28.9\% against 55.9\%.
 
 \paragraph{The mechanism.} Two loads. The Rust implementation read the probe key
 and the published block index with a scoped atomic load; the CUDA implementation
-reads both plainly. \textbf{A GPU-scope atomic load must be coherent across
+reads both plainly.
+
+A note on sequence, because Section~\ref{sec:expressiveness} reports that the
+scoped atomic load could not be called at all in the version of
+\texttt{cuda-oxide} we started from. It could not, and the Rust arm originally
+used a volatile read instead. That construct \emph{also} bypasses L1, and more
+expensively, since Rust's volatile semantics lower to a system-scope access. We
+patched the compiler in order to test a different hypothesis, which failed; the
+patch then made the scoped atomic load usable, and it is the version reported
+here. The relevant point survives the detour and is arguably strengthened by it:
+\emph{both} constructs Rust offers for reading a location another thread writes
+bypass the cache, and the fix was to use neither. \textbf{A GPU-scope atomic load must be coherent across
 streaming multiprocessors, and no NVIDIA L1 cache is coherent across streaming
 multiprocessors, so such a load bypasses L1 by construction, on every call,
 however weak its ordering.} Relaxed removes ordering, not coherence.
@@ -846,7 +858,7 @@ hardware cost.
 A scoped atomic load is coherent at its scope. No NVIDIA L1 is coherent across
 streaming multiprocessors. Therefore the access cannot be served from L1, on
 every call, regardless of ordering: relaxed removes ordering, not coherence.
-Section~\ref{sec:attribution} measured that at 26 points of L1 hit rate and
+Section~\ref{sec:attribution} measured that at 27 points of L1 hit rate and
 $1.70\times$ the traffic to L2.
 
 Nothing warns the programmer. The source looks correct, the generated PTX looks

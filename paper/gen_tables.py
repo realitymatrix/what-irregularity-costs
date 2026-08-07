@@ -115,7 +115,7 @@ def table_counters(out, src):
     L = [r"\begin{tabular}{lrrr}", r"\toprule",
          r"Counter & CUDA C++ & Rust & Rust, fixed \\", r"\midrule"]
     for r in rows:
-        if r["metric"] == "L1 sector hit rate":
+        if r["metric"] == "warp cycles per issued instruction":
             L.append(r"\addlinespace")
         after = r["rust_after"] or "--"
         def fmt(v):
