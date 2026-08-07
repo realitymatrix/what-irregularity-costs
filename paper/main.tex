@@ -427,7 +427,93 @@ $2.33\times$ in streaming multiprocessor count.}
 \label{tab:totals}
 \end{table}
 
-% TODO: prose for the results, the workload sweep axes, and the device axis.
+\subsection{The split}
+
+Table~\ref{tab:stage} is the result. On the update stage, which walks a band and
+accumulates, the three languages differ by a small factor. On the allocate
+stage, which probes and inserts, Rust remains close to CUDA C++ while Triton is
+more than an order of magnitude behind.
+
+The wide ends of both ranges belong to the smallest cell, 20{,}000 points, where
+the kernel runs in a few microseconds and a fixed per-launch cost dominates
+anything the language does. We report the full range rather than excluding the
+cell, and Table~\ref{tab:cells} shows where it sits.
+
+On the full integrate path (Table~\ref{tab:totals}) the allocate stage is roughly
+a tenth of the work, so the totals are dominated by the regular stage: Rust lands
+within 1--3\% of CUDA C++ on real depth data and Triton at $2.6$--$2.9\times$. A
+practitioner reading only the totals would conclude that Rust is free and Triton
+is expensive; reading the stages shows that both conclusions come from one
+kernel.
+
+\subsection{The sweep, and what each axis shows}
+
+\begin{table}[h]
+\centering
+\small
+\input{tables/cells}
+\caption{Allocate ratio to CUDA C++ per cell, on the RTX 5070 Ti. Ratios, not
+times, because the axes change the absolute work by two orders of magnitude. The
+trends within each axis group are the evidence discussed below.}
+\label{tab:cells}
+\end{table}
+
+Table~\ref{tab:cells} groups the cells by axis. Two of the axes were chosen as
+opposite levers, and they move the Triton ratio in opposite directions, which is
+the strongest evidence in the paper that the mechanism in
+Section~\ref{sec:attribution} is the right one.
+
+\paragraph{Point count, at fixed geometry.} Raising the point count over the same
+surface raises contention while leaving the number of blocks unchanged. Triton's
+ratio rises with it, from $14.2\times$ to $24.7\times$, because every additional
+lane that resolves early still issues a compare-exchange it cannot mask off.
+Rust's ratio \emph{falls}, from $3.34\times$ to $1.21\times$, which is the
+signature of a fixed cost being amortised rather than a multiplier: the absolute
+difference is roughly constant while the work grows $64\times$.
+
+\paragraph{Extent, at fixed angular resolution.} Spreading the same points over a
+larger sphere raises the number of blocks while lowering per-voxel contention.
+Triton's ratio falls, from $21.3\times$ to $11.4\times$: with more blocks, fewer
+lanes resolve on the first probe, so the wasted work is a smaller share of the
+total. Two levers, opposite directions, one mechanism.
+
+\paragraph{Load factor.} The sharpest prediction of the Triton explanation is
+that its ratio should shrink as the table fills, because CUDA C++ pays actual
+probe depth while Triton pays a fixed bound. We could not test it. The table is
+sized at twice the pool and the pool must hold every block, so the reachable load
+factor caps at 0.283, over which range CUDA's expected probe count only moves
+from 1.02 to 1.39. The lever is too weak, and this is a limitation of the data
+structure rather than of the sweep (Section~\ref{sec:threats}).
+
+\paragraph{Real data.} Two cells unproject ground-truth depth from a TartanAir
+sequence. They validate the synthetic sweep rather than contradicting it: the
+ratios land inside the synthetic range and within a fraction of a point of the
+baseline cell. The warm cell, which integrates a frame into a volume already
+holding the preceding eight, is the regime a live pipeline is in for every frame
+after the first, and it is where Triton is worst in the entire sweep at
+$28.6\times$. In that regime most probes hit an existing key and exit
+immediately; CUDA C++ and Rust take that exit and Triton, which cannot, does not.
+
+\subsection{The device axis}
+
+The matrix runs on two GPUs differing $2.33\times$ in streaming multiprocessor
+count at identical code generation, since both are the same architecture. All
+three arms now scale with the machine, between $1.1\times$ and $2.2\times$
+against an available $2.33\times$, with the low ends again the smallest cell.
+
+This axis was not always uninteresting. Before a fix described in
+Section~\ref{sec:attribution}, Triton's allocate did not scale at all, at
+$0.89\times$ to $1.07\times$: adding forty streaming multiprocessors bought it
+nothing, and on some cells the narrower card was faster. That failure is
+invisible on a single device, which reports a plausible time and no indication
+that the kernel has stopped responding to hardware.
+
+The axis also serves as a check on the ratios themselves. Per cell, the two cards
+agree closely: Triton at $17.9\times$ on both at the baseline, Rust at
+$1.01$--$1.03\times$ on both with real data. A ratio that survives a change of
+machine balance is a better candidate for a language property than one that does
+not, and an earlier version of these numbers halved between the two cards, which
+was a symptom rather than a finding.
 
 \section{Attribution}
 \label{sec:attribution}

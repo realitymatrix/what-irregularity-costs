@@ -73,6 +73,36 @@ def table_by_stage(m, out):
     (out / "by_stage.tex").write_text("\n".join(L) + "\n")
 
 
+ORDER = [("pts-20k", "points"), ("pts-80k", "points"), ("base", "points"),
+         ("pts-720k", "points"), ("pts-1280k", "points"),
+         ("r-0.25", "extent"), ("r-1.0", "extent"), ("r-2.0", "extent"),
+         ("plane-320k", "shape"), ("tartan-cold", "real"), ("tartan-warm", "real")]
+
+
+def table_cells(m, meta, out):
+    """Per-cell allocate ratios on the wide GPU. The trends are the evidence."""
+    L = [r"\begin{tabular}{llrrrr}", r"\toprule",
+         r"Cell & Axis & Points & Load & Rust & Triton \\",
+         r"\midrule"]
+    prev = None
+    for cell, axis in ORDER:
+        if cell not in meta:
+            continue
+        if prev is not None and axis != prev:
+            L.append(r"\addlinespace")
+        prev = axis
+        pts, lf = meta[cell]
+        b = m.get(("0", cell, "A3-cuda", "allocate"))
+        r4 = m.get(("0", cell, "A4-rust", "allocate"))
+        r5 = m.get(("0", cell, "A5-triton", "allocate"))
+        if not b:
+            continue
+        L.append(f"{tex_escape(cell)} & {axis} & {pts:,} & {lf:.3f} & "
+                 f"{r4/b:.2f} & {r5/b:.1f} \\\\".replace(",", ","))
+    L += [r"\bottomrule", r"\end{tabular}"]
+    (out / "cells.tex").write_text("\n".join(L) + "\n")
+
+
 def main():
     if len(sys.argv) < 2:
         print(__doc__)
@@ -80,9 +110,13 @@ def main():
     src = pathlib.Path(sys.argv[1])
     out = pathlib.Path(__file__).parent / "tables"
     out.mkdir(exist_ok=True)
+    meta = {}
+    for r in csv.DictReader(open(src)):
+        meta[r["cell"]] = (int(r["points"]), float(r["load_factor"]))
     m = load(src)
     n = table_totals(m, out)
     table_by_stage(m, out)
+    table_cells(m, meta, out)
     (out / "PROVENANCE.txt").write_text(
         f"Generated from {src}\nby paper/gen_tables.py. Do not edit by hand.\n")
     print(f"wrote {n} workload rows and the per-stage summary to {out}")
