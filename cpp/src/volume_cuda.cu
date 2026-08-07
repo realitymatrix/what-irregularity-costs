@@ -206,10 +206,11 @@ void CudaVolume::reset() {
     const size_t n_vox = (size_t)impl_->cfg.pool_capacity_blocks * kBlockVoxels;
     // The table must be refilled with kEmptyKey, not zeroed: zero is a valid
     // packed coordinate, so a zeroed table reads as occupied.
-    std::vector<HashEntry> host(size + kScratchSlots, HashEntry{kEmptyKey, -1, 0});
-    for (uint32_t i = size; i < size + kScratchSlots; ++i) host[i].key = -2;
-    cudaMemcpyAsync(impl_->v.table, host.data(),
-                    (size_t)(size + kScratchSlots) * sizeof(HashEntry),
+    // Live table only. The scratch region past `size` is write-once (its
+    // sentinel key can never satisfy a CAS against kEmptyKey), so rewriting it
+    // every reset would copy 16 MiB per volume per repetition for no effect.
+    std::vector<HashEntry> host(size, HashEntry{kEmptyKey, -1, 0});
+    cudaMemcpyAsync(impl_->v.table, host.data(), (size_t)size * sizeof(HashEntry),
                     cudaMemcpyHostToDevice, impl_->stream);
     cudaMemsetAsync(impl_->v.block_count, 0, sizeof(int32_t), impl_->stream);
     cudaMemsetAsync(impl_->v.drop_count, 0, sizeof(unsigned long long), impl_->stream);

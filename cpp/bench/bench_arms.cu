@@ -230,6 +230,14 @@ int g_device = 0;
 /// must record which physical card produced the row.
 int g_label = -1;
 
+/// Size minus one of the scratch region arm A5's resolved lanes CAS into.
+///
+/// A hypothesis under test rather than a tuning knob. `OSN_TRITON_BLOCK - 1`
+/// reproduces the historical behaviour exactly, where every program in the grid
+/// shares the same 256 addresses. See --scratch-slots and
+/// docs/SCRATCH-HYPOTHESIS.md.
+int32_t g_scratch_mask = OSN_TRITON_BLOCK - 1;
+
 std::string nvsmi(const char* query) {
     char cmd[512];
     std::snprintf(cmd, sizeof(cmd),
@@ -439,11 +447,12 @@ bool run_cell(const Cell& cell, const ArmHandles& arms, int reps, int warmup, in
             void* args[] = {(void*)&d_pts, (void*)&dvs[j].table, (void*)&dvs[j].table,
                             (void*)&dvs[j].block_count, (void*)&dvs[j].block_coord,
                             (void*)&dvs[j].drop_count, (void*)&dvs[j].scratch_base,
+                            (void*)&g_scratch_mask,
                             (void*)&n, (void*)&hm, (void*)&dvs[j].pool_capacity,
                             (void*)&dvs[j].voxel_size_m, (void*)&dvs[j].trunc_m,
                             (void*)&z, (void*)&z, (void*)&z, (void*)&z};
             osn_triton_launch(arms.k_alloc, grid, OSN_TRITON_ALLOC_BLOCK_DIM_X,
-                              OSN_TRITON_ALLOC_SHARED, args, 16);
+                              OSN_TRITON_ALLOC_SHARED, args, 17);
         }
 #endif
     };
@@ -609,6 +618,14 @@ int main(int argc, char** argv) {
         auto next = [&]() -> const char* { return i + 1 < argc ? argv[++i] : ""; };
         if (a == "--device") g_device = std::atoi(next());
         else if (a == "--device-label") g_label = std::atoi(next());
+        else if (a == "--scratch-slots") {
+            const int32_t v = std::atoi(next());
+            if (v < 1 || (v & (v - 1)) != 0) {
+                std::printf("--scratch-slots must be a power of two, got %d\n", v);
+                return 1;
+            }
+            g_scratch_mask = v - 1;
+        }
         else if (a == "--reps") reps = std::atoi(next());
         else if (a == "--warmup") warmup = std::atoi(next());
         else if (a == "--batch") batch = std::atoi(next());
@@ -660,6 +677,9 @@ int main(int argc, char** argv) {
                 voxel);
     std::printf("  clocks/thermals are LOGGED, not pinned: nvidia-smi -lgc needs root\n");
     std::printf("  arm order is INTERLEAVED and rotated per repetition\n");
+    std::printf("  A5 scratch region: %d slots%s\n", g_scratch_mask + 1,
+                g_scratch_mask == OSN_TRITON_BLOCK - 1 ? " (historical, shared across the grid)"
+                                                       : "");
     std::printf("  device sync policy: requested SPIN -> %s\n",
                 flag_rc == cudaSuccess ? "applied" : cudaGetErrorName(flag_rc));
     std::printf("  state at start: %s\n", gpu_state().c_str());

@@ -54,7 +54,7 @@ def main(argv: list[str]) -> int:
     cx = dict(BLOCK=BLOCK, STEPS=STEPS, MAX_PROBE=MAX_PROBE, BLOCK_DIM=BLOCK_DIM)
 
     k_alloc = K.tsdf_alloc_kernel[(4,)](
-        pos, t64, t32, bc, bco, dr, hash_size, 1024, hash_size - 1, pool,
+        pos, t64, t32, bc, bco, dr, hash_size, BLOCK - 1, 1024, hash_size - 1, pool,
         0.01, 0.04, 0.0, 0.0, 0.0, 0.0, **cx)
     k_update = K.tsdf_update_kernel[(4,)](
         pos, t64, t32, tsdf, w, w, w, w, 1024, hash_size - 1,

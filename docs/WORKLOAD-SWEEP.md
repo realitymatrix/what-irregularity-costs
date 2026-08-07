@@ -246,7 +246,14 @@ it exits early and leaves only atomics on hot slots, and would therefore not.
 Measured, both halves are wrong. CUDA scales nearly linearly with the machine;
 Triton does not scale at all.
 
-### Mechanism, proposed and testable
+### Mechanism: CONFIRMED, see docs/SCRATCH-HYPOTHESIS.md
+
+The candidate below was tested and confirmed. Enlarging the scratch region from
+256 slots to 65,536 restores device scaling to 1.84x, against A3's 1.93x on the
+same cell, and makes the kernel 3.5x faster (1.812 to 0.524 ms). The
+failure-to-scale reported here is a property of the workaround's sizing, not of
+Triton's allocate as such, and the A5/A3 ratios in this document are therefore
+pessimistic by roughly 3.5x. Original text follows.
 
 The leading candidate is the scratch region. Because `tl.atomic_cas` takes no
 mask, every resolved lane still issues a CAS, aimed at one of
@@ -257,8 +264,7 @@ runtime, and more SMs would add contenders without adding throughput, which is
 exactly the observed shape.
 
 This predicts that varying `kScratchSlots` moves the device-scaling behaviour,
-and that a large enough region restores scaling. That experiment has not been
-run and the mechanism should not be stated as established until it has.
+and that a large enough region restores scaling. **Both predictions held.**
 
 ### It also changes how the headline ratio must be quoted
 

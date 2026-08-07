@@ -21,8 +21,23 @@ namespace osn_tsdf {
         }                                                                               \
     } while (0)
 
-/// Scratch slots appended to the hash table, one per lane of a Triton program.
-inline constexpr uint32_t kScratchSlots = 256;
+/// Scratch slots appended to the hash table, for the Triton arm's inert CASes.
+///
+/// Sized for the largest region any experiment asks for, not for the region
+/// actually used: the kernel takes a runtime mask, so the *used* region is
+/// chosen per launch and only this allocation has to be big enough. Costs
+/// 16 MiB per volume, which is small beside the voxel pool.
+///
+/// The size matters because it is a hypothesis under test. `tl.atomic_cas`
+/// takes no mask, so every resolved lane still issues a CAS somewhere, and with
+/// a 256-slot region every program in the grid collides on the same 256
+/// addresses. That is the leading explanation for arm A5's allocate failing to
+/// scale with SM count at all while the other arms track the machine
+/// (docs/WORKLOAD-SWEEP.md). Making the region per-program tests it.
+#ifndef OSN_TSDF_SCRATCH_SLOTS
+#define OSN_TSDF_SCRATCH_SLOTS (1u << 20)
+#endif
+inline constexpr uint32_t kScratchSlots = OSN_TSDF_SCRATCH_SLOTS;
 
 struct DeviceView {  // NOLINT: shared with other arms via the C API
     uint32_t scratch_base = 0;
@@ -78,9 +93,12 @@ struct CudaVolumeImpl {
 
         // The table must be filled with kEmptyKey, not zeroed: zero is a valid
         // block coordinate, so a zeroed table reads as occupied at (0,0,0).
+        //
+        // The scratch sentinels must differ from kEmptyKey and from any packed
+        // key, so an inert CAS can never succeed there. That also makes the
+        // region write-once: nothing ever mutates it, so it is initialised here
+        // and NOT rewritten by reset(), which matters now that it is 16 MiB.
         std::vector<HashEntry> host(size + kScratchSlots, HashEntry{kEmptyKey, -1, 0});
-        // Scratch sentinels must differ from kEmptyKey and from any packed key,
-        // so an inert CAS can never succeed there.
         for (uint32_t i = size; i < size + kScratchSlots; ++i) host[i].key = -2;
         CUDA_TRY(cudaMemcpy(v.table, host.data(),
                             (size_t)(size + kScratchSlots) * sizeof(HashEntry),

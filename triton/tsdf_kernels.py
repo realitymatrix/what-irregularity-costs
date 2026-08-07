@@ -100,6 +100,7 @@ def tsdf_alloc_kernel(
     block_coord_ptr,
     drop_count_ptr,
     scratch_base,          # first slot of the scratch REGION, see below
+    scratch_mask,          # region size minus 1; must be a power of two
     n_points,
     hash_mask,
     pool_capacity,
@@ -118,14 +119,24 @@ def tsdf_alloc_kernel(
     offs = pid * BLOCK + lane
     live = offs < n_points
 
-    # One scratch address PER LANE, not one shared slot.
+    # Where a resolved lane aims its inert CAS.
     #
     # `tl.atomic_cas` takes no mask, so a lane that has already resolved still
     # issues a CAS somewhere. Aiming them all at a single slot serialises the
-    # entire grid on one address: measured 10.7 ms with a shared slot against
-    # 1.7 ms with a region, a 5.9x difference, on top of the linear cost of the
+    # entire grid on one address: 10.7 ms with a shared slot against 1.7 ms with
+    # a 256-slot region, a 5.9x difference, on top of the linear cost of the
     # fixed probe bound. See tools/profile_a5_alloc.py.
-    my_scratch = scratch_base + lane
+    #
+    # The region size is now a RUNTIME argument rather than BLOCK-sized, because
+    # it is a hypothesis under test. Indexing by lane alone gives every program
+    # in the grid the same 256 addresses, so the number of colliding contenders
+    # grows with the grid while the address set does not. That is the leading
+    # explanation for this kernel failing to scale with SM count at all while
+    # the CUDA and Rust arms track the machine (docs/WORKLOAD-SWEEP.md).
+    # Indexing by `pid * BLOCK + lane` makes the region per-program when
+    # `scratch_mask` is large enough, and reproduces the old behaviour exactly
+    # when it is BLOCK-1, since pid * BLOCK vanishes modulo BLOCK.
+    my_scratch = scratch_base + ((pid * BLOCK + lane) & scratch_mask)
 
     px = tl.load(positions_ptr + offs * 3 + 0, mask=live, other=0.0)
     py = tl.load(positions_ptr + offs * 3 + 1, mask=live, other=0.0)

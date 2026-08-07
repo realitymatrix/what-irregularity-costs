@@ -318,9 +318,15 @@ int main() {
             const uint32_t grid = (uint32_t)((n + OSN_TRITON_BLOCK - 1) / OSN_TRITON_BLOCK);
 
             if (full) {
+                // Historical scratch layout: BLOCK slots shared by the whole
+                // grid. Pinned here rather than tracking the benchmark's
+                // --scratch-slots, so a change to the region size is measured as
+                // performance and cannot quietly change what is verified.
+                const int32_t scratch_mask = OSN_TRITON_BLOCK - 1;
                 void* aargs[] = {(void*)&d_pts,      (void*)&dv.table,     (void*)&dv.table,
                                  (void*)&dv.block_count, (void*)&dv.block_coord,
                                  (void*)&dv.drop_count,  (void*)&dv.scratch_base,
+                                 (void*)&scratch_mask,
                                  (void*)&n,          (void*)&hash_mask_i,  (void*)&dv.pool_capacity,
                                  (void*)&dv.voxel_size_m, (void*)&dv.trunc_m,
                                  (void*)&camv, (void*)&camv, (void*)&camv, (void*)&rsq};

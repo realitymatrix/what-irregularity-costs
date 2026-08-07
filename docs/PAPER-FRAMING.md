@@ -61,7 +61,12 @@ baseline cell rather than the result.
 
 Three findings, at three different levels of explanation.
 
-**Triton's 73x on allocate is fully attributed, and it is a language cost.**
+**Triton's allocate gap is fully attributed, and it is a language cost — but
+it is 18.7x, not the 73x published earlier.** See docs/SCRATCH-HYPOTHESIS.md:
+most of the difference was a badly-sized scratch region, an artefact of the
+workaround rather than of the language. The corrected figure is
+device-independent (18.7x and 17.8x on two cards) where the old one halved
+between them, which makes it the stronger claim despite being smaller.
 Both mechanisms are confirmed and they compound. No per-lane early exit means
 the probe loop runs to a fixed bound, so cost is linear in that bound: 8.38x
 for an 8x bound. And `tl.atomic_cas` takes no `mask`, so resolved lanes cannot
@@ -158,7 +163,8 @@ need real depth to be compared.
 4. **Extraction measured properly, or explicitly excluded.** It is 1.825 ms,
    6.6x the whole integrate path, and currently shared and unoptimised. Either
    it joins the comparison or the paper says plainly that it does not.
-5. **The scratch-region hypothesis tested.** The proposed mechanism for
-   Triton's failure to scale is collision on 256 scratch addresses. Varying
-   `kScratchSlots` should move it. Until run, the mechanism is proposed, not
-   established.
+5. ~~**The scratch-region hypothesis tested.**~~ **Done and confirmed**,
+   docs/SCRATCH-HYPOTHESIS.md. It cost the headline ratio: 73x became 18.7x.
+   Still open: re-run the full sweep at 65,536 slots and regenerate every table,
+   since all published A5 numbers are pessimistic by roughly 3.5x, and re-take
+   the MAX_PROBE = 32 measurements, which were made at 256 slots.
