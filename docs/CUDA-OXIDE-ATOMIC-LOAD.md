@@ -103,11 +103,22 @@ Two deliberate choices:
 That is a negative result for the performance hypothesis and a positive one for
 the patch: the experiment was impossible to run before, and it is now cheap to
 run. The defect is worth reporting upstream on its own merits.
-* Not yet done: upstream tests. `crates/dialect-nvvm/tests/ops_test.rs`
+* **Submitted upstream as NVlabs/cuda-oxide#695** (draft), 2026-08-07:
+  https://github.com/NVlabs/cuda-oxide/pull/695
+* Scope grew by one during the work. The shipped `atomics` example turned out
+  not to build under `--materialize-cubin` either, failing first on
+  `fence syncscope("block") release` -> "Illegal instruction: fence" in
+  `atomic_block_scope_acqrel_test`. That is the same defect class (an IR
+  construct libNVVM refuses where the PTX instruction exists), so `emit_fence`
+  is fixed the same way. Without it the example could not be made to build and
+  the fix could not be demonstrated end to end.
+* Superseded: upstream tests. `crates/dialect-nvvm/tests/ops_test.rs`
   already exercises `NvvmAtomicLoadOp`/`NvvmAtomicStoreOp` construction, but
-  the lowering needs a test asserting the emitted template, and there should
-  be a compile-and-run example under `crates/rustc-codegen-cuda/examples/`
-  since the whole point is that this path was never exercised end to end.
+  the lowering now also has two tests asserting the emitted templates,
+  constraints and asm kind, and that inexpressible orderings are rejected. A
+  new `scoped_atomic_load_store` example covers the path end to end: it fails
+  to compile on upstream `main` and passes with the change, which is what makes
+  it a regression test rather than a demo.
 
 ## Why this is worth reporting upstream regardless of the measurement
 
