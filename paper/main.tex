@@ -274,9 +274,132 @@ reconstruction specifically.
 \section{Methodology}
 \label{sec:method}
 
-% TODO: batched launches, interleaved arm order, exclusivity guard, three passes
-% and medians, the validity gates, and the dozen caught errors with the three
-% that would have reversed a conclusion.
+Most engineering benchmark papers are rejected for sloppy measurement rather
+than for uninteresting numbers. We describe the harness in detail, and then
+describe the errors it did \emph{not} prevent, because the second list is more
+useful than the first.
+
+\subsection{Correctness gates timing}
+
+No arm is timed until it is known to compute the right answer, and the checks
+are ordered by how much they can catch.
+
+\textbf{Analytic first.} Points are sampled on a sphere of known radius, so the
+extracted surface has a closed-form expected position. This is the only tier
+that can catch an error all arms share.
+
+\textbf{Third party second.} Open3D's voxel block grid provides an external
+reference for the algorithm's shape.
+
+\textbf{Cross-arm last.} The arms are compared to one another, at 0.000000000\,m
+mean surface distance in the final state.
+
+The order is not decoration. A half-voxel bias, in which the signed distance was
+evaluated at the ray sample that selected a voxel rather than at the voxel
+centre, passed the plane test and every cross-arm comparison, because all arms
+had inherited it. It was caught only by the sphere, where it appeared as a
+uniform 0.005\,m radius error; correcting it improved agreement to 0.000015\,m, a
+factor of 340. Had the project been built on cross-arm agreement alone, every
+number in it would have been wrong in the same direction and the agreement would
+have looked like evidence.
+
+\subsection{What the harness defends against}
+
+Each of the following exists because its absence produced a wrong number at some
+point during the work.
+
+\textbf{Amortised launches.} Each timed window contains several kernel launches
+rather than one, divided out afterwards. Timing a single launch measures the
+host's wait for completion as much as the kernel: the driver spins briefly and
+then blocks, and the scheduler wakeup of roughly 130\,\textmu s lands unevenly
+across arms depending on how much host work each does after enqueuing. This
+produced a spurious $4\times$ tail on one arm that a separate probe showed was
+entirely in the wait, with the kernel itself flat.
+
+Allocation additionally needs distinct volumes per launch: after the first
+launch the table is populated, so re-launching into the same volume would measure
+a lookup-only fast path.
+
+\textbf{Interleaved and rotated arm order.} Arms take turns within each
+repetition and the starting arm rotates. Running all of one arm and then all of
+another makes clock ramp indistinguishable from a language difference; a single
+session was observed going from 1575\,MHz to 2842\,MHz, which is larger than
+several of the effects being measured. A per-arm first-half against second-half
+comparison is printed as a check that the interleaving worked.
+
+\textbf{Exclusive device.} The harness refuses to run when another process holds
+significant memory on the target GPU. An unrelated job sharing the device once
+made one arm measure 4.455\,ms against its true 0.044\,ms, a $100\times$ error
+that looked like a plausible result.
+
+\textbf{Distributions, not means.} Median, 95th and 99th percentiles per stage,
+with the repeat count stated. Clocks and temperatures are recorded per cell
+rather than once per run, because a later cell running hotter than an earlier one
+is an artefact that is only visible if sampled alongside the timings.
+
+\subsection{The sweep}
+
+Every number comes from a matrix rather than a single scene, because a ratio
+measured once is a property of that scene's contention pattern as much as of the
+language. Four axes, chosen so that each answers a stated question rather than
+filling a table: point count at fixed geometry, which raises contention while
+holding hash work constant; extent at fixed angular resolution, which is the
+opposite lever; hash load factor; and scene shape, including two cells of real
+depth data.
+
+The matrix runs on two GPUs and three times over, and cells are discarded if any
+arm drops a block or disagrees with the reference on block count. Automatic
+reductions in batch size, when a cell's volumes will not fit in memory, are
+reported rather than silently applied, because a cell measured at a different
+batch size is not comparable to one that was not.
+
+\subsection{What went wrong anyway}
+
+Roughly a dozen errors were caught during this work. Most produced a wrong
+magnitude. Three produced a reversed or null conclusion, and two of those were
+caught only after the wrong number had been written down.
+
+\paragraph{A workload asymmetry made the slower arm look faster.} Colour
+accumulation was implemented in three arms and not the fourth, a 40\% difference
+in atomic traffic. Rust appeared $2\times$ faster than CUDA C++.
+
+\paragraph{A device axis was silently fake.} One arm's loader hardcodes device
+zero, and creating a driver-API context makes it current for the whole process,
+so an explicit device selection was ignored by every arm. The first two-device
+sweep reported a clean null result, identical performance across a $2.33\times$
+difference in streaming multiprocessor count, while the second card sat idle at
+8\,W. That is a striking and publishable-looking finding with a ready
+explanation, and nothing in the timings looked anomalous. It was caught only
+because the null was surprising enough to prompt a check of the card's power
+draw. The harness now selects the device by masking the process to one GPU and
+verifies the resulting context, because the runtime's notion of the current
+device and the driver's can differ.
+
+\paragraph{A single pass was not reproducible.} One cell reported 0.047\,ms in
+one pass and 0.060\,ms in each of three reruns, a 30\% swing. No within-pass
+statistic separates that case: flagging on the ratio of the 95th percentile to
+the median fires on eight of ten cells and misses this one. Only repetition of
+the whole matrix detects it, which is why the sweep runs three passes and reports
+medians.
+
+A fourth is worth listing because it was a stage-level rather than an arm-level
+error. The extraction stage's reported time was 82\% to 97\% device-to-host
+transfer over PCIe links of differing width, so its apparent $6.9\times$
+difference between the two GPUs was the motherboard. Actual compute differed by
+$1.24\times$.
+
+\subsection{What this suggests}
+
+The common thread is that all three reversing errors were failures of
+\emph{comparability} rather than of precision. The two sides were not doing the
+same work, or were not running on the same machine, or were not being summarised
+by a statistic that survived repetition. None of them would have been caught by
+running more repetitions or reporting tighter error bars.
+
+A language comparison's credibility rests entirely on those three properties,
+and in this project each of them turned out to be something the harness had to
+verify rather than assume. We suggest that any such comparison state explicitly
+how it established them.
 
 \section{Results}
 \label{sec:results}
