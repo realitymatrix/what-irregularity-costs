@@ -1,0 +1,62 @@
+\begin{thebibliography}{1}
+
+\bibitem{curless1996volumetric}
+Brian Curless and Marc Levoy.
+\newblock A volumetric method for building complex models from range images.
+\newblock In {\em Proceedings of the 23rd Annual Conference on Computer
+  Graphics and Interactive Techniques (SIGGRAPH)}, pages 303--312, 1996.
+
+\bibitem{davis2024portability}
+Joshua~H. Davis, Pranav Sivaraman, Joy Kitson, Konstantinos Parasyris,
+  Harshitha Menon, Isaac Minn, Giorgis Georgakoudis, and Abhinav Bhatele.
+\newblock Taking {GPU} programming models to task for performance portability.
+\newblock {\em arXiv preprint arXiv:2402.08950}, 2024.
+\newblock Conference version: \url{https://doi.org/10.1145/3721145.3730423}.
+
+\bibitem{cudaoxidepr}
+Petr Korolev and {cuda-oxide maintainers}.
+\newblock fix(mir-lower): lower scoped atomic load/store and fences to inline
+  {PTX}.
+\newblock NVlabs/cuda-oxide pull request \#695, merged as \texttt{c68632a3},
+  2026.
+
+\bibitem{newcombe2011kinectfusion}
+Richard~A. Newcombe, Shahram Izadi, Otmar Hilliges, David Molyneaux, David Kim,
+  Andrew~J. Davison, Pushmeet Kohli, Jamie Shotton, Steve Hodges, and Andrew
+  Fitzgibbon.
+\newblock {KinectFusion}: Real-time dense surface mapping and tracking.
+\newblock In {\em 10th IEEE International Symposium on Mixed and Augmented
+  Reality (ISMAR)}, pages 127--136, 2011.
+
+\bibitem{niessner2013voxelhashing}
+Matthias Nie{\ss}ner, Michael Zollh{\"o}fer, Shahram Izadi, and Marc
+  Stamminger.
+\newblock Real-time {3D} reconstruction at scale using voxel hashing.
+\newblock {\em ACM Transactions on Graphics}, 32(6), 2013.
+
+\bibitem{cudaoxide}
+{NVIDIA}.
+\newblock {cuda-oxide}: A {Rust} to {PTX} compiler.
+\newblock \url{https://github.com/NVlabs/cuda-oxide}, 2026.
+\newblock Measured at commit \texttt{2db9713}.
+
+\bibitem{tillet2019triton}
+Philippe Tillet, H.~T. Kung, and David Cox.
+\newblock Triton: An intermediate language and compiler for tiled neural
+  network computations.
+\newblock In {\em Proceedings of the 3rd ACM SIGPLAN International Workshop on
+  Machine Learning and Programming Languages (MAPL)}, 2019.
+
+\bibitem{wang2020tartanair}
+Wenshan Wang, Delong Zhu, Xiangwei Wang, Yaoyu Hu, Yuheng Qiu, Chen Wang, Yafei
+  Hu, Ashish Kapoor, and Sebastian Scherer.
+\newblock {TartanAir}: A dataset to push the limits of visual {SLAM}.
+\newblock In {\em IEEE/RSJ International Conference on Intelligent Robots and
+  Systems (IROS)}, 2020.
+
+\bibitem{zhou2018open3d}
+Qian-Yi Zhou, Jaesik Park, and Vladlen Koltun.
+\newblock {Open3D}: A modern library for {3D} data processing.
+\newblock {\em arXiv preprint arXiv:1801.09847}, 2018.
+
+\end{thebibliography}

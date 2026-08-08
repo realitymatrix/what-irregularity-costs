@@ -256,33 +256,40 @@ motherboard.
 
 \begin{figure}[h]
 \centering
-\begin{minipage}{0.32\linewidth}\centering
-\includegraphics[width=\linewidth]{tartan-warm.png}\\{\footnotesize real depth, warm}
+\begin{minipage}{0.235\linewidth}\centering
+\includegraphics[width=\linewidth]{tartan-warm.png}\\{\scriptsize RetroOffice, warm}
 \end{minipage}\hfill
-\begin{minipage}{0.32\linewidth}\centering
-\includegraphics[width=\linewidth]{base.png}\\{\footnotesize sphere, 320k points}
+\begin{minipage}{0.235\linewidth}\centering
+\includegraphics[width=\linewidth]{diner-p000.png}\\{\scriptsize AmericanDiner, warm}
 \end{minipage}\hfill
-\begin{minipage}{0.32\linewidth}\centering
-\includegraphics[width=\linewidth]{pts-20k.png}\\{\footnotesize sphere, 20k points}
+\begin{minipage}{0.235\linewidth}\centering
+\includegraphics[width=\linewidth]{base.png}\\{\scriptsize sphere, 320k points}
+\end{minipage}\hfill
+\begin{minipage}{0.235\linewidth}\centering
+\includegraphics[width=\linewidth]{pts-20k.png}\\{\scriptsize sphere, 20k points}
 \end{minipage}
 
 \vspace{6pt}
-\begin{minipage}{0.32\linewidth}\centering
-\includegraphics[width=\linewidth]{plane-320k.png}\\{\footnotesize plane, 320k points}
+\begin{minipage}{0.235\linewidth}\centering
+\includegraphics[width=\linewidth]{plane-320k.png}\\{\scriptsize plane, 320k points}
 \end{minipage}\hfill
-\begin{minipage}{0.32\linewidth}\centering
-\includegraphics[width=\linewidth]{r-2.0.png}\\{\footnotesize sphere, 2\,m radius}
+\begin{minipage}{0.235\linewidth}\centering
+\includegraphics[width=\linewidth]{r-2.0.png}\\{\scriptsize sphere, 2\,m radius}
 \end{minipage}\hfill
-\begin{minipage}{0.32\linewidth}\centering
-\includegraphics[width=\linewidth]{lf-hi.png}\\{\footnotesize load factor 0.283}
+\begin{minipage}{0.235\linewidth}\centering
+\includegraphics[width=\linewidth]{lf-hi.png}\\{\scriptsize load factor 0.283}
+\end{minipage}\hfill
+\begin{minipage}{0.235\linewidth}\centering
+\includegraphics[width=\linewidth]{tartan-dense.png}\\{\scriptsize real, load factor 0.437}
 \end{minipage}
 \caption{What the cells actually build, rendered from the fused volume: one lit
 point per occupied voxel, shaded by the surface normal the TSDF supplies. These
 are the reconstructions the timings come from, not illustrations of them. The
-20k-point cell is the sweep's outlier in every table, and the reason is visible
-here: at that density the volume barely reaches the weight threshold anywhere,
-so there is almost no work for the kernel to do and a fixed per-launch cost
-dominates whatever the language contributes.}
+two rooms are different environments, which is what the real-data axis varies
+beyond camera path. The 20k-point cell is the sweep's outlier in every table,
+and the reason is visible here: at that density the volume barely reaches the
+weight threshold anywhere, so there is almost no work for the kernel to do and
+a fixed per-launch cost dominates whatever the language contributes.}
 \label{fig:scenes}
 \end{figure}
 
