@@ -73,6 +73,13 @@ def main():
     m, meta = load(src)
     totals, cells, st = build(m, meta)
     tpl = (pathlib.Path(__file__).parent / "page_template.html").read_text()
+    # The charts are inlined rather than linked so that the CSS variables they
+    # carry resolve against the page's theme; an <img> would isolate them.
+    figs = pathlib.Path(__file__).parent.parent / "docs/figures"
+    for name in ("stages", "axes", "counters"):
+        svg = figs / f"{name}.svg"
+        tpl = tpl.replace("{{FIG_%s}}" % name.upper(),
+                          svg.read_text() if svg.exists() else "")
     html = (tpl.replace("{{TOTALS}}", totals).replace("{{CELLS}}", cells)
                .replace("{{ALLOC_RUST}}", f"{st[('allocate','A4-rust')][0]:.2f}&ndash;{st[('allocate','A4-rust')][1]:.2f}&times;")
                .replace("{{ALLOC_TRITON}}", f"{st[('allocate','A5-triton')][0]:.1f}&ndash;{st[('allocate','A5-triton')][1]:.1f}&times;")

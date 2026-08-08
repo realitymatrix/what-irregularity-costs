@@ -21,6 +21,7 @@
 \usepackage{booktabs}
 \usepackage{amsmath}
 \usepackage{graphicx}
+\graphicspath{{figures/}}
 \usepackage{listings}
 \usepackage{xcolor}
 \usepackage[hidelinks]{hyperref}
@@ -508,7 +509,19 @@ $2.33\times$ in streaming multiprocessor count.}
 
 \subsection{The split}
 
-Table~\ref{tab:stage} is the result. On the update stage, which walks a band and
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{stages.pdf}
+\caption{The result. The same two implementations, priced separately on the
+regular stage and the irregular one, as a range over all twelve workload cells
+with the median marked. Both arms sit close to CUDA C++ on the stage that walks
+a band and accumulates; on the stage that probes and inserts, Triton is more
+than an order of magnitude behind and Rust's cost becomes strongly
+workload-dependent. Log scale.}
+\label{fig:stages}
+\end{figure}
+
+Figure~\ref{fig:stages} and Table~\ref{tab:stage} are the result. On the update stage, which walks a band and
 accumulates, the three languages differ by a small factor. On the allocate
 stage, which probes and inserts, Rust remains close to CUDA C++ while Triton is
 more than an order of magnitude behind.
@@ -526,6 +539,19 @@ is expensive; reading the stages shows that both conclusions come from one
 kernel.
 
 \subsection{The sweep, and what each axis shows}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{axes.pdf}
+\caption{Two levers that move contention in opposite directions, on the
+RTX~5070~Ti. Adding points over fixed geometry raises the number of threads
+contending for each table slot, and Triton's allocate cost rises with it;
+spreading the same points over more blocks lowers contention, and Triton's cost
+falls. A cost driven by problem size would slope the same way in both panels.
+Rust falls in both, which is the shape of a fixed per-launch cost being
+amortised rather than a contention cost. Log--log.}
+\label{fig:axes}
+\end{figure}
 
 \begin{table}[h]
 \centering
@@ -710,8 +736,22 @@ however weak its ordering.} Relaxed removes ordering, not coherence.
 The block index is almost always already published, so the Rust version paid an
 uncached access on the common path where the CUDA version pays a cached one and
 reserves the uncached access for when it is genuinely waiting. Making both first
-reads plain restores every counter to parity (Table~\ref{tab:counters}) and takes
-allocate from $1.63\times$ to $1.33\times$ at the baseline cell.
+reads plain restores every counter to parity (Figure~\ref{fig:counters} and
+Table~\ref{tab:counters}) and takes allocate from $1.63\times$ to $1.33\times$
+at the baseline cell.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{counters.pdf}
+\caption{What the two-line change moved, each counter normalised to CUDA C++ so
+that quantities in different units share one axis. Hollow markers are the Rust
+kernel before the fix, filled markers after. The kernel was moving
+$1.70\times$ the L2 sectors from identical requests and retaining barely half
+as much in L1; afterwards every counter lands on the reference. Note that for
+L1 hit rate a value below $1$ is the bad direction, since it is the only
+counter here where more is better.}
+\label{fig:counters}
+\end{figure}
 
 This is correct rather than a relaxation of correctness, and the distinction
 matters: the \emph{algorithm} provides the guarantee that the memory model was

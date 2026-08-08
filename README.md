@@ -40,8 +40,14 @@ Full integrate path on real depth data: Rust 1.01–1.03x, Triton 2.57–2.92x.
 cmake -S cpp -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j
 build/test_cuda_analytic          # correctness gate: all arms vs analytic geometry
 tools/sweep.sh build              # the full matrix, 3 passes per device
-paper/gen_tables.py results/sweep_*/sweep.csv
+paper/gen_tables.py  results/sweep_*/sweep.csv  # paper tables
+tools/gen_figures.py results/sweep_*/sweep.csv  # paper figures + page charts
+tools/gen_page.py    results/sweep_*/sweep.csv  # docs/index.html
 ```
+
+Nothing in the paper or on the project page is typed in by hand: the tables, the
+figures and the page all come off those three generators reading the same CSVs,
+so a number cannot drift in one place without moving in the others.
 
 Requires an NVIDIA GPU. Measurements in the paper are sm_120 (Blackwell), CUDA
 13.0, driver 580.

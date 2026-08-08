@@ -10,23 +10,30 @@
   --bg:#fbfaf8; --fg:#14171c; --muted:#5a6472; --rule:#dfe1e6; --rule-hard:#c4c8cf;
   --accent:#1a5fb4; --code-bg:#f2f2ef;
   --cuda:#4a7318; --rust:#a63a0c; --triton:#5f4390;
+  --c-rust:#a63a0c; --c-triton:#5f4390;
 }
 @media (prefers-color-scheme:dark){
   :root{ --bg:#14161a; --fg:#e4e7ea; --muted:#98a1ac; --rule:#282d34; --rule-hard:#3a414a;
          --accent:#82adea; --code-bg:#1a1d23;
-         --cuda:#8fc44a; --rust:#e08050; --triton:#a98ada; }
+         --cuda:#8fc44a; --rust:#e08050; --triton:#a98ada;
+         --c-rust:#d1663a; --c-triton:#9b7ae0; }
 }
 :root[data-theme=light]{
   --bg:#fbfaf8; --fg:#14171c; --muted:#5a6472; --rule:#dfe1e6; --rule-hard:#c4c8cf;
   --accent:#1a5fb4; --code-bg:#f2f2ef;
   --cuda:#4a7318; --rust:#a63a0c; --triton:#5f4390;
+  --c-rust:#a63a0c; --c-triton:#5f4390;
 }
 :root[data-theme=dark]{
   --bg:#14161a; --fg:#e4e7ea; --muted:#98a1ac; --rule:#282d34; --rule-hard:#3a414a;
   --accent:#82adea; --code-bg:#1a1d23;
   --cuda:#8fc44a; --rust:#e08050; --triton:#a98ada;
+  --c-rust:#d1663a; --c-triton:#9b7ae0;
 }
 *{box-sizing:border-box}
+figure{margin:26px 0 8px}
+figure svg{display:block; width:100%; height:auto; max-width:100%}
+figcaption{color:var(--muted); font-size:.87rem; line-height:1.5; max-width:64ch; padding-top:10px}
 body{
   margin:0; background:var(--bg); color:var(--fg);
   font:17px/1.62 Charter,"Bitstream Charter",Georgia,"Times New Roman",serif;
@@ -130,18 +137,16 @@ same hash-blocked TSDF fusion kernel five times and measure it on a workload wit
 opposite character: an open-addressed hash table with compare-exchange insertion,
 data-dependent per-lane probe depth, and contended scatter.</p>
 
-<div class="split">
-  <div class="card">
-    <div class="lbl">Regular stage &mdash; walk and accumulate</div>
-    <div class="big"><span class="rust">{{UPD_RUST}}</span> <span class="triton">{{UPD_TRITON}}</span></div>
-    <div class="note">Rust and Triton, relative to CUDA C++</div>
-  </div>
-  <div class="card">
-    <div class="lbl">Irregular stage &mdash; probe and insert</div>
-    <div class="big"><span class="rust">{{ALLOC_RUST}}</span> <span class="triton">{{ALLOC_TRITON}}</span></div>
-    <div class="note">Same kernel, same memory, same algorithm</div>
-  </div>
-</div>
+<figure>
+  {{FIG_STAGES}}
+  <figcaption>The same two implementations, priced separately on each stage, as a
+  range over all twelve workloads on both GPUs with the median marked. Log scale;
+  CUDA C++ is the reference at 1&times;. Rust is
+  <span class="rust">{{UPD_RUST}}</span> on the regular stage and
+  <span class="rust">{{ALLOC_RUST}}</span> on the irregular one; Triton is
+  <span class="triton">{{UPD_TRITON}}</span> against
+  <span class="triton">{{ALLOC_TRITON}}</span>.</figcaption>
+</figure>
 
 <div class="finding">Language choice is nearly free on the work that is usually
 benchmarked, and expensive on the work that is not.</div>
@@ -199,6 +204,15 @@ the memory model provides the guarantee, restores every counter to parity. Nothi
 the source, the PTX, the machine code or the occupancy reveals this; it is visible only
 in where the data is permitted to live.</p>
 
+<figure>
+  {{FIG_COUNTERS}}
+  <figcaption>What the two-line change moved. Each counter is normalised to
+  CUDA C++ so that quantities in different units share one axis; hollow markers
+  are the Rust kernel before the fix, filled after. L1 hit rate is the one
+  counter here where more is better, so its below-1 position is the bad
+  direction.</figcaption>
+</figure>
+
 <hr>
 
 <h2>The sweep</h2>
@@ -207,6 +221,14 @@ in where the data is permitted to live.</p>
 in opposite directions &mdash; the strongest evidence that the mechanism above is the
 right one. Raising point count over fixed geometry raises contention and Triton rises;
 spreading the same points over more blocks lowers contention and Triton falls.</p>
+
+<figure>
+  {{FIG_AXES}}
+  <figcaption>A cost driven by problem size would slope the same way in both
+  panels. Triton does not, which is what makes contention rather than size the
+  explanation. Rust falls in both, the shape of a fixed per-launch cost being
+  amortised rather than a contention cost. RTX&nbsp;5070&nbsp;Ti, log&ndash;log.</figcaption>
+</figure>
 
 <div class="tablewrap">
 <table>
