@@ -230,7 +230,7 @@ surface with it.</p>
 every lane pays worst-case depth. And <code>tl.atomic_cas</code> takes no mask, unlike
 <code>tl.atomic_add</code>, so lanes that have already resolved must be aimed at a
 scratch address. That scratch structure has no counterpart in the CUDA implementation,
-and sizing it badly costs a factor of twenty &mdash; while also silently destroying the
+and sizing it badly costs a factor of twenty, while also silently destroying the
 kernel's ability to use additional streaming multiprocessors, a failure invisible on a
 single GPU.</p>
 
@@ -241,7 +241,7 @@ enough to silently lose data at load factors CUDA C++ handles exactly.</p>
 <h3>Rust: the safe construct is the expensive one</h3>
 <p>Rust's gap was invisible to every instruction count we could take. The Rust kernel
 issues fewer branches, fewer memory operations and 12% fewer dynamic compare-exchanges,
-from a smaller register budget, at identical occupancy &mdash; and was still slower. It
+from a smaller register budget, at identical occupancy. And it was still slower. It
 does less work, more slowly.</p>
 
 <p>Hardware counters found it in L1 residency: identical requests, but 1.70&times; the
@@ -249,7 +249,7 @@ sectors pushed to L2 and an L1 hit rate of 28.9% against 55.9%.</p>
 
 <div class="finding">A GPU-scope atomic load must be coherent across SMs. No NVIDIA L1
 is coherent across SMs. So the type-correct way to read a shared location bypasses the
-cache on every access &mdash; relaxed removes ordering, not coherence.</div>
+cache on every access: relaxed removes ordering, not coherence.</div>
 
 <p>Replacing two such reads with plain loads, correct because the algorithm rather than
 the memory model provides the guarantee, restores every counter to parity. Nothing in
@@ -270,8 +270,8 @@ in where the data is permitted to live.</p>
 <h2>The sweep</h2>
 
 <p>Two of the four axes were chosen as opposite levers, and they move the Triton ratio
-in opposite directions &mdash; the strongest evidence that the mechanism above is the
-right one. Raising point count over fixed geometry raises contention and Triton rises;
+in opposite directions, which is the strongest evidence that the mechanism above is
+the right one. Raising point count over fixed geometry raises contention and Triton rises;
 spreading the same points over more blocks lowers contention and Triton falls.</p>
 
 <figure>
@@ -291,8 +291,8 @@ spreading the same points over more blocks lowers contention and Triton falls.</
   <tbody>{{CELLS}}</tbody>
   <caption>Allocate ratio to CUDA C++ per cell, RTX 5070 Ti. The widest Rust value is the
   smallest cell, where the kernel is short enough that launch effects dominate. The
-  highest Triton value is the warm real-data cell &mdash; the regime a live pipeline is
-  in for every frame after the first.</caption>
+  highest Triton value is the warm real-data cell, the regime a live pipeline is in for
+  every frame after the first.</caption>
 </table>
 </div>
 
@@ -325,13 +325,13 @@ workaround rather than the language.</p>
 <p>In the version of <code>cuda-oxide</code> used here, the scoped atomic load and store
 <strong>could not be called at all</strong>. Both lowered to LLVM IR that libNVVM rejects,
 so every call failed the backend verifier in the build mode that produces real kernels
-&mdash; with an error naming an LLVM basic block rather than the offending line of Rust.
+with an error naming an LLVM basic block rather than the offending line of Rust.
 The project's own atomics example does not build in that mode.</p>
 
 <p>The underlying PTX instructions have existed since sm_70, so this was a lowering gap
 rather than a hardware limit. The fix was contributed with tests, a regression example,
 and the CI registration whose absence let the defect survive, and is
-<a href="https://github.com/NVlabs/cuda-oxide/pull/695">merged upstream</a> &mdash; the
+<a href="https://github.com/NVlabs/cuda-oxide/pull/695">merged upstream</a>. The
 API is callable in current <code>cuda-oxide</code>.</p>
 
 <p>The maintainer amended it in two respects, both corrections rather than polish. We had
