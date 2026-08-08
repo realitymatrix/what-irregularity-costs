@@ -173,12 +173,14 @@ def render_diff(pos_a, nor_a, pos_b, size, yaw, pitch, leaf):
 # The cells worth a picture: one per distinct thing the sweep varies, rather
 # than all fifteen, most of which are the same sphere at a different density.
 GALLERY = [
-    ("tartan-warm", "real depth, warm volume", 0.75, 0.30),
+    ("tartan-warm", "RetroOffice, warm volume", 0.75, 0.30),
+    ("diner-p000", "AmericanDiner, warm volume", 0.75, 0.30),
     ("base", "sphere, 320k points", 0.9, 0.42),
     ("pts-20k", "sphere, 20k points", 0.9, 0.42),
     ("plane-320k", "plane, 320k points", -0.5, 0.40),
     ("r-2.0", "sphere, 2 m radius", 0.9, 0.42),
-    ("lf-hi", "load factor 1.05", 0.9, 0.42),
+    ("lf-hi", "sphere, load factor 0.283", 0.9, 0.42),
+    ("tartan-dense", "real depth, load factor 0.437", 0.75, 0.30),
 ]
 
 

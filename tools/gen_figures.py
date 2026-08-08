@@ -125,7 +125,8 @@ def fig_stages(med, meta, pal):
     ax.set_ylim(-0.6, 3.9)
     ax.set_yticks(range(4))
     ax.set_yticklabels(labels)
-    ax.set_xlabel("time relative to CUDA C++ (log scale), range over 12 workloads on 2 GPUs",
+    ax.set_xlabel(f"time relative to CUDA C++ (log scale), range over "
+                  f"{len(cells)} workloads on {len(devices)} GPUs",
                   fontsize=8, color=pal["muted"])
     style(ax, pal)
     ax.tick_params(axis="y", length=0)

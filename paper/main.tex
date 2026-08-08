@@ -274,7 +274,7 @@ motherboard.
 \includegraphics[width=\linewidth]{r-2.0.png}\\{\footnotesize sphere, 2\,m radius}
 \end{minipage}\hfill
 \begin{minipage}{0.32\linewidth}\centering
-\includegraphics[width=\linewidth]{lf-hi.png}\\{\footnotesize load factor 1.05}
+\includegraphics[width=\linewidth]{lf-hi.png}\\{\footnotesize load factor 0.283}
 \end{minipage}
 \caption{What the cells actually build, rendered from the fused volume: one lit
 point per occupied voxel, shaded by the surface normal the TSDF supplies. These
@@ -500,6 +500,24 @@ error, and because it shows the same failure at a different granularity: the
 extraction stage's reported time turned out to be mostly bus traffic rather than
 compute (Section~\ref{sec:workload}).
 
+\paragraph{Two more silent-measurement defects, found by widening the sweep.}
+Adding real-data cells surfaced two failures of the same kind as the fake
+device axis, and we record them for the same reason. First, a cell that sizes
+its pool from the measured block count sized it from the frame alone, ignoring
+the warm pre-fill, so the pool was exhausted before the timed window opened and
+the cell measured pool exhaustion rather than table contention; because an
+unbounded probe against a full table scans every slot for every point, a cell
+that should run in two seconds ran for over half an hour, which is the only
+reason we noticed. Second, the Triton cubin path is resolved relative to the
+working directory, and the sweep driver runs from the build directory, so an
+override that is correct from the repository root silently drops the Triton
+arm: a complete sweep ran, reported ``0 invalid'', and compared two arms where
+three were asked for. The harness now refuses to run with an arm missing unless
+told explicitly to allow it. A third instance, the same day, was a sweep run at
+the historical scratch-region size, which costs the Triton arm a factor of
+three to four; that value is no longer the default, because a default is what
+you measure by forgetting a flag.
+
 \subsection{What this suggests}
 
 The common thread is that all three reversing errors were failures of
@@ -545,7 +563,7 @@ $2.33\times$ in streaming multiprocessor count.}
 \centering
 \includegraphics[width=\linewidth]{stages.pdf}
 \caption{The result. The same two implementations, priced separately on the
-regular stage and the irregular one, as a range over all twelve workload cells
+regular stage and the irregular one, as a range over all nineteen workload cells
 with the median marked. Both arms sit close to CUDA C++ on the stage that walks
 a band and accumulates; on the stage that probes and inserts, Triton is more
 than an order of magnitude behind and Rust's cost becomes strongly
@@ -557,6 +575,15 @@ Figure~\ref{fig:stages} and Table~\ref{tab:stage} are the result. On the update 
 accumulates, the three languages differ by a small factor. On the allocate
 stage, which probes and inserts, Rust remains close to CUDA C++ while Triton is
 more than an order of magnitude behind.
+
+The real-depth cells sit at the \emph{worse} end of Triton's range rather than
+the middle of it: across the nine valid real cells its allocate ratio spans
+$17.3$--$31.6\times$ with a median of $25.2\times$, against $11.2$--$31.6\times$
+and a median of $21.5\times$ over the sweep as a whole. Rust does not show the
+same effect, spanning $1.12$--$1.41\times$ on real data against $1.02$--$3.34$
+overall. Synthetic scenes therefore understate the cost of the construct
+Triton lacks, which matters because a synthetic scene is what a language
+comparison would ordinarily be run on.
 
 The wide ends of both ranges belong to the smallest cell, 20{,}000 points, where
 the kernel runs in a few microseconds and a fixed per-launch cost dominates
@@ -826,7 +853,7 @@ that only a symmetric re-run detects.
 
 \subsection{The residual}
 
-After the fix, Rust's allocate stage spans $1.02$--$1.69\times$ across the
+After the fix, Rust's allocate stage spans $1.02$--$1.71\times$ across the
 sweep with a median of $1.21\times$, excluding the smallest cell, where the
 kernel is short enough that launch effects dominate and the ratio reaches
 $3.34\times$. That residual is not attributed. We report it as unattributed
@@ -893,21 +920,56 @@ to 32 took roughly twenty minutes to compile against seconds, and produced a
 $3.7\times$ larger cubin.
 
 The consequence is a correctness one. A bound small enough to compile is small
-enough to lose data: at a load factor of 0.283 the Triton arm silently dropped 13
-blocks of 1{,}160, and at the 0.035 of our original single-scene benchmark it
-dropped none. The loss is monotonic in load factor and invisible in a sparse
-benchmark.
+enough to lose data, and the sweep now prices that across five load factors
+rather than the two we first reported:
+
+\begin{center}
+\begin{tabular}{lrrrr}
+\toprule
+Cell & Load factor & Blocks (CUDA C++) & Blocks (Triton) & Contributions dropped \\
+\midrule
+lf-sparse    & 0.018 & 1{,}160  & 1{,}160  & 0 \\
+base         & 0.035 & 1{,}160  & 1{,}160  & 0 \\
+lf-lo        & 0.071 & 1{,}160  & 1{,}159  & 155 \\
+lf-mid       & 0.142 & 1{,}160  & 1{,}159  & 155 \\
+tartan-p002  & 0.192 & 25{,}230 & 25{,}230 & 22 \\
+lf-hi        & 0.283 & 1{,}160  & 1{,}147  & 27{,}943 \\
+tartan-dense & 0.437 & 14{,}332 & 14{,}278 & 53{,}614 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Every row reproduced identically in all six passes, so the loss is
+deterministic rather than a race. Two things in that table were not visible
+before. Loss begins at a load factor of $0.071$, not at the $0.283$ we
+previously reported as the first failing point; between $0.035$ and $0.071$ the
+arm goes from exact to losing a block. And \texttt{tartan-p002} is real depth
+data, at a load factor reached by an ordinary trajectory at the pool size every
+other real cell uses. We did not have to contrive that cell. It is one of six
+RetroOffice trajectories, and it is the one where the volume happens to be
+dense enough for a bounded probe to run out.
+
+The failure is also not one thing. At $0.192$ the block set is exact and 22
+point contributions are discarded during the update stage, so the surface is
+complete and slightly wrong. From $0.283$ upward whole blocks fail to be
+allocated and their surface is missing entirely. A consumer would notice the
+second and not the first.
 
 \begin{figure}[h]
 \centering
 \includegraphics[width=0.56\linewidth]{lf-hi.lost-vs-triton.png}
 \caption{What that silence looks like. The surface is the volume CUDA C++ built
-at a load factor of $1.05$; marked in colour are the points present there and
+at a load factor of $0.283$; marked in colour are the points present there and
 absent from the volume Triton built from identical input. The loss is not
 scattered, which is the part a count does not convey: it arrives as whole
 contiguous patches, because the unit that fails to be allocated is a block of
 $8^3$ voxels, and a block that loses its probe takes its entire surface with
-it. A reconstruction pipeline consuming this would see holes, not noise.}
+it. A reconstruction pipeline consuming this would see holes, not noise.
+On real depth the same failure has a different signature. At a load factor of
+$0.437$ the \texttt{tartan-dense} cell loses 54 blocks scattered across the
+whole room rather than gathered into a few patches, because real occupancy is
+irregular where a sphere's is not. That is the harder case to notice: pepper
+through a reconstruction reads as sensor noise, and a crater does not.}
 \label{fig:loss}
 \end{figure}
 
@@ -1017,11 +1079,18 @@ CUDA C++ with a median of $1.21\times$, and we do not know why. Given that eleve
 same gap were each plausible and each wrong, we prefer to leave it open than to
 assign it to whichever cause is nearest.
 
-\paragraph{One environment of real data.} The real-data cells come from a single
-TartanAir sequence. They validated the synthetic sweep rather than contradicting
-it, which is the outcome that carries the least information: had they disagreed,
-we would have learned more. One indoor environment is not a claim about real
-depth data in general.
+\paragraph{Two environments of real data.} The real-data cells are nine valid
+cells from two TartanAir environments: six trajectories of RetroOffice and
+three of AmericanDiner. An earlier version of this work used one frame of one
+trajectory, and we flagged that as the weakest evidence in the paper. Widening
+it changed a conclusion rather than confirming one, which is the argument for
+having done it: real depth turns out to sit at the worse end of Triton's range,
+not the middle, and one of the six RetroOffice trajectories reaches a load
+factor at which the Triton arm silently discards data. Neither was visible from
+a single scene. Two indoor environments from one simulator are still not a
+claim about real depth data in general, and in particular both are synthetic
+renderings with exact ground-truth depth, so they have none of the noise,
+dropout or calibration error of a physical sensor.
 
 \paragraph{We wrote all the implementations.} Every arm was written by the same
 authors, who had substantially more experience in CUDA C++ than in Triton before

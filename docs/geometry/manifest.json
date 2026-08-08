@@ -18,6 +18,57 @@
    }
   },
   {
+   "cell": "diner-p000",
+   "verts": {
+    "A3-cuda": 10464336,
+    "A4-rust": 10465014,
+    "A5-triton": 10465554
+   },
+   "agree": true,
+   "files": {
+    "A3-cuda": {
+     "file": "diner-p000.A3-cuda.bin",
+     "points": 98322,
+     "bytes": 786612,
+     "leaf_m": 0.0228
+    }
+   }
+  },
+  {
+   "cell": "diner-p002",
+   "verts": {
+    "A3-cuda": 2393640,
+    "A4-rust": 2393244,
+    "A5-triton": 2393688
+   },
+   "agree": true,
+   "files": {
+    "A3-cuda": {
+     "file": "diner-p002.A3-cuda.bin",
+     "points": 113812,
+     "bytes": 910532,
+     "leaf_m": 0.00982
+    }
+   }
+  },
+  {
+   "cell": "diner-p003",
+   "verts": {
+    "A3-cuda": 12407016,
+    "A4-rust": 12408504,
+    "A5-triton": 12407694
+   },
+   "agree": true,
+   "files": {
+    "A3-cuda": {
+     "file": "diner-p003.A3-cuda.bin",
+     "points": 90678,
+     "bytes": 725460,
+     "leaf_m": 0.02623
+    }
+   }
+  },
+  {
    "cell": "lf-hi",
    "verts": {
     "A3-cuda": 846288,
@@ -230,33 +281,124 @@
   {
    "cell": "tartan-cold",
    "verts": {
-    "A3-cuda": 4315656,
-    "A4-rust": 4315608,
-    "A5-triton": 4315500
+    "A3-cuda": 4315566,
+    "A4-rust": 4315638,
+    "A5-triton": 4315476
    },
    "agree": true,
    "files": {
     "A3-cuda": {
      "file": "tartan-cold.A3-cuda.bin",
-     "points": 169918,
-     "bytes": 1359380,
+     "points": 169917,
+     "bytes": 1359372,
      "leaf_m": 0.01195
+    }
+   }
+  },
+  {
+   "cell": "tartan-dense",
+   "verts": {
+    "A3-cuda": 11401086,
+    "A4-rust": 11401134,
+    "A5-triton": 11356416
+   },
+   "agree": false,
+   "files": {
+    "A3-cuda": {
+     "file": "tartan-dense.A3-cuda.bin",
+     "points": 87178,
+     "bytes": 697460,
+     "leaf_m": 0.02464
+    },
+    "A5-triton": {
+     "file": "tartan-dense.A5-triton.bin",
+     "points": 86926,
+     "bytes": 695444,
+     "leaf_m": 0.02464
+    }
+   }
+  },
+  {
+   "cell": "tartan-p001",
+   "verts": {
+    "A3-cuda": 3626346,
+    "A4-rust": 3626970,
+    "A5-triton": 3626688
+   },
+   "agree": true,
+   "files": {
+    "A3-cuda": {
+     "file": "tartan-p001.A3-cuda.bin",
+     "points": 111394,
+     "bytes": 891188,
+     "leaf_m": 0.0131
+    }
+   }
+  },
+  {
+   "cell": "tartan-p003",
+   "verts": {
+    "A3-cuda": 10391328,
+    "A4-rust": 10391796,
+    "A5-triton": 10391580
+   },
+   "agree": true,
+   "files": {
+    "A3-cuda": {
+     "file": "tartan-p003.A3-cuda.bin",
+     "points": 81730,
+     "bytes": 653876,
+     "leaf_m": 0.02518
+    }
+   }
+  },
+  {
+   "cell": "tartan-p004",
+   "verts": {
+    "A3-cuda": 6368148,
+    "A4-rust": 6368040,
+    "A5-triton": 6368112
+   },
+   "agree": true,
+   "files": {
+    "A3-cuda": {
+     "file": "tartan-p004.A3-cuda.bin",
+     "points": 102701,
+     "bytes": 821644,
+     "leaf_m": 0.0168
+    }
+   }
+  },
+  {
+   "cell": "tartan-p005",
+   "verts": {
+    "A3-cuda": 8797698,
+    "A4-rust": 8797518,
+    "A5-triton": 8797746
+   },
+   "agree": true,
+   "files": {
+    "A3-cuda": {
+     "file": "tartan-p005.A3-cuda.bin",
+     "points": 94704,
+     "bytes": 757668,
+     "leaf_m": 0.02209
     }
    }
   },
   {
    "cell": "tartan-warm",
    "verts": {
-    "A3-cuda": 11401596,
-    "A4-rust": 11401296,
-    "A5-triton": 11401188
+    "A3-cuda": 11401332,
+    "A4-rust": 11401476,
+    "A5-triton": 11401050
    },
    "agree": true,
    "files": {
     "A3-cuda": {
      "file": "tartan-warm.A3-cuda.bin",
-     "points": 134734,
-     "bytes": 1077908,
+     "points": 134736,
+     "bytes": 1077924,
      "leaf_m": 0.01956
     }
    }

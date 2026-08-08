@@ -18,7 +18,7 @@ hand-written CUDA C++ and Triton is more than an order of magnitude behind.
 
 | stage | Rust / CUDA C++ | Triton / CUDA C++ |
 |---|---|---|
-| allocate (irregular) | 1.02–3.34x | 11.2–28.6x |
+| allocate (irregular) | 1.02–3.34x | 11.2–31.6x |
 | update (regular) | 0.96–1.19x | 1.1–2.6x |
 
 Full integrate path on real depth data: Rust 1.01–1.03x, Triton 2.57–2.92x.

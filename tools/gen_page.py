@@ -126,6 +126,7 @@ def main():
                .replace("{{ALLOC_TRITON}}", f"{st[('allocate','A5-triton')][0]:.1f}&ndash;{st[('allocate','A5-triton')][1]:.1f}&times;")
                .replace("{{UPD_RUST}}", f"{st[('update','A4-rust')][0]:.2f}&ndash;{st[('update','A4-rust')][1]:.2f}&times;")
                .replace("{{UPD_TRITON}}", f"{st[('update','A5-triton')][0]:.1f}&ndash;{st[('update','A5-triton')][1]:.1f}&times;")
+               .replace("{{NCELLS}}", str(len({c for (_d, c, _a, _s) in m})))
                .replace("{{SOURCE}}", src.parent.name))
     out.parent.mkdir(exist_ok=True)
     out.write_text(html)

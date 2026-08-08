@@ -31,11 +31,13 @@ def tex_escape(s):
 
 
 def table_totals(m, out):
-    rows = [("tartan-warm", "TartanAir, warm volume"),
-            ("tartan-cold", "TartanAir, cold volume"),
+    rows = [("tartan-warm", "RetroOffice P000, warm"),
+            ("tartan-cold", "RetroOffice P000, cold"),
+            ("diner-p000", "AmericanDiner P000, warm"),
             ("plane-320k", "Plane, 320k points"),
             ("pts-1280k", "Sphere, 1.28M points"),
             ("base", "Sphere, 320k points")]
+    rows = [r for r in rows if any(k[1] == r[0] for k in m)]
     L = [r"\begin{tabular}{llrrrrr}", r"\toprule",
          r"Workload & GPU & CUDA C++ & \multicolumn{2}{c}{Rust} & \multicolumn{2}{c}{Triton} \\",
          r"\cmidrule(lr){4-5}\cmidrule(lr){6-7}",
@@ -73,10 +75,21 @@ def table_by_stage(m, out):
     (out / "by_stage.tex").write_text("\n".join(L) + "\n")
 
 
-ORDER = [("pts-20k", "points"), ("pts-80k", "points"), ("base", "points"),
-         ("pts-720k", "points"), ("pts-1280k", "points"),
-         ("r-0.25", "extent"), ("r-1.0", "extent"), ("r-2.0", "extent"),
-         ("plane-320k", "shape"), ("tartan-cold", "real"), ("tartan-warm", "real")]
+# Axis order is editorial; cell order inside an axis follows the data, so a
+# cell added to the sweep appears here without anyone remembering to list it.
+AXIS_ORDER = ["baseline", "points", "extent", "shape", "loadfactor", "real"]
+
+
+def cell_order(meta):
+    """Every cell present in the CSV, grouped by axis, ordered within it."""
+    seen = {}
+    for cell, (points, load, axis) in meta.items():
+        seen.setdefault(axis, []).append((cell, points, load))
+    out = []
+    for axis in AXIS_ORDER + [a for a in sorted(seen) if a not in AXIS_ORDER]:
+        for cell, _p, _l in sorted(seen.get(axis, []), key=lambda t: (t[1], t[0])):
+            out.append((cell, axis))
+    return out
 
 
 def table_cells(m, meta, out):
@@ -85,13 +98,13 @@ def table_cells(m, meta, out):
          r"Cell & Axis & Points & Load & Rust & Triton \\",
          r"\midrule"]
     prev = None
-    for cell, axis in ORDER:
+    for cell, axis in cell_order(meta):
         if cell not in meta:
             continue
         if prev is not None and axis != prev:
             L.append(r"\addlinespace")
         prev = axis
-        pts, lf = meta[cell]
+        pts, lf, _axis = meta[cell]
         b = m.get(("0", cell, "A3-cuda", "allocate"))
         r4 = m.get(("0", cell, "A4-rust", "allocate"))
         r5 = m.get(("0", cell, "A5-triton", "allocate"))
@@ -138,7 +151,7 @@ def main():
     out.mkdir(exist_ok=True)
     meta = {}
     for r in csv.DictReader(open(src)):
-        meta[r["cell"]] = (int(r["points"]), float(r["load_factor"]))
+        meta[r["cell"]] = (int(r["points"]), float(r["load_factor"]), r["axis"])
     m = load(src)
     n = table_totals(m, out)
     table_by_stage(m, out)

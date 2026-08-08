@@ -59,7 +59,7 @@ after every fix described below.
 
 | stage | A4 / A3 | A5 / A3 |
 |---|---|---|
-| allocate (irregular: probe, CAS, publication) | 1.12–1.33x | **17.3–28.6x** |
+| allocate (irregular: probe, CAS, publication) | 1.02–3.34x | **11.2–31.6x** |
 | update (regular: walk and accumulate) | 1.00–1.08x | 1.23–1.41x |
 
 The shape is the finding. On the regular kernel all three languages land within
@@ -304,6 +304,10 @@ what remains deepens results that are already defensible.
 2. **The residual allocate gap**, 1.12–1.33x, is not attributed.
 3. **`MAX_PROBE = 32` measurements were taken at 256 scratch slots** and are
    therefore pessimistic by roughly 3.5x.
-4. **Real data is one sequence.** Two cells from TartanAir V2 RetroOffice P000.
+4. **Real data is two environments.** Nine valid cells from TartanAir V2:
+   six RetroOffice trajectories and three AmericanDiner. Widening this from the
+   original single frame changed conclusions rather than confirming them, and
+   is written up in docs/REAL-DATA.md. Both are simulator renderings with exact
+   ground-truth depth, so neither carries real sensor noise.
    They validated the synthetic sweep rather than contradicting it, but one
    environment is not a claim about real data in general.

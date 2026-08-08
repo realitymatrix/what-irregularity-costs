@@ -1,9 +1,16 @@
 [
  {
   "cell": "tartan-warm",
-  "label": "real depth, warm volume",
+  "label": "RetroOffice, warm volume",
   "file": "tartan-warm.png",
-  "points": 134734,
+  "points": 134736,
+  "lost": 0
+ },
+ {
+  "cell": "diner-p000",
+  "label": "AmericanDiner, warm volume",
+  "file": "diner-p000.png",
+  "points": 98322,
   "lost": 0
  },
  {
@@ -36,16 +43,30 @@
  },
  {
   "cell": "lf-hi",
-  "label": "load factor 1.05",
+  "label": "sphere, load factor 0.283",
   "file": "lf-hi.png",
   "points": 118988,
   "lost": 0
  },
  {
   "cell": "lf-hi",
-  "label": "load factor 1.05, what triton lost",
+  "label": "sphere, load factor 0.283, what triton lost",
   "file": "lf-hi.lost-vs-triton.png",
   "points": 117712,
   "lost": 1280
+ },
+ {
+  "cell": "tartan-dense",
+  "label": "real depth, load factor 0.437",
+  "file": "tartan-dense.png",
+  "points": 87178,
+  "lost": 0
+ },
+ {
+  "cell": "tartan-dense",
+  "label": "real depth, load factor 0.437, what triton lost",
+  "file": "tartan-dense.lost-vs-triton.png",
+  "points": 86926,
+  "lost": 294
  }
 ]

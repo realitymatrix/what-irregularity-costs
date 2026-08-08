@@ -1,2 +1,2 @@
-Generated from results/sweep_20260807_124145/sweep.csv
+Generated from results/sweep_20260807_202302/sweep.csv
 by paper/gen_tables.py. Do not edit by hand.

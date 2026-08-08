@@ -250,6 +250,49 @@ const std::vector<Cell> kDefaultCells = {
     {"tartan-warm", "real",      Shape::File,   0.0f,    0,    0, 1 << 16, 0,
      "../data/tartanair/retro_p000_f008.bin",
      "../data/tartanair/retro_p000_f008_warm.bin"},
+    // The same warm regime on the other five trajectories of the same
+    // environment. One frame of one trajectory is a sample of size one, and
+    // the real-data result is the one a practitioner will actually act on, so
+    // it is the one that least deserves to rest on a single scene. These vary
+    // the camera path and therefore the occupancy pattern, while holding the
+    // room, the resolution and the point count roughly fixed.
+    {"tartan-p001", "real",      Shape::File,   0.0f,    0,    0, 1 << 16, 0,
+     "../data/tartanair/retro_p001_f008.bin",
+     "../data/tartanair/retro_p001_f008_warm.bin"},
+    {"tartan-p002", "real",      Shape::File,   0.0f,    0,    0, 1 << 16, 0,
+     "../data/tartanair/retro_p002_f008.bin",
+     "../data/tartanair/retro_p002_f008_warm.bin"},
+    {"tartan-p003", "real",      Shape::File,   0.0f,    0,    0, 1 << 16, 0,
+     "../data/tartanair/retro_p003_f008.bin",
+     "../data/tartanair/retro_p003_f008_warm.bin"},
+    {"tartan-p004", "real",      Shape::File,   0.0f,    0,    0, 1 << 16, 0,
+     "../data/tartanair/retro_p004_f008.bin",
+     "../data/tartanair/retro_p004_f008_warm.bin"},
+    {"tartan-p005", "real",      Shape::File,   0.0f,    0,    0, 1 << 16, 0,
+     "../data/tartanair/retro_p005_f008.bin",
+     "../data/tartanair/retro_p005_f008_warm.bin"},
+    // Real data at a hash load factor high enough to matter. Every load-factor
+    // cell so far has been a sphere, so the paper can say Triton loses blocks
+    // under contention but not that the regime is reachable by a real
+    // pipeline. Sizing the pool to the block count rather than the scene puts
+    // this frame there, and answers that question either way.
+    {"tartan-dense", "real",     Shape::File,   0.0f,    0,    0,       0, 1.05f,
+     "../data/tartanair/retro_p000_f008.bin",
+     "../data/tartanair/retro_p000_f008_warm.bin"},
+    // A second environment. Six trajectories of one room vary the camera path
+    // but not the room, so they cannot distinguish "real depth behaves this
+    // way" from "this office does". AmericanDiner is a different interior with
+    // different surface layout and depth distribution, which is the smallest
+    // change that tests the distinction.
+    {"diner-p000",  "real",      Shape::File,   0.0f,    0,    0, 1 << 16, 0,
+     "../data/tartanair/diner_p000_f008.bin",
+     "../data/tartanair/diner_p000_f008_warm.bin"},
+    {"diner-p002",  "real",      Shape::File,   0.0f,    0,    0, 1 << 16, 0,
+     "../data/tartanair/diner_p002_f008.bin",
+     "../data/tartanair/diner_p002_f008_warm.bin"},
+    {"diner-p003",  "real",      Shape::File,   0.0f,    0,    0, 1 << 16, 0,
+     "../data/tartanair/diner_p003_f008.bin",
+     "../data/tartanair/diner_p003_f008_warm.bin"},
 };
 
 // ---------------------------------------------------------------------------
@@ -292,11 +335,14 @@ int g_label = -1;
 
 /// Size minus one of the scratch region arm A5's resolved lanes CAS into.
 ///
-/// A hypothesis under test rather than a tuning knob. `OSN_TRITON_BLOCK - 1`
-/// reproduces the historical behaviour exactly, where every program in the grid
-/// shares the same 256 addresses. See --scratch-slots and
-/// docs/SCRATCH-HYPOTHESIS.md.
-int32_t g_scratch_mask = OSN_TRITON_BLOCK - 1;
+/// Was a hypothesis under test; the answer is in, so the answer is the default.
+/// `OSN_TRITON_BLOCK - 1` reproduces the historical behaviour, where every
+/// program in the grid shares the same 256 addresses, and it costs arm A5 a
+/// factor of three to four. Leaving that as the default made it the thing you
+/// measured by forgetting a flag, which is how one full sweep was already
+/// wasted. Ask for it explicitly with --scratch-slots 256.
+/// See docs/SCRATCH-HYPOTHESIS.md.
+int32_t g_scratch_mask = 65536 - 1;
 
 /// Identifies one pass over the matrix, so repeated passes can be compared.
 ///
@@ -497,6 +543,19 @@ bool run_cell(const Cell& cell, const ArmHandles& arms, int reps, int warmup, in
         float* dp = nullptr;
         cudaMalloc(&dp, pts.size() * sizeof(float));
         cudaMemcpy(dp, pts.data(), pts.size() * sizeof(float), cudaMemcpyHostToDevice);
+        // The probe has to see everything the volume will hold, warm pre-fill
+        // included. Sizing from the frame alone targets a load factor the cell
+        // cannot reach and instead exhausts the pool before the timed window
+        // opens, which measures pool exhaustion rather than table contention.
+        // Cells without a warm cloud are unaffected.
+        if (has_warm) {
+            float* dw = nullptr;
+            cudaMalloc(&dw, warm.pts.size() * sizeof(float));
+            cudaMemcpy(dw, warm.pts.data(), warm.pts.size() * sizeof(float),
+                       cudaMemcpyHostToDevice);
+            osn_tsdf_cuda_allocate_blocks(probe, dw, (int32_t)(warm.pts.size() / 3), cx, cy, cz, 0);
+            cudaFree(dw);
+        }
         osn_tsdf_cuda_allocate_blocks(probe, dp, n, cx, cy, cz, 0);
         osn_tsdf_cuda_synchronize(probe);
         const int32_t nb = osn_tsdf_cuda_block_count(probe);
@@ -872,7 +931,8 @@ int main(int argc, char** argv) {
     std::printf("  clocks/thermals are LOGGED, not pinned: nvidia-smi -lgc needs root\n");
     std::printf("  arm order is INTERLEAVED and rotated per repetition\n");
     std::printf("  A5 scratch region: %d slots%s\n", g_scratch_mask + 1,
-                g_scratch_mask == OSN_TRITON_BLOCK - 1 ? " (historical, shared across the grid)"
+                g_scratch_mask == OSN_TRITON_BLOCK - 1
+                    ? " (HISTORICAL, shared across the grid -- costs A5 3-4x)"
                                                        : "");
     std::printf("  device sync policy: requested SPIN -> %s\n",
                 flag_rc == cudaSuccess ? "applied" : cudaGetErrorName(flag_rc));
@@ -904,6 +964,18 @@ int main(int argc, char** argv) {
 #endif
     std::printf("  arms: A3 yes | A4 %s | A5 %s\n", arms.have_a4 ? "yes" : "NO",
                 arms.have_a5 ? "yes" : "NO");
+    // A missing arm is the same class of error as the fake device axis: the
+    // run completes, reports "0 invalid", and quietly compares two arms where
+    // three were asked for. Nothing downstream can tell the difference, so
+    // refuse here unless the omission was asked for explicitly.
+    if ((!arms.have_a4 || !arms.have_a5) && !getenv("OSN_ALLOW_MISSING_ARMS")) {
+        std::printf("\n  REFUSING TO RUN: an arm failed to load.\n"
+                    "  A4 needs the cuda-oxide module; A5 needs the Triton cubins,\n"
+                    "  looked for in $OSN_TRITON_DIR (default ../artifacts/triton,\n"
+                    "  relative to the working directory).\n"
+                    "  Set OSN_ALLOW_MISSING_ARMS=1 to measure the arms that did load.\n");
+        return 6;
+    }
 
     // Verify the arms did not move the context to another device.
     //
