@@ -1,0 +1,265 @@
+{
+ "cells": [
+  {
+   "cell": "base",
+   "verts": {
+    "A3-cuda": 846288,
+    "A4-rust": 846288,
+    "A5-triton": 846288
+   },
+   "agree": true,
+   "files": {
+    "A3-cuda": {
+     "file": "base.A3-cuda.bin",
+     "points": 118988,
+     "bytes": 951940,
+     "leaf_m": 0.00195
+    }
+   }
+  },
+  {
+   "cell": "lf-hi",
+   "verts": {
+    "A3-cuda": 846288,
+    "A4-rust": 846288,
+    "A5-triton": 835728
+   },
+   "agree": false,
+   "files": {
+    "A3-cuda": {
+     "file": "lf-hi.A3-cuda.bin",
+     "points": 118988,
+     "bytes": 951940,
+     "leaf_m": 0.00195
+    },
+    "A5-triton": {
+     "file": "lf-hi.A5-triton.bin",
+     "points": 117712,
+     "bytes": 941732,
+     "leaf_m": 0.00195
+    }
+   }
+  },
+  {
+   "cell": "lf-lo",
+   "verts": {
+    "A3-cuda": 846288,
+    "A4-rust": 846288,
+    "A5-triton": 846288
+   },
+   "agree": true,
+   "files": {
+    "A3-cuda": {
+     "file": "lf-lo.A3-cuda.bin",
+     "points": 118988,
+     "bytes": 951940,
+     "leaf_m": 0.00195
+    }
+   }
+  },
+  {
+   "cell": "lf-mid",
+   "verts": {
+    "A3-cuda": 846288,
+    "A4-rust": 846288,
+    "A5-triton": 846288
+   },
+   "agree": true,
+   "files": {
+    "A3-cuda": {
+     "file": "lf-mid.A3-cuda.bin",
+     "points": 118988,
+     "bytes": 951940,
+     "leaf_m": 0.00195
+    }
+   }
+  },
+  {
+   "cell": "lf-sparse",
+   "verts": {
+    "A3-cuda": 846288,
+    "A4-rust": 846288,
+    "A5-triton": 846288
+   },
+   "agree": true,
+   "files": {
+    "A3-cuda": {
+     "file": "lf-sparse.A3-cuda.bin",
+     "points": 118988,
+     "bytes": 951940,
+     "leaf_m": 0.00195
+    }
+   }
+  },
+  {
+   "cell": "plane-320k",
+   "verts": {
+    "A3-cuda": 950424,
+    "A4-rust": 950424,
+    "A5-triton": 950424
+   },
+   "agree": true,
+   "files": {
+    "A3-cuda": {
+     "file": "plane-320k.A3-cuda.bin",
+     "points": 103879,
+     "bytes": 831068,
+     "leaf_m": 0.00617
+    }
+   }
+  },
+  {
+   "cell": "pts-1280k",
+   "verts": {
+    "A3-cuda": 846288,
+    "A4-rust": 846288,
+    "A5-triton": 846288
+   },
+   "agree": true,
+   "files": {
+    "A3-cuda": {
+     "file": "pts-1280k.A3-cuda.bin",
+     "points": 118988,
+     "bytes": 951940,
+     "leaf_m": 0.00195
+    }
+   }
+  },
+  {
+   "cell": "pts-20k",
+   "verts": {
+    "A3-cuda": 7632,
+    "A4-rust": 7632,
+    "A5-triton": 7632
+   },
+   "agree": true,
+   "files": {
+    "A3-cuda": {
+     "file": "pts-20k.A3-cuda.bin",
+     "points": 2144,
+     "bytes": 17188,
+     "leaf_m": 0.00195
+    }
+   }
+  },
+  {
+   "cell": "pts-720k",
+   "verts": {
+    "A3-cuda": 846288,
+    "A4-rust": 846288,
+    "A5-triton": 846288
+   },
+   "agree": true,
+   "files": {
+    "A3-cuda": {
+     "file": "pts-720k.A3-cuda.bin",
+     "points": 118988,
+     "bytes": 951940,
+     "leaf_m": 0.00195
+    }
+   }
+  },
+  {
+   "cell": "pts-80k",
+   "verts": {
+    "A3-cuda": 648336,
+    "A4-rust": 648336,
+    "A5-triton": 648336
+   },
+   "agree": true,
+   "files": {
+    "A3-cuda": {
+     "file": "pts-80k.A3-cuda.bin",
+     "points": 102384,
+     "bytes": 819108,
+     "leaf_m": 0.00195
+    }
+   }
+  },
+  {
+   "cell": "r-0.25",
+   "verts": {
+    "A3-cuda": 212544,
+    "A4-rust": 212544,
+    "A5-triton": 212544
+   },
+   "agree": true,
+   "files": {
+    "A3-cuda": {
+     "file": "r-0.25.A3-cuda.bin",
+     "points": 31778,
+     "bytes": 254260,
+     "leaf_m": 0.00098
+    }
+   }
+  },
+  {
+   "cell": "r-1.0",
+   "verts": {
+    "A3-cuda": 2571120,
+    "A4-rust": 2571120,
+    "A5-triton": 2571120
+   },
+   "agree": true,
+   "files": {
+    "A3-cuda": {
+     "file": "r-1.0.A3-cuda.bin",
+     "points": 91703,
+     "bytes": 733660,
+     "leaf_m": 0.01241
+    }
+   }
+  },
+  {
+   "cell": "r-2.0",
+   "verts": {
+    "A3-cuda": 124722,
+    "A4-rust": 124722,
+    "A5-triton": 124722
+   },
+   "agree": true,
+   "files": {
+    "A3-cuda": {
+     "file": "r-2.0.A3-cuda.bin",
+     "points": 20997,
+     "bytes": 168012,
+     "leaf_m": 0.00781
+    }
+   }
+  },
+  {
+   "cell": "tartan-cold",
+   "verts": {
+    "A3-cuda": 4315656,
+    "A4-rust": 4315608,
+    "A5-triton": 4315500
+   },
+   "agree": true,
+   "files": {
+    "A3-cuda": {
+     "file": "tartan-cold.A3-cuda.bin",
+     "points": 169918,
+     "bytes": 1359380,
+     "leaf_m": 0.01195
+    }
+   }
+  },
+  {
+   "cell": "tartan-warm",
+   "verts": {
+    "A3-cuda": 11401596,
+    "A4-rust": 11401296,
+    "A5-triton": 11401188
+   },
+   "agree": true,
+   "files": {
+    "A3-cuda": {
+     "file": "tartan-warm.A3-cuda.bin",
+     "points": 134734,
+     "bytes": 1077908,
+     "leaf_m": 0.01956
+    }
+   }
+  }
+ ]
+}

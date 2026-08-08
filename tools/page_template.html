@@ -32,6 +32,36 @@
 }
 *{box-sizing:border-box}
 figure{margin:26px 0 8px}
+.gallery{display:grid; grid-template-columns:repeat(3,1fr); gap:18px; margin:26px 0 8px}
+@media(max-width:640px){ .gallery{grid-template-columns:repeat(2,1fr)} }
+.tile{margin:0}
+.tile img{display:block; width:100%; height:auto; background:transparent}
+.tile figcaption{padding-top:6px; font-size:.8rem; line-height:1.35; color:var(--muted)}
+.tile figcaption span{display:block; font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:.72rem; letter-spacing:.03em; opacity:.8}
+.viewer{margin:26px 0 8px}
+.v-cells{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px}
+.v-cells button{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.74rem;
+  padding:5px 9px; border:1px solid var(--rule); background:transparent; color:var(--muted);
+  border-radius:2px; cursor:pointer}
+.v-cells button:hover{border-color:var(--accent); color:var(--accent)}
+.v-cells button[aria-pressed=true]{border-color:var(--fg); color:var(--fg)}
+.v-cells button:focus-visible,.v-swap:focus-visible,#v-canvas:focus-visible{
+  outline:2px solid var(--accent); outline-offset:2px}
+.v-stage{position:relative; border:1px solid var(--rule); border-radius:2px;
+  aspect-ratio:16/10; overflow:hidden}
+#v-canvas{display:block; width:100%; height:100%; touch-action:none; cursor:grab}
+#v-canvas:active{cursor:grabbing}
+.v-note{position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  text-align:center; padding:24px; color:var(--muted); font-size:.9rem; line-height:1.5}
+.v-note[hidden]{display:none}
+.v-meta{padding-top:10px; font-size:.82rem; color:var(--muted); min-height:1.4em}
+.v-meta .k{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--fg)}
+.v-swap{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.72rem;
+  padding:3px 8px; margin-left:4px; border:1px solid var(--rule); background:transparent;
+  color:var(--muted); border-radius:2px; cursor:pointer}
+.v-swap:hover{border-color:var(--accent); color:var(--accent)}
+.v-hint{font-size:.82rem; color:var(--muted); padding-top:12px; max-width:64ch; line-height:1.5}
 figure svg{display:block; width:100%; height:auto; max-width:100%}
 figcaption{color:var(--muted); font-size:.87rem; line-height:1.5; max-width:64ch; padding-top:10px}
 body{
@@ -150,6 +180,28 @@ data-dependent per-lane probe depth, and contended scatter.</p>
 
 <div class="finding">Language choice is nearly free on the work that is usually
 benchmarked, and expensive on the work that is not.</div>
+
+<hr>
+
+<h2>The workloads</h2>
+
+<p>These are the volumes the timings come from, rendered from the fused result:
+one lit point per occupied voxel, shaded by the normal the TSDF supplies. Not
+illustrations of the workloads, but the workloads.</p>
+
+<div class="gallery">
+{{GALLERY}}
+</div>
+
+<p>Two of these explain numbers that look strange in the tables. The 20k-point
+cell is the sweep's outlier everywhere, and the reason is visible: at that
+density the volume barely reaches its weight threshold, so there is almost no
+work to do and a fixed per-launch cost dominates whatever the language
+contributes. And the load-factor cell shows what Triton's bounded probe costs
+in correctness rather than time. The loss is not scattered noise. It arrives as
+whole contiguous patches, because the unit that fails to be allocated is a
+block of 8&sup3; voxels, and a block that loses its probe takes its entire
+surface with it.</p>
 
 <hr>
 
@@ -280,6 +332,10 @@ The project's own atomics example does not build in that mode.</p>
 <a href="https://github.com/NVlabs/cuda-oxide/pull/695">NVlabs/cuda-oxide#695</a>, with
 tests, a regression example, and the CI registration whose absence let the defect
 survive.</p>
+
+<hr>
+
+{{VIEWER}}
 
 <hr>
 

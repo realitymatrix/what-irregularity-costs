@@ -73,6 +73,47 @@ def main():
     m, meta = load(src)
     totals, cells, st = build(m, meta)
     tpl = (pathlib.Path(__file__).parent / "page_template.html").read_text()
+    # The viewer's markup and its data both come from files this generator
+    # owns, so the page cannot claim a cell the export never produced.
+    import json as _json
+    root = pathlib.Path(__file__).parent.parent
+    manifest_path = root / "docs/geometry/manifest.json"
+    if manifest_path.exists():
+        man = _json.loads(manifest_path.read_text())
+        # Order the buttons the way the sweep groups its cells, so the
+        # selector reads as the workload matrix rather than as an alphabet.
+        order = ["tartan-warm", "tartan-cold", "base", "pts-20k", "pts-80k",
+                 "pts-720k", "pts-1280k", "r-0.25", "r-1.0", "r-2.0",
+                 "plane-320k", "lf-sparse", "lf-lo", "lf-mid", "lf-hi"]
+        known = {c["cell"] for c in man["cells"]}
+        cell_order = [c for c in order if c in known] + sorted(known - set(order))
+        buttons = "\n".join(
+            f'    <button type="button" data-cell="{c}" aria-pressed="false">{c}</button>'
+            for c in cell_order)
+        snippet = (pathlib.Path(__file__).parent / "viewer_snippet.html").read_text()
+        snippet = (snippet.replace("{{VIEWER_BUTTONS}}", "\n" + buttons + "\n  ")
+                          .replace("{{VIEWER_MANIFEST}}", _json.dumps(man, separators=(",", ":"))))
+        tpl = tpl.replace("{{VIEWER}}", snippet)
+    else:
+        tpl = tpl.replace("{{VIEWER}}", "")
+
+    gallery_path = root / "docs/renders/gallery.json"
+    if gallery_path.exists():
+        g = _json.loads(gallery_path.read_text())
+        tiles = []
+        for item in g:
+            note = (f"{item['lost']:,} points absent" if item.get("lost")
+                    else f"{item['points']:,} points")
+            tiles.append(
+                f'  <figure class="tile">\n'
+                f'    <img src="renders/{item["file"]}" alt="{item["label"]}" '
+                f'loading="lazy" width="760" height="760">\n'
+                f'    <figcaption>{item["label"]}<span>{note}</span></figcaption>\n'
+                f'  </figure>')
+        tpl = tpl.replace("{{GALLERY}}", "\n".join(tiles))
+    else:
+        tpl = tpl.replace("{{GALLERY}}", "")
+
     # The charts are inlined rather than linked so that the CSS variables they
     # carry resolve against the page's theme; an <img> would isolate them.
     figs = pathlib.Path(__file__).parent.parent / "docs/figures"

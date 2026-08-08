@@ -1,0 +1,51 @@
+[
+ {
+  "cell": "tartan-warm",
+  "label": "real depth, warm volume",
+  "file": "tartan-warm.png",
+  "points": 134734,
+  "lost": 0
+ },
+ {
+  "cell": "base",
+  "label": "sphere, 320k points",
+  "file": "base.png",
+  "points": 118988,
+  "lost": 0
+ },
+ {
+  "cell": "pts-20k",
+  "label": "sphere, 20k points",
+  "file": "pts-20k.png",
+  "points": 2144,
+  "lost": 0
+ },
+ {
+  "cell": "plane-320k",
+  "label": "plane, 320k points",
+  "file": "plane-320k.png",
+  "points": 103879,
+  "lost": 0
+ },
+ {
+  "cell": "r-2.0",
+  "label": "sphere, 2 m radius",
+  "file": "r-2.0.png",
+  "points": 20997,
+  "lost": 0
+ },
+ {
+  "cell": "lf-hi",
+  "label": "load factor 1.05",
+  "file": "lf-hi.png",
+  "points": 118988,
+  "lost": 0
+ },
+ {
+  "cell": "lf-hi",
+  "label": "load factor 1.05, what triton lost",
+  "file": "lf-hi.lost-vs-triton.png",
+  "points": 117712,
+  "lost": 1280
+ }
+]

@@ -254,6 +254,38 @@ compute. The kernel and its allocation are 0.319\,ms, comparable to integrate
 rather than several times it, and the striking cross-device difference was the
 motherboard.
 
+\begin{figure}[h]
+\centering
+\begin{minipage}{0.32\linewidth}\centering
+\includegraphics[width=\linewidth]{tartan-warm.png}\\{\footnotesize real depth, warm}
+\end{minipage}\hfill
+\begin{minipage}{0.32\linewidth}\centering
+\includegraphics[width=\linewidth]{base.png}\\{\footnotesize sphere, 320k points}
+\end{minipage}\hfill
+\begin{minipage}{0.32\linewidth}\centering
+\includegraphics[width=\linewidth]{pts-20k.png}\\{\footnotesize sphere, 20k points}
+\end{minipage}
+
+\vspace{6pt}
+\begin{minipage}{0.32\linewidth}\centering
+\includegraphics[width=\linewidth]{plane-320k.png}\\{\footnotesize plane, 320k points}
+\end{minipage}\hfill
+\begin{minipage}{0.32\linewidth}\centering
+\includegraphics[width=\linewidth]{r-2.0.png}\\{\footnotesize sphere, 2\,m radius}
+\end{minipage}\hfill
+\begin{minipage}{0.32\linewidth}\centering
+\includegraphics[width=\linewidth]{lf-hi.png}\\{\footnotesize load factor 1.05}
+\end{minipage}
+\caption{What the cells actually build, rendered from the fused volume: one lit
+point per occupied voxel, shaded by the surface normal the TSDF supplies. These
+are the reconstructions the timings come from, not illustrations of them. The
+20k-point cell is the sweep's outlier in every table, and the reason is visible
+here: at that density the volume barely reaches the weight threshold anywhere,
+so there is almost no work for the kernel to do and a fixed per-launch cost
+dominates whatever the language contributes.}
+\label{fig:scenes}
+\end{figure}
+
 \subsection{Why this workload}
 
 The properties that make TSDF fusion awkward are exactly the ones absent from
@@ -865,6 +897,19 @@ enough to lose data: at a load factor of 0.283 the Triton arm silently dropped 1
 blocks of 1{,}160, and at the 0.035 of our original single-scene benchmark it
 dropped none. The loss is monotonic in load factor and invisible in a sparse
 benchmark.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.56\linewidth]{lf-hi.lost-vs-triton.png}
+\caption{What that silence looks like. The surface is the volume CUDA C++ built
+at a load factor of $1.05$; marked in colour are the points present there and
+absent from the volume Triton built from identical input. The loss is not
+scattered, which is the part a count does not convey: it arrives as whole
+contiguous patches, because the unit that fails to be allocated is a block of
+$8^3$ voxels, and a block that loses its probe takes its entire surface with
+it. A reconstruction pipeline consuming this would see holes, not noise.}
+\label{fig:loss}
+\end{figure}
 
 It was also unreported. The implementation counted blocks lost to pool
 exhaustion, as the other arms do, but had no equivalent accounting for probe

@@ -432,8 +432,39 @@ struct ArmHandles {
 
 /// Run every arm over one workload cell. Returns false if the cell was skipped
 /// or failed a validity gate, which is reported rather than silently dropped.
+/// Dump what an arm actually built, so the project page can show it.
+///
+/// This lives inside the harness rather than in a separate tool on purpose:
+/// the geometry a reader looks at should come off the same code path that was
+/// timed, from the same volume, at the same settings. A standalone exporter
+/// could drift from the benchmark and nothing would catch it.
+///
+/// The format is deliberately dumb -- a tiny header and interleaved
+/// position/normal floats exactly as extraction produced them. Quantisation
+/// for the web is a later, separate step, so that what leaves the GPU here is
+/// unprocessed.
+void write_geometry(const std::string& dir, const char* cell, const char* arm,
+                    const float* posnor, int32_t n_verts) {
+    char path[512];
+    std::snprintf(path, sizeof(path), "%s/%s.%s.raw", dir.c_str(), cell, arm);
+    std::FILE* f = std::fopen(path, "wb");
+    if (!f) {
+        std::printf("  export: cannot open %s\n", path);
+        return;
+    }
+    const uint32_t magic = 0x314e534fu;  // "OSN1"
+    const uint32_t nv = (uint32_t)n_verts;
+    std::fwrite(&magic, 4, 1, f);
+    std::fwrite(&nv, 4, 1, f);
+    std::fwrite(posnor, sizeof(float), (size_t)n_verts * 6, f);
+    std::fclose(f);
+    std::printf("  export: %s  %d verts (%.1f MiB raw)\n", path, n_verts,
+                n_verts * 6 * sizeof(float) / 1048576.0);
+}
+
 bool run_cell(const Cell& cell, const ArmHandles& arms, int reps, int warmup, int batch_req,
-              float voxel, std::vector<Row>& rows, bool want_extract) {
+              float voxel, std::vector<Row>& rows, bool want_extract,
+              const std::string& export_dir) {
     Scene scene;
     if (!make_scene(cell, scene)) {
         std::printf("=== cell %s (axis %s) ===\n  SKIPPED: scene unavailable\n\n", cell.name,
@@ -648,6 +679,41 @@ bool run_cell(const Cell& cell, const ArmHandles& arms, int reps, int warmup, in
         }
     }
 
+    // ---- geometry export --------------------------------------------------
+    //
+    // Untimed and after the fact, so it cannot perturb a measurement. Each arm
+    // rebuilds the volume from scratch and is extracted separately: the point
+    // of showing all three is that they agree, and that is only worth showing
+    // if each one is genuinely re-derived.
+    if (!export_dir.empty()) {
+        for (int arm = 0; arm < 3; ++arm) {
+            if (arm == 1 && !arms.have_a4) continue;
+            if (arm == 2 && !arms.have_a5) continue;
+            reset_all();
+            launch_alloc(arm, 0);
+            launch_update(arm, 0);
+            osn_tsdf_cuda_synchronize(vols[0]);
+            // The timed path's 4M-vertex buffer is sized for the analytic
+            // scenes; a real room overflows it and extraction returns -1. The
+            // export is untimed, so it can afford to grow and retry rather
+            // than silently ship a truncated surface.
+            int32_t nv = -1;
+            std::vector<float> ex_buf;
+            for (int32_t cap = 4 << 20; cap <= (24 << 20); cap *= 2) {
+                ex_buf.assign((size_t)cap * 6, 0.0f);
+                nv = osn_tsdf_cuda_extract_mesh(vols[0], ex_buf.data(), nullptr, cap, 0.5f, 0.0f);
+                if (nv >= 0) break;
+                std::printf("  export: %s %s overflowed %d verts, retrying\n", cell.name,
+                            arm_name[arm], cap);
+            }
+            if (nv > 0)
+                write_geometry(export_dir, cell.name, arm_name[arm], ex_buf.data(), nv);
+            else
+                std::printf("  export: %s %s produced no surface (%d)\n", cell.name,
+                            arm_name[arm], nv);
+        }
+    }
+
     // ---- validity gates ---------------------------------------------------
     //
     // A cell that overflowed its pool, or where the arms disagree on what they
@@ -735,6 +801,7 @@ int main(int argc, char** argv) {
     // times compares nothing. Off by default so a CSV cannot be misread; the
     // rows it emits when enabled are labelled to say whose number it is.
     bool want_extract = false;
+    std::string export_dir;
 
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
@@ -758,6 +825,7 @@ int main(int argc, char** argv) {
         else if (a == "--axis") only_axis = next();
         else if (a == "--csv") csv_path = next();
         else if (a == "--cpu") want_cpu = true;
+        else if (a == "--export-geometry") export_dir = next();
         else if (a == "--extract") want_extract = true;
         else if (a == "--no-extract") want_extract = false;  // accepted, now the default
         else if (a == "--list") {
@@ -766,6 +834,7 @@ int main(int argc, char** argv) {
         } else {
             std::printf("usage: bench_arms [--device N] [--reps N] [--warmup N] [--batch N]\n"
                         "                  [--voxel M] [--cells a,b,c] [--axis NAME]\n"
+                        "                  [--export-geometry DIR]\n"
                         "                  [--csv PATH] [--cpu] [--no-extract] [--list]\n");
             return 1;
         }
@@ -882,7 +951,7 @@ int main(int argc, char** argv) {
     std::vector<Row> rows;
     int ok = 0, bad = 0;
     for (const auto& c : cells) {
-        if (run_cell(c, arms, reps, warmup, batch, voxel, rows, want_extract)) ok++;
+        if (run_cell(c, arms, reps, warmup, batch, voxel, rows, want_extract, export_dir)) ok++;
         else bad++;
     }
 

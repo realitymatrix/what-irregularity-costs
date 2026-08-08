@@ -32,6 +32,36 @@
 }
 *{box-sizing:border-box}
 figure{margin:26px 0 8px}
+.gallery{display:grid; grid-template-columns:repeat(3,1fr); gap:18px; margin:26px 0 8px}
+@media(max-width:640px){ .gallery{grid-template-columns:repeat(2,1fr)} }
+.tile{margin:0}
+.tile img{display:block; width:100%; height:auto; background:transparent}
+.tile figcaption{padding-top:6px; font-size:.8rem; line-height:1.35; color:var(--muted)}
+.tile figcaption span{display:block; font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:.72rem; letter-spacing:.03em; opacity:.8}
+.viewer{margin:26px 0 8px}
+.v-cells{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px}
+.v-cells button{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.74rem;
+  padding:5px 9px; border:1px solid var(--rule); background:transparent; color:var(--muted);
+  border-radius:2px; cursor:pointer}
+.v-cells button:hover{border-color:var(--accent); color:var(--accent)}
+.v-cells button[aria-pressed=true]{border-color:var(--fg); color:var(--fg)}
+.v-cells button:focus-visible,.v-swap:focus-visible,#v-canvas:focus-visible{
+  outline:2px solid var(--accent); outline-offset:2px}
+.v-stage{position:relative; border:1px solid var(--rule); border-radius:2px;
+  aspect-ratio:16/10; overflow:hidden}
+#v-canvas{display:block; width:100%; height:100%; touch-action:none; cursor:grab}
+#v-canvas:active{cursor:grabbing}
+.v-note{position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  text-align:center; padding:24px; color:var(--muted); font-size:.9rem; line-height:1.5}
+.v-note[hidden]{display:none}
+.v-meta{padding-top:10px; font-size:.82rem; color:var(--muted); min-height:1.4em}
+.v-meta .k{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--fg)}
+.v-swap{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.72rem;
+  padding:3px 8px; margin-left:4px; border:1px solid var(--rule); background:transparent;
+  color:var(--muted); border-radius:2px; cursor:pointer}
+.v-swap:hover{border-color:var(--accent); color:var(--accent)}
+.v-hint{font-size:.82rem; color:var(--muted); padding-top:12px; max-width:64ch; line-height:1.5}
 figure svg{display:block; width:100%; height:auto; max-width:100%}
 figcaption{color:var(--muted); font-size:.87rem; line-height:1.5; max-width:64ch; padding-top:10px}
 body{
@@ -1549,6 +1579,55 @@ z
 
 <div class="finding">Language choice is nearly free on the work that is usually
 benchmarked, and expensive on the work that is not.</div>
+
+<hr>
+
+<h2>The workloads</h2>
+
+<p>These are the volumes the timings come from, rendered from the fused result:
+one lit point per occupied voxel, shaded by the normal the TSDF supplies. Not
+illustrations of the workloads, but the workloads.</p>
+
+<div class="gallery">
+  <figure class="tile">
+    <img src="renders/tartan-warm.png" alt="real depth, warm volume" loading="lazy" width="760" height="760">
+    <figcaption>real depth, warm volume<span>134,734 points</span></figcaption>
+  </figure>
+  <figure class="tile">
+    <img src="renders/base.png" alt="sphere, 320k points" loading="lazy" width="760" height="760">
+    <figcaption>sphere, 320k points<span>118,988 points</span></figcaption>
+  </figure>
+  <figure class="tile">
+    <img src="renders/pts-20k.png" alt="sphere, 20k points" loading="lazy" width="760" height="760">
+    <figcaption>sphere, 20k points<span>2,144 points</span></figcaption>
+  </figure>
+  <figure class="tile">
+    <img src="renders/plane-320k.png" alt="plane, 320k points" loading="lazy" width="760" height="760">
+    <figcaption>plane, 320k points<span>103,879 points</span></figcaption>
+  </figure>
+  <figure class="tile">
+    <img src="renders/r-2.0.png" alt="sphere, 2 m radius" loading="lazy" width="760" height="760">
+    <figcaption>sphere, 2 m radius<span>20,997 points</span></figcaption>
+  </figure>
+  <figure class="tile">
+    <img src="renders/lf-hi.png" alt="load factor 1.05" loading="lazy" width="760" height="760">
+    <figcaption>load factor 1.05<span>118,988 points</span></figcaption>
+  </figure>
+  <figure class="tile">
+    <img src="renders/lf-hi.lost-vs-triton.png" alt="load factor 1.05, what triton lost" loading="lazy" width="760" height="760">
+    <figcaption>load factor 1.05, what triton lost<span>1,280 points absent</span></figcaption>
+  </figure>
+</div>
+
+<p>Two of these explain numbers that look strange in the tables. The 20k-point
+cell is the sweep's outlier everywhere, and the reason is visible: at that
+density the volume barely reaches its weight threshold, so there is almost no
+work to do and a fixed per-launch cost dominates whatever the language
+contributes. And the load-factor cell shows what Triton's bounded probe costs
+in correctness rather than time. The loss is not scattered noise. It arrives as
+whole contiguous patches, because the unit that fails to be allocated is a
+block of 8&sup3; voxels, and a block that loses its probe takes its entire
+surface with it.</p>
 
 <hr>
 
@@ -4651,6 +4730,342 @@ The project's own atomics example does not build in that mode.</p>
 <a href="https://github.com/NVlabs/cuda-oxide/pull/695">NVlabs/cuda-oxide#695</a>, with
 tests, a regression example, and the CI registration whose absence let the defect
 survive.</p>
+
+<hr>
+
+<hr>
+
+<h2 id="viewer">What was actually built</h2>
+
+<p>Every number above comes from fusing one of these. The benchmark is abstract
+until you can see what a cell is: a sphere at four point densities is not the
+same workload as a room, and the load-factor cells that look identical in a
+table are the ones where an arm starts losing data. Pick a cell to load its
+fused surface.</p>
+
+<div class="viewer" id="v-root">
+  <div class="v-cells" role="group" aria-label="Workload cell">
+    <button type="button" data-cell="tartan-warm" aria-pressed="false">tartan-warm</button>
+    <button type="button" data-cell="tartan-cold" aria-pressed="false">tartan-cold</button>
+    <button type="button" data-cell="base" aria-pressed="false">base</button>
+    <button type="button" data-cell="pts-20k" aria-pressed="false">pts-20k</button>
+    <button type="button" data-cell="pts-80k" aria-pressed="false">pts-80k</button>
+    <button type="button" data-cell="pts-720k" aria-pressed="false">pts-720k</button>
+    <button type="button" data-cell="pts-1280k" aria-pressed="false">pts-1280k</button>
+    <button type="button" data-cell="r-0.25" aria-pressed="false">r-0.25</button>
+    <button type="button" data-cell="r-1.0" aria-pressed="false">r-1.0</button>
+    <button type="button" data-cell="r-2.0" aria-pressed="false">r-2.0</button>
+    <button type="button" data-cell="plane-320k" aria-pressed="false">plane-320k</button>
+    <button type="button" data-cell="lf-sparse" aria-pressed="false">lf-sparse</button>
+    <button type="button" data-cell="lf-lo" aria-pressed="false">lf-lo</button>
+    <button type="button" data-cell="lf-mid" aria-pressed="false">lf-mid</button>
+    <button type="button" data-cell="lf-hi" aria-pressed="false">lf-hi</button>
+  </div>
+  <div class="v-stage">
+    <canvas id="v-canvas" tabindex="0"
+            aria-label="Rotatable 3D view of the fused surface. Drag to orbit, scroll to zoom, arrow keys to rotate."></canvas>
+    <div class="v-note" id="v-note">Select a cell to load it.</div>
+  </div>
+  <div class="v-meta" id="v-meta"></div>
+  <p class="v-hint">Drag to orbit &middot; scroll to zoom &middot; arrow keys when focused.
+  One lit point per occupied voxel cell, which is what a TSDF stores; the raw
+  extracted surface is up to 11.4&nbsp;million vertices and is reduced here for
+  the page, not for the measurement.</p>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var MANIFEST = {"cells":[{"cell":"base","verts":{"A3-cuda":846288,"A4-rust":846288,"A5-triton":846288},"agree":true,"files":{"A3-cuda":{"file":"base.A3-cuda.bin","points":118988,"bytes":951940,"leaf_m":0.00195}}},{"cell":"lf-hi","verts":{"A3-cuda":846288,"A4-rust":846288,"A5-triton":835728},"agree":false,"files":{"A3-cuda":{"file":"lf-hi.A3-cuda.bin","points":118988,"bytes":951940,"leaf_m":0.00195},"A5-triton":{"file":"lf-hi.A5-triton.bin","points":117712,"bytes":941732,"leaf_m":0.00195}}},{"cell":"lf-lo","verts":{"A3-cuda":846288,"A4-rust":846288,"A5-triton":846288},"agree":true,"files":{"A3-cuda":{"file":"lf-lo.A3-cuda.bin","points":118988,"bytes":951940,"leaf_m":0.00195}}},{"cell":"lf-mid","verts":{"A3-cuda":846288,"A4-rust":846288,"A5-triton":846288},"agree":true,"files":{"A3-cuda":{"file":"lf-mid.A3-cuda.bin","points":118988,"bytes":951940,"leaf_m":0.00195}}},{"cell":"lf-sparse","verts":{"A3-cuda":846288,"A4-rust":846288,"A5-triton":846288},"agree":true,"files":{"A3-cuda":{"file":"lf-sparse.A3-cuda.bin","points":118988,"bytes":951940,"leaf_m":0.00195}}},{"cell":"plane-320k","verts":{"A3-cuda":950424,"A4-rust":950424,"A5-triton":950424},"agree":true,"files":{"A3-cuda":{"file":"plane-320k.A3-cuda.bin","points":103879,"bytes":831068,"leaf_m":0.00617}}},{"cell":"pts-1280k","verts":{"A3-cuda":846288,"A4-rust":846288,"A5-triton":846288},"agree":true,"files":{"A3-cuda":{"file":"pts-1280k.A3-cuda.bin","points":118988,"bytes":951940,"leaf_m":0.00195}}},{"cell":"pts-20k","verts":{"A3-cuda":7632,"A4-rust":7632,"A5-triton":7632},"agree":true,"files":{"A3-cuda":{"file":"pts-20k.A3-cuda.bin","points":2144,"bytes":17188,"leaf_m":0.00195}}},{"cell":"pts-720k","verts":{"A3-cuda":846288,"A4-rust":846288,"A5-triton":846288},"agree":true,"files":{"A3-cuda":{"file":"pts-720k.A3-cuda.bin","points":118988,"bytes":951940,"leaf_m":0.00195}}},{"cell":"pts-80k","verts":{"A3-cuda":648336,"A4-rust":648336,"A5-triton":648336},"agree":true,"files":{"A3-cuda":{"file":"pts-80k.A3-cuda.bin","points":102384,"bytes":819108,"leaf_m":0.00195}}},{"cell":"r-0.25","verts":{"A3-cuda":212544,"A4-rust":212544,"A5-triton":212544},"agree":true,"files":{"A3-cuda":{"file":"r-0.25.A3-cuda.bin","points":31778,"bytes":254260,"leaf_m":0.00098}}},{"cell":"r-1.0","verts":{"A3-cuda":2571120,"A4-rust":2571120,"A5-triton":2571120},"agree":true,"files":{"A3-cuda":{"file":"r-1.0.A3-cuda.bin","points":91703,"bytes":733660,"leaf_m":0.01241}}},{"cell":"r-2.0","verts":{"A3-cuda":124722,"A4-rust":124722,"A5-triton":124722},"agree":true,"files":{"A3-cuda":{"file":"r-2.0.A3-cuda.bin","points":20997,"bytes":168012,"leaf_m":0.00781}}},{"cell":"tartan-cold","verts":{"A3-cuda":4315656,"A4-rust":4315608,"A5-triton":4315500},"agree":true,"files":{"A3-cuda":{"file":"tartan-cold.A3-cuda.bin","points":169918,"bytes":1359380,"leaf_m":0.01195}}},{"cell":"tartan-warm","verts":{"A3-cuda":11401596,"A4-rust":11401296,"A5-triton":11401188},"agree":true,"files":{"A3-cuda":{"file":"tartan-warm.A3-cuda.bin","points":134734,"bytes":1077908,"leaf_m":0.01956}}}]};
+  var cells = {}, i;
+  for (i = 0; i < MANIFEST.cells.length; i++) cells[MANIFEST.cells[i].cell] = MANIFEST.cells[i];
+
+  var canvas = document.getElementById("v-canvas");
+  var note = document.getElementById("v-note");
+  var meta = document.getElementById("v-meta");
+  var root = document.getElementById("v-root");
+  var gl = canvas.getContext("webgl2", { antialias: true, alpha: true });
+  if (!gl) { note.textContent = "This view needs WebGL2, which this browser did not provide."; return; }
+
+  var VS = [
+    "#version 300 es",
+    "in vec3 aPos; in vec2 aOct;",
+    "uniform mat4 uMVP; uniform mat3 uNM; uniform vec3 uLo, uSpan;",
+    "uniform float uSize; out vec3 vN;",
+    "vec3 octDecode(vec2 e){",
+    "  vec3 n = vec3(e.xy, 1.0 - abs(e.x) - abs(e.y));",
+    "  if (n.z < 0.0) n.xy = (1.0 - abs(n.yx)) * vec2(n.x >= 0.0 ? 1.0 : -1.0, n.y >= 0.0 ? 1.0 : -1.0);",
+    "  return normalize(n);",
+    "}",
+    "void main(){",
+    "  vec3 p = uLo + aPos * uSpan;",
+    "  vN = normalize(uNM * octDecode(aOct));",
+    "  vec4 c = uMVP * vec4(p, 1.0);",
+    "  gl_Position = c;",
+    "  gl_PointSize = clamp(uSize / max(c.w, 0.001), 1.0, 7.0);",
+    "}"
+  ].join("\n");
+
+  var FS = [
+    "#version 300 es",
+    "precision mediump float;",
+    "in vec3 vN; out vec4 o;",
+    "uniform vec3 uWarm, uCool, uInk;",
+    "void main(){",
+    "  vec2 d = gl_PointCoord * 2.0 - 1.0;",
+    "  if (dot(d, d) > 1.0) discard;",           // round points, not squares
+    "  vec3 n = normalize(vN);",
+    "  float key = max(dot(n, normalize(vec3(0.35, 0.65, 0.68))), 0.0);",
+    "  float fill = max(dot(n, normalize(vec3(-0.5, -0.2, 0.3))), 0.0);",
+    "  vec3 c = uInk * 0.14 + uWarm * (key * 0.85) + uCool * (fill * 0.3);",
+    "  o = vec4(c, 1.0);",
+    "}"
+  ].join("\n");
+
+  function compile(type, src) {
+    var s = gl.createShader(type);
+    gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+    return s;
+  }
+  var prog = gl.createProgram();
+  gl.attachShader(prog, compile(gl.VERTEX_SHADER, VS));
+  gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FS));
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { note.textContent = "Shader link failed."; return; }
+  gl.useProgram(prog);
+
+  var U = {};
+  ["uMVP", "uNM", "uLo", "uSpan", "uSize", "uWarm", "uCool", "uInk"].forEach(function (n) {
+    U[n] = gl.getUniformLocation(prog, n);
+  });
+
+  var vao = gl.createVertexArray(), bPos = gl.createBuffer(), bOct = gl.createBuffer();
+  gl.bindVertexArray(vao);
+  gl.enable(gl.DEPTH_TEST);
+
+  var state = { n: 0, lo: [0, 0, 0], span: [1, 1, 1], yaw: 0.6, pitch: 0.35, dist: 2.4, ready: false };
+
+  function css(name, fallback) {
+    var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v || fallback;
+  }
+  function hex(h) {
+    h = h.replace("#", "");
+    if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+    var n = parseInt(h, 16);
+    return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+  }
+
+  function resize() {
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var w = canvas.clientWidth, h = canvas.clientHeight;
+    if (!w || !h) return false;
+    var W = Math.round(w * dpr), H = Math.round(h * dpr);
+    if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    return true;
+  }
+
+  function mul(a, b) {
+    var r = new Float32Array(16), i, j, k, s;
+    for (i = 0; i < 4; i++) for (j = 0; j < 4; j++) {
+      s = 0; for (k = 0; k < 4; k++) s += a[k * 4 + j] * b[i * 4 + k];
+      r[i * 4 + j] = s;
+    }
+    return r;
+  }
+
+  function draw() {
+    if (!resize() || !state.ready) return;
+    var aspect = canvas.width / canvas.height;
+    var f = 1.0 / Math.tan(0.5 * 0.9);
+    var near = 0.01, far = 100.0;
+    var P = new Float32Array([f / aspect, 0, 0, 0, 0, f, 0, 0, 0, 0, (far + near) / (near - far), -1,
+                              0, 0, 2 * far * near / (near - far), 0]);
+    var cp = Math.cos(state.pitch), sp = Math.sin(state.pitch);
+    var cy = Math.cos(state.yaw), sy = Math.sin(state.yaw);
+    // Orbit the unit cube the geometry is normalised into, centred on 0.5.
+    var eye = [0.5 + state.dist * cp * sy, 0.5 + state.dist * sp, 0.5 + state.dist * cp * cy];
+    var zx = eye[0] - 0.5, zy = eye[1] - 0.5, zz = eye[2] - 0.5;
+    var zl = Math.hypot(zx, zy, zz); zx /= zl; zy /= zl; zz /= zl;
+    var xx = zz, xy = 0, xz = -zx;
+    var xl = Math.hypot(xx, xy, xz) || 1; xx /= xl; xy /= xl; xz /= xl;
+    var ux = zy * xz - zz * xy, uy = zz * xx - zx * xz, uz = zx * xy - zy * xx;
+    var V = new Float32Array([
+      xx, ux, zx, 0, xy, uy, zy, 0, xz, uz, zz, 0,
+      -(xx * eye[0] + xy * eye[1] + xz * eye[2]),
+      -(ux * eye[0] + uy * eye[1] + uz * eye[2]),
+      -(zx * eye[0] + zy * eye[1] + zz * eye[2]), 1]);
+
+    gl.uniformMatrix4fv(U.uMVP, false, mul(P, V));
+    gl.uniformMatrix3fv(U.uNM, false, new Float32Array([xx, ux, zx, xy, uy, zy, xz, uz, zz]));
+    gl.uniform3fv(U.uLo, new Float32Array([0, 0, 0]));
+    gl.uniform3fv(U.uSpan, new Float32Array(state.span));
+    gl.uniform1f(U.uSize, canvas.height * 0.0032 / Math.max(state.dist, 0.2) * 2.2);
+    gl.uniform3fv(U.uWarm, new Float32Array(hex(css("--c-rust", "#a63a0c"))));
+    gl.uniform3fv(U.uCool, new Float32Array(hex(css("--c-triton", "#5f4390"))));
+    gl.uniform3fv(U.uInk, new Float32Array(hex(css("--fg", "#14171c"))));
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.drawArrays(gl.POINTS, 0, state.n);
+  }
+
+  var pending = false;
+  function schedule() {
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(function () { pending = false; draw(); });
+  }
+
+  function upload(buf) {
+    var dv = new DataView(buf);
+    if (dv.getUint32(0, true) !== 0x32475350) throw new Error("bad asset header");
+    var n = dv.getUint32(8, true);
+    var lo = [dv.getFloat32(12, true), dv.getFloat32(16, true), dv.getFloat32(20, true)];
+    var hi = [dv.getFloat32(24, true), dv.getFloat32(28, true), dv.getFloat32(32, true)];
+    var off = 36;
+    var pos = new Uint16Array(buf, off, n * 3);
+    var oct = new Int8Array(buf, off + n * 6, n * 2);
+
+    // Normalise into a unit cube so framing does not depend on scene scale,
+    // and keep the true aspect so a plane still reads as flat.
+    var sx = hi[0] - lo[0], sy = hi[1] - lo[1], sz = hi[2] - lo[2];
+    var m = Math.max(sx, sy, sz) || 1;
+    state.span = [sx / m, sy / m, sz / m];
+    state.n = n;
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, bPos);
+    gl.bufferData(gl.ARRAY_BUFFER, pos, gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 3, gl.UNSIGNED_SHORT, true, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, bOct);
+    gl.bufferData(gl.ARRAY_BUFFER, oct, gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(1);
+    gl.vertexAttribPointer(1, 2, gl.BYTE, true, 0, 0);
+    state.ready = true;
+  }
+
+  var current = null, loading = null;
+  function fmt(n) { return n.toLocaleString("en-US"); }
+
+  function describe(entry, arm) {
+    var f = entry.files[arm], parts = [];
+    parts.push("<span class='k'>" + fmt(f.points) + "</span> points shown");
+    parts.push("<span class='k'>" + fmt(entry.verts[arm]) + "</span> vertices extracted");
+    parts.push("voxel grid <span class='k'>" + (f.leaf_m * 100).toFixed(1) + " cm</span>");
+    var arms = Object.keys(entry.verts).sort();
+    var agree = entry.agree
+      ? "all three arms built the same surface"
+      : "<strong>the arms disagree here</strong>: " + arms.map(function (a) {
+          return a.replace(/^A\d-/, "") + " " + fmt(entry.verts[a]);
+        }).join(", ") + " vertices";
+    parts.push(agree);
+    return parts.join(" &middot; ");
+  }
+
+  function select(name, arm) {
+    var entry = cells[name];
+    if (!entry) return;
+    arm = arm || (entry.files["A3-cuda"] ? "A3-cuda" : Object.keys(entry.files)[0]);
+    current = name;
+    Array.prototype.forEach.call(root.querySelectorAll(".v-cells button"), function (b) {
+      var on = b.getAttribute("data-cell") === name;
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    note.textContent = "Loading " + name + "…";
+    note.hidden = false;
+    meta.innerHTML = "";
+    var url = "geometry/" + entry.files[arm].file;
+    var token = {};
+    loading = token;
+    fetch(url).then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.arrayBuffer();
+    }).then(function (b) {
+      if (loading !== token) return;
+      upload(b);
+      note.hidden = true;
+      meta.innerHTML = describe(entry, arm) +
+        (Object.keys(entry.files).length > 1
+          ? " &middot; showing <span class='k'>" + arm.replace(/^A\d-/, "") + "</span>"
+          : "");
+      if (Object.keys(entry.files).length > 1) {
+        var alt = Object.keys(entry.files).filter(function (a) { return a !== arm; })[0];
+        var btn = document.createElement("button");
+        btn.className = "v-swap";
+        btn.textContent = "show " + alt.replace(/^A\d-/, "");
+        btn.onclick = function () { select(name, alt); };
+        meta.appendChild(document.createTextNode(" "));
+        meta.appendChild(btn);
+      }
+      schedule();
+    }).catch(function (e) {
+      if (loading !== token) return;
+      state.ready = false;
+      note.innerHTML = "Could not load the geometry (" + e.message +
+        "). The interactive view runs on <a href='https://realitymatrix.github.io/what-irregularity-costs/#viewer'>the project page</a>, " +
+        "which serves these files alongside it.";
+      note.hidden = false;
+    });
+  }
+
+  // ---- interaction --------------------------------------------------------
+  var drag = null;
+  canvas.addEventListener("pointerdown", function (e) {
+    drag = { x: e.clientX, y: e.clientY };
+    canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener("pointermove", function (e) {
+    if (!drag) return;
+    state.yaw -= (e.clientX - drag.x) * 0.008;
+    state.pitch = Math.max(-1.45, Math.min(1.45, state.pitch + (e.clientY - drag.y) * 0.008));
+    drag.x = e.clientX; drag.y = e.clientY;
+    schedule();
+  });
+  ["pointerup", "pointercancel"].forEach(function (t) {
+    canvas.addEventListener(t, function () { drag = null; });
+  });
+  canvas.addEventListener("wheel", function (e) {
+    e.preventDefault();
+    state.dist = Math.max(0.55, Math.min(6.0, state.dist * (1 + Math.sign(e.deltaY) * 0.12)));
+    schedule();
+  }, { passive: false });
+  canvas.addEventListener("keydown", function (e) {
+    var k = e.key, step = 0.12;
+    if (k === "ArrowLeft") state.yaw += step;
+    else if (k === "ArrowRight") state.yaw -= step;
+    else if (k === "ArrowUp") state.pitch = Math.min(1.45, state.pitch + step);
+    else if (k === "ArrowDown") state.pitch = Math.max(-1.45, state.pitch - step);
+    else if (k === "+" || k === "=") state.dist = Math.max(0.55, state.dist * 0.9);
+    else if (k === "-") state.dist = Math.min(6.0, state.dist * 1.1);
+    else return;
+    e.preventDefault();
+    schedule();
+  });
+  window.addEventListener("resize", schedule);
+  // A tab that loads in the background has its first animation frame
+  // throttled away, and nothing in a static scene ever asks for another, so
+  // the canvas would stay blank until the reader happened to drag it. Both of
+  // these give the first frame another chance once the element is really
+  // laid out and visible.
+  if (window.ResizeObserver) new ResizeObserver(schedule).observe(canvas);
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden) schedule();
+  });
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", schedule);
+  new MutationObserver(schedule).observe(document.documentElement,
+    { attributes: true, attributeFilter: ["data-theme"] });
+
+  Array.prototype.forEach.call(root.querySelectorAll(".v-cells button"), function (b) {
+    b.addEventListener("click", function () { select(b.getAttribute("data-cell")); });
+  });
+
+  // Load the real-data cell first: it is the one that looks like something.
+  select(cells["tartan-warm"] ? "tartan-warm" : MANIFEST.cells[0].cell);
+})();
+</script>
+
 
 <hr>
 
