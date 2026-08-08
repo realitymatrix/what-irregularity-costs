@@ -1,12 +1,17 @@
 % What Irregularity Costs.
 %
-% Intended arXiv classification:
-%   primary   cs.PL  (Programming Languages)
-%   secondary cs.DC  (Distributed, Parallel, and Cluster Computing)
+% arXiv classification:
+%   primary   cs.CV  (Computer Vision and Pattern Recognition)
+%   secondary cs.PL  (Programming Languages)
+%             cs.DC  (Distributed, Parallel, and Cluster Computing)
 %             cs.PF  (Performance)
-% NOT cs.CV. An earlier plan for this project targeted computer vision, which
-% was correct when the paper was a latency-budget study for reconstruction. It
-% is now a language and compiler comparison and belongs in cs.PL.
+% The contribution is a language and compiler result, so cs.PL is its
+% methodological home and it is cross-listed there. The primary is cs.CV
+% because the finding that most needs to reach practitioners is a correctness
+% one about TSDF fusion: at load factors an ordinary depth trajectory reaches,
+% the Triton implementation silently discards blocks, and the reconstruction
+% loses surface without reporting anything. The people who need to know that
+% are the ones writing fusion pipelines.
 %
 % Build:  tectonic paper/main.tex
 % Tables: paper/gen_tables.py results/sweep_YYYYmmdd_HHMMSS/sweep.csv
