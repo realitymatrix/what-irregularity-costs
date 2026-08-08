@@ -5,6 +5,10 @@ CUDA C++, Rust, and Triton on a hash-blocked GPU workload.
 **[Paper (PDF)](paper/main.pdf)** &middot; [Project page](docs/index.html) &middot;
 [Raw data](results/)
 
+Submitted to arXiv, primary cs.CV, cross-listed cs.PL, cs.DC and cs.PF. Under
+moderation; this line gets the identifier once it is announced. The submission
+package and the script that builds and verifies it are in [arxiv/](arxiv/).
+
 GPU language comparisons are almost always run on tiled dense linear algebra,
 where every toolchain is good and the differences are small. This repository
 implements the same hash-blocked TSDF fusion kernel five times and measures it on
