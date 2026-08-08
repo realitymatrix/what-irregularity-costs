@@ -1036,7 +1036,21 @@ gap rather than a hardware limit. We contributed a fix that lowers the three
 operations to those instructions, along with tests, a regression example, and the
 continuous-integration registration whose absence had allowed the defect to
 survive: the example that exercises these APIs was only ever run in the build
-mode where the problem does not appear.
+mode where the problem does not appear. It was reviewed and merged
+upstream~\cite{cudaoxidepr}, so the API is callable in current
+\texttt{cuda-oxide} and the workaround this paper describes is no longer needed
+to reproduce it.
+
+The maintainer amended the patch in two respects, and both are corrections
+rather than polish. We had made the assembler's memory clobber conditional,
+omitting it for \texttt{Relaxed}; it is unconditional in the merged version,
+because without it the compiler may reorder plain accesses to the same address
+across the inline assembly and break the single-thread coherence Rust
+guarantees regardless of ordering. This does not affect our measurements, which
+were taken with the clobber present, but it does mean the version we submitted
+would have been wrong in a way our benchmark could not have detected. Sequential
+consistency, which we left unsupported, now lowers to a fence fused with an
+acquiring load or releasing store.
 
 This correction also revises a claim we made in an earlier draft. We had written
 that libNVVM's restrictions force Rust back onto volatile reads and an explicit

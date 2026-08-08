@@ -153,7 +153,7 @@ footer{color:var(--muted); font-size:.83rem; text-align:center; margin-top:64px;
     <a class="btn" href="#bibtex">BibTeX</a>
     <a class="btn" href="https://github.com/realitymatrix/what-irregularity-costs">Code</a>
     <a class="btn" href="https://github.com/realitymatrix/what-irregularity-costs/tree/main/results">Raw data</a>
-    <a class="btn" href="https://github.com/NVlabs/cuda-oxide/pull/695">Upstream fix</a>
+    <a class="btn" href="https://github.com/NVlabs/cuda-oxide/pull/695">Upstream fix (merged)</a>
   </div>
 </header>
 
@@ -4695,10 +4695,19 @@ so every call failed the backend verifier in the build mode that produces real k
 &mdash; with an error naming an LLVM basic block rather than the offending line of Rust.
 The project's own atomics example does not build in that mode.</p>
 
-<p>The underlying PTX instructions have existed since sm_70. Fix contributed upstream as
-<a href="https://github.com/NVlabs/cuda-oxide/pull/695">NVlabs/cuda-oxide#695</a>, with
-tests, a regression example, and the CI registration whose absence let the defect
-survive.</p>
+<p>The underlying PTX instructions have existed since sm_70, so this was a lowering gap
+rather than a hardware limit. The fix was contributed with tests, a regression example,
+and the CI registration whose absence let the defect survive, and is
+<a href="https://github.com/NVlabs/cuda-oxide/pull/695">merged upstream</a> &mdash; the
+API is callable in current <code>cuda-oxide</code>.</p>
+
+<p>The maintainer amended it in two respects, both corrections rather than polish. We had
+made the assembler's memory clobber conditional, omitting it for relaxed ordering; it is
+unconditional in the merged version, because without it the compiler may reorder plain
+accesses to the same address across the inline assembly and break the single-thread
+coherence Rust guarantees whatever the ordering. That does not move the measurements here,
+which were taken with the clobber present, but the version submitted would have been wrong
+in a way this benchmark could not have caught.</p>
 
 <hr>
 

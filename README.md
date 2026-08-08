@@ -52,10 +52,12 @@ so a number cannot drift in one place without moving in the others.
 Requires an NVIDIA GPU. Measurements in the paper are sm_120 (Blackwell), CUDA
 13.0, driver 580.
 
-**The Rust arm needs a patched `cuda-oxide`.** Its scoped atomic load and store
-could not be compiled at all in the upstream version used here; the fix is
-[NVlabs/cuda-oxide#695](https://github.com/NVlabs/cuda-oxide/pull/695). Until it
-lands, build the backend from that branch and point `CUDA_OXIDE_BACKEND` at the
+**The Rust arm needs `cuda-oxide` at or after the atomics fix.** Its scoped
+atomic load and store could not be compiled at all in the version used for these
+measurements. The fix,
+[NVlabs/cuda-oxide#695](https://github.com/NVlabs/cuda-oxide/pull/695), is
+merged upstream, so a current checkout works without patching. On an older one,
+build the backend from that commit and point `CUDA_OXIDE_BACKEND` at the
 resulting `librustc_codegen_cuda.so`. See
 [docs/CUDA-OXIDE-ATOMIC-LOAD.md](docs/CUDA-OXIDE-ATOMIC-LOAD.md).
 
