@@ -4,7 +4,29 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>What Irregularity Costs</title>
-<meta name="description" content="CUDA C++, Rust, and Triton on a hash-blocked GPU workload. Language choice is nearly free on tiled work and expensive on irregular work.">
+<meta name="description" content="The same hash-blocked TSDF fusion kernel in CUDA C++, Rust and Triton. Language choice is nearly free on the work that is usually benchmarked and expensive on the work that is not. arXiv:2608.08287">
+<link rel="canonical" href="https://realitymatrix.github.io/what-irregularity-costs/">
+
+<!-- Social preview. Absolute URLs: scrapers do not resolve relative paths, and
+     og:image must be absolute or the card renders with no image at all. -->
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="What Irregularity Costs">
+<meta property="og:title" content="What Irregularity Costs: CUDA C++, Rust, and Triton on a Hash-Blocked GPU Workload">
+<meta property="og:description" content="The same hash-blocked TSDF fusion kernel in CUDA C++, Rust and Triton. Language choice is nearly free on the work that is usually benchmarked and expensive on the work that is not. arXiv:2608.08287">
+<meta property="og:url" content="https://realitymatrix.github.io/what-irregularity-costs/">
+<meta property="og:image" content="https://realitymatrix.github.io/what-irregularity-costs/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Title card showing the per-stage ratios and a fused sphere with the blocks Triton lost marked in colour.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="What Irregularity Costs">
+<meta name="twitter:description" content="The same hash-blocked TSDF fusion kernel in CUDA C++, Rust and Triton. Language choice is nearly free on the work that is usually benchmarked and expensive on the work that is not. arXiv:2608.08287">
+<meta name="twitter:image" content="https://realitymatrix.github.io/what-irregularity-costs/og-image.png">
+<meta name="author" content="Petr Korolev">
+<meta name="citation_title" content="What Irregularity Costs: CUDA C++, Rust, and Triton on a Hash-Blocked GPU Workload">
+<meta name="citation_author" content="Korolev, Petr">
+<meta name="citation_arxiv_id" content="2608.08287">
+<meta name="citation_pdf_url" content="https://arxiv.org/pdf/2608.08287">
 <style>
 :root{
   --bg:#fbfaf8; --fg:#14171c; --muted:#5a6472; --rule:#dfe1e6; --rule-hard:#c4c8cf;
