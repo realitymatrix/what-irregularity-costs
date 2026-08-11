@@ -293,6 +293,20 @@ const std::vector<Cell> kDefaultCells = {
     {"diner-p003",  "real",      Shape::File,   0.0f,    0,    0, 1 << 16, 0,
      "../data/tartanair/diner_p003_f008.bin",
      "../data/tartanair/diner_p003_f008_warm.bin"},
+
+    // Cold twins, to separate "real data" from "warm volume". Every real cell
+    // but tartan-cold pre-fills, and every synthetic cell does not, so the two
+    // are confounded in the sweep as it stands. These are the same frames into
+    // an empty volume: identical points, identical geometry, only the starting
+    // state differs.
+    {"diner-p000-cold", "coldwarm", Shape::File, 0.0f, 0, 0, 1 << 16, 0,
+     "../data/tartanair/diner_p000_f008.bin", nullptr},
+    {"diner-p003-cold", "coldwarm", Shape::File, 0.0f, 0, 0, 1 << 16, 0,
+     "../data/tartanair/diner_p003_f008.bin", nullptr},
+    {"tartan-p003-cold", "coldwarm", Shape::File, 0.0f, 0, 0, 1 << 16, 0,
+     "../data/tartanair/retro_p003_f008.bin", nullptr},
+    {"tartan-p001-cold", "coldwarm", Shape::File, 0.0f, 0, 0, 1 << 16, 0,
+     "../data/tartanair/retro_p001_f008.bin", nullptr},
 };
 
 // ---------------------------------------------------------------------------
