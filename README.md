@@ -2,12 +2,18 @@
 
 CUDA C++, Rust, and Triton on a hash-blocked GPU workload.
 
-**[arXiv:2608.08287](https://arxiv.org/abs/2608.08287)** &middot; [Paper (PDF)](paper/main.pdf) &middot; [Project page](docs/index.html) &middot;
+[![arXiv](https://img.shields.io/badge/arXiv-2608.08287-b31b1b.svg)](https://arxiv.org/abs/2608.08287)
+[![License: MIT](https://img.shields.io/badge/code-MIT-blue.svg)](LICENSE)
+[![Paper: CC BY 4.0](https://img.shields.io/badge/paper-CC%20BY%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by/4.0/)
+
+**[arXiv:2608.08287](https://arxiv.org/abs/2608.08287)** &middot;
+[Paper (PDF)](paper/main.pdf) &middot;
+[Project page](https://realitymatrix.github.io/what-irregularity-costs/) &middot;
 [Raw data](results/)
 
-Published as [arXiv:2608.08287](https://arxiv.org/abs/2608.08287), cs.CV with cs.PL, cs.DC and cs.PF
-cross-lists, CC BY 4.0. The submission package and the script that builds and
-verifies it are in [arxiv/](arxiv/).
+Published 8 August 2026, cs.CV with cs.PL, cs.DC and cs.PF cross-lists, CC BY
+4.0. The submission package and the script that builds and verifies it are in
+[arxiv/](arxiv/).
 
 GPU language comparisons are almost always run on tiled dense linear algebra,
 where every toolchain is good and the differences are small. This repository
@@ -26,6 +32,20 @@ hand-written CUDA C++ and Triton is more than an order of magnitude behind.
 | update (regular) | 0.96–1.19x | 1.1–2.6x |
 
 Full integrate path on real depth data: Rust 1.01–1.03x, Triton 2.57–2.92x.
+
+## Citing
+
+```bibtex
+@misc{korolev2026irregularity,
+  author        = {Korolev, Petr},
+  title         = {What Irregularity Costs: {CUDA} {C++}, {Rust}, and {Triton}
+                   on a Hash-Blocked {GPU} Workload},
+  year          = {2026},
+  eprint        = {2608.08287},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV},
+}
+```
 
 ## What is here
 
