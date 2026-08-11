@@ -60,9 +60,12 @@ def load(csv_path):
         arm = ARM.get(r["arm"])
         if arm is None:
             continue
+        if r["axis"] == "coldwarm":
+            continue
         key = (r["device_name"], r["cell"], arm, r["stage"])
         raw[key].append(float(r["p50_ms"]))
-        meta[r["cell"]] = (r["axis"], int(r["points"]), float(r["load_factor"]))
+        meta[r["cell"]] = (r["axis"], int(r["points"]), int(r["blocks"]),
+                           float(r["load_factor"]))
     return {k: statistics.median(v) for k, v in raw.items()}, meta
 
 
@@ -146,7 +149,7 @@ def fig_axes(med, meta, pal):
         ("points", "more points, fixed geometry", "points (thousands)",
          lambda c: meta[c][1] / 1000.0, lambda v: f"{v:g}"),
         ("extent", "same points, spread wider", "table load factor",
-         lambda c: meta[c][2] * 100.0, lambda v: f"{v:.1f}%"),
+         lambda c: meta[c][3] * 100.0, lambda v: f"{v:.1f}%"),
     ]
     for ax, (axis, title, xlabel, xof, xfmt) in zip(axes, panels):
         cells = sorted((c for c in meta if meta[c][0] == axis), key=xof)
@@ -178,6 +181,57 @@ def fig_axes(med, meta, pal):
 
     axes[0].set_ylabel("allocate, relative to CUDA C++", fontsize=8,
                        color=pal["muted"])
+    fig.tight_layout()
+    return fig
+
+
+def fig_floor(med, meta, pal):
+    """The cost floor: hold the point count, vary the work, watch who moves.
+
+    This is the sharpest form of the expressiveness claim. Every cell here
+    launches the same number of threads over the same number of points; only
+    the amount of insertion those threads have to do changes. An arm that can
+    exit a probe early gets cheaper as the work falls. An arm that must run to
+    a compile-time bound cannot.
+    """
+    cells = [c for c in meta if 319_000 <= meta[c][1] <= 321_000]
+    cells.sort(key=lambda c: meta[c][2])
+    fig, ax = plt.subplots(figsize=(6.4, 2.7))
+    xs = [meta[c][2] for c in cells]
+
+    series = [("cuda", "CUDA C++", pal["fg"]), ("rust", "Rust", pal["rust"]),
+              ("triton", "Triton", pal["triton"])]
+    for arm, name, colour in series:
+        ys = [med[(REF_DEVICE, c, arm, "allocate")] for c in cells]
+        ax.plot(xs, ys, "-o", color=colour, lw=2, ms=6, zorder=3,
+                markeredgecolor=pal["bg"], markeredgewidth=1.2)
+        span = max(ys) / min(ys)
+        dy = {"cuda": -7, "rust": 7, "triton": 0}[arm]
+        ax.annotate(f"{name}  ×{span:.2f}", (xs[-1], ys[-1]), xytext=(9, dy),
+                    textcoords="offset points", va="center", fontsize=8,
+                    color=colour if arm != "cuda" else pal["muted"])
+
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    # 1,060 and 1,160 are a hair apart on a log axis and their labels collide;
+    # label the ends and the decades, and let the markers show the rest.
+    shown = [xs[0], xs[-1]] + [x for x in xs if x not in (xs[0], xs[-1])
+                               and min(abs(x - o) / o for o in (xs[0], xs[-1])) > 0.4]
+    keep, last = [], 0
+    for x in sorted(set(shown)):
+        if last == 0 or x / last > 1.6:
+            keep.append(x); last = x
+    ax.set_xticks(keep)
+    ax.set_xticklabels([f"{int(x):,}" for x in keep], fontsize=8)
+    ax.set_xticks([], minor=True)
+    ax.set_xlabel("blocks allocated, at a fixed 320k points", fontsize=8,
+                  color=pal["muted"])
+    ax.set_ylabel("allocate (ms)", fontsize=8, color=pal["muted"])
+    ax.set_yticks([0.02, 0.05, 0.1, 0.2, 0.5])
+    ax.set_yticks([], minor=True)
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
+    ax.set_xlim(min(xs) * 0.6, max(xs) * 3.2)
+    style(ax, pal)
     fig.tight_layout()
     return fig
 
@@ -256,6 +310,7 @@ def main():
     med, meta = load(sweep)
     builders = [
         ("stages", lambda p: fig_stages(med, meta, p)),
+        ("floor", lambda p: fig_floor(med, meta, p)),
         ("axes", lambda p: fig_axes(med, meta, p)),
         ("counters", lambda p: fig_counters(counters, p)),
     ]

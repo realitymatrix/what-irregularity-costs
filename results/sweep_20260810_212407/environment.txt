@@ -1,0 +1,13 @@
+date:    2026-08-10T21:24:07-07:00
+host:    nexxus
+kernel:  6.11.0-29-generic
+driver:  580.159.04
+nvcc:    Build cuda_13.0.r13.0/compiler.36424714_0
+rustc:   rustc 1.93.1 (01f6ddf75 2026-02-11)
+commit:  fbb17d3225984cb663d7f8c34095a476be145f46
+dirty:   0 file(s)
+args:    
+
+index, name, compute_cap, memory.total [MiB], clocks.max.sm [MHz]
+0, NVIDIA GeForce RTX 5070 Ti, 12.0, 16303 MiB, 3090 MHz
+1, NVIDIA GeForce RTX 5060, 12.0, 8151 MiB, 3090 MHz

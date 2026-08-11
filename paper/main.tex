@@ -2,6 +2,12 @@
 %
 % Published as arXiv:2608.08287 [cs.CV], 8 August 2026, CC BY 4.0.
 %
+% v2 adds Section 6.2: Triton's allocate cost tracks the number of threads
+% launched rather than the work they do, measured by holding the point count
+% fixed and varying insertion work by 65x. It also corrects v1's reading of the
+% real-data result, which attributed to real depth an effect that belongs to
+% warm volumes.
+%
 % arXiv classification:
 %   primary   cs.CV  (Computer Vision and Pattern Recognition)
 %   secondary cs.PL  (Programming Languages)
@@ -564,12 +570,22 @@ more than an order of magnitude behind.
 
 The real-depth cells sit at the \emph{worse} end of Triton's range rather than
 the middle of it: across the nine valid real cells its allocate ratio spans
-$17.3$--$31.6\times$ with a median of $25.2\times$, against $11.2$--$31.6\times$
+$17.3$--$31.7\times$ with a median of $25.2\times$, against $11.2$--$31.7\times$
 and a median of $21.5\times$ over the sweep as a whole. Rust does not show the
-same effect, spanning $1.12$--$1.41\times$ on real data against $1.02$--$3.34$
+same effect, spanning $1.12$--$1.41\times$ on real data against $1.02$--$3.33$
 overall. Synthetic scenes therefore understate the cost of the construct
 Triton lacks, which matters because a synthetic scene is what a language
 comparison would ordinarily be run on.
+
+The reason is not that real depth is harder for Triton, and Section
+\ref{sec:floor} shows that it is not harder at all. The real cells are warm,
+integrating a frame into a volume that already holds eight, so most of their
+probes hit rather than insert. A hit is cheaper than an insertion for anything
+that can stop probing once it has found the key, so CUDA C++ and Rust get
+faster; Triton, which cannot stop, does not. The ratio worsens through the
+denominator. The single real cell without a warm pre-fill, \texttt{tartan-cold},
+lands at $17.8\times$ among the synthetic cells rather than with its
+neighbours, and was the clue.
 
 The wide ends of both ranges belong to the smallest cell, 20{,}000 points, where
 the kernel runs in a few microseconds and a fixed per-launch cost dominates
@@ -694,6 +710,81 @@ restriction sets what each wasted iteration costs. Replacing the exchange with a
 plain load, as a control, leaves 0.090\,ms against 2.04\,ms, a factor of 113, so
 essentially the entire gap is on this path rather than in code generation or
 memory layout.
+
+\subsection{Triton: a cost that does not respond to the work}
+\label{sec:floor}
+
+The sharpest form of the expressiveness claim is not a ratio. Six cells of the
+sweep hold the point count at 320{,}000 and vary only how much insertion those
+points require, by a factor of 65 in block count:
+
+\begin{center}
+\begin{tabular}{lrrr}
+\toprule
+Cell & Blocks & CUDA C++ & Triton \\
+\midrule
+r-0.25     &    280 & 0.024 ms & 0.501 ms \\
+plane-320k &  1{,}060 & 0.029 & 0.502 \\
+base       &  1{,}160 & 0.028 & 0.501 \\
+lf-sparse  &  1{,}160 & 0.028 & 0.504 \\
+r-1.0      &  4{,}752 & 0.032 & 0.503 \\
+r-2.0      & 18{,}160 & 0.045 & 0.507 \\
+\midrule
+\multicolumn{2}{l}{spread across the group} & $1.89\times$ & $\mathbf{1.014\times}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+CUDA C++ costs $1.89\times$ more at the top of that range than the bottom,
+because more blocks means more insertions and insertions are work. Triton costs
+$1.014\times$ more. A least-squares fit of allocate time against point count and
+block count over all cells says the same: Triton costs $1.49$~ms per million
+points, and block count accounts for $2.4\%$ of its predicted time against
+$97.6\%$ from point count alone. Figure~\ref{fig:floor} plots it.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{floor.pdf}
+\caption{Same points, same launch, different amounts of work. An arm that can
+leave a probe loop early gets cheaper as the work falls. Triton must run to a
+compile-time bound, so it does not. The annotation on each line is its spread
+across the group.}
+\label{fig:floor}
+\end{figure}
+
+\textbf{Triton's irregular-stage cost is a function of how many threads are
+launched, not of what those threads accomplish.} Every lane runs the probe loop
+to its bound whether it inserts a block, finds one already present, or has
+nothing to do, so the kernel cannot become cheaper when the problem becomes
+easier.
+
+Cold twins of four real cells isolate this directly. They integrate the same
+frames into an empty volume, so the geometry and the point count are identical
+and only the starting state differs:
+
+\begin{center}
+\begin{tabular}{lrrr}
+\toprule
+Cell & CUDA C++, cold\,$\rightarrow$\,warm & Triton, cold\,$\rightarrow$\,warm & Ratio \\
+\midrule
+tartan-p001 & $0.031 \rightarrow 0.020$ ms & $0.639 \rightarrow 0.637$ ms & $20.7 \rightarrow 31.7\times$ \\
+tartan-p003 & $0.039 \rightarrow 0.023$      & $0.663 \rightarrow 0.661$      & $17.2 \rightarrow 28.5\times$ \\
+diner-p000  & $0.034 \rightarrow 0.025$      & $0.653 \rightarrow 0.653$      & $19.2 \rightarrow 26.4\times$ \\
+diner-p003  & $0.040 \rightarrow 0.023$      & $0.666 \rightarrow 0.665$      & $16.6 \rightarrow 28.6\times$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Warming the volume makes CUDA C++ $1.38$--$1.73\times$ faster. It moves Triton by
+at most $0.3\%$ across the four pairs.
+
+This is worth more than the headline ratio because it does not transfer, and it
+fails to transfer in the direction that matters. A pipeline is warm for every
+frame after the first, so the regime in which the gap is widest is the regime a
+deployed system spends all of its time in. It also makes the expressiveness
+argument quantitative: the absence of a per-lane early exit is not a constant
+factor but a floor, $1.49$~ms per million points here, that no reduction in work
+removes.
 
 \subsection{Triton: a failure invisible on one device}
 

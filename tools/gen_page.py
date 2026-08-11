@@ -11,17 +11,33 @@ GPU = {"0": "RTX 5070 Ti", "1": "RTX 5060"}
 TOTALS = [("tartan-warm", "TartanAir, warm volume"), ("tartan-cold", "TartanAir, cold volume"),
           ("plane-320k", "Plane, 320k points"), ("pts-1280k", "Sphere, 1.28M points"),
           ("base", "Sphere, 320k points")]
-CELLS = [("pts-20k", "points"), ("pts-80k", "points"), ("base", "points"),
-         ("pts-720k", "points"), ("pts-1280k", "points"), ("r-0.25", "extent"),
-         ("r-1.0", "extent"), ("r-2.0", "extent"), ("plane-320k", "shape"),
-         ("tartan-cold", "real"), ("tartan-warm", "real")]
+# Axis order is editorial; the cells inside each axis come from the data, so a
+# cell added to the sweep appears here without anyone maintaining a list. The
+# previous hand-written list had gone stale and silently omitted every
+# real-data cell added after it was written.
+AXIS_ORDER = ["baseline", "points", "extent", "shape", "loadfactor", "real"]
+
+
+def cell_rows(meta):
+    seen = {}
+    for cell, (points, _load, axis) in meta.items():
+        seen.setdefault(axis, []).append((cell, points))
+    out = []
+    for axis in AXIS_ORDER + [a for a in sorted(seen) if a not in AXIS_ORDER]:
+        for cell, _p in sorted(seen.get(axis, []), key=lambda t: (t[1], t[0])):
+            out.append((cell, axis))
+    return out
 
 
 def load(path):
     acc, meta = collections.defaultdict(list), {}
     for r in csv.DictReader(open(path)):
+        # The coldwarm cells are an instrument: each is only meaningful beside
+        # its warm twin, so counting them here would double a workload.
+        if r["axis"] == "coldwarm":
+            continue
         acc[(r["device"], r["cell"], r["arm"], r["stage"])].append(float(r["p50_ms"]))
-        meta[r["cell"]] = (int(r["points"]), float(r["load_factor"]))
+        meta[r["cell"]] = (int(r["points"]), float(r["load_factor"]), r["axis"])
     return {k: statistics.median(v) for k, v in acc.items()}, meta
 
 
@@ -50,13 +66,13 @@ def build(m, meta):
 <td class="n r">{t['A5-triton']/t['A3-cuda']:.2f}&times;</td></tr>""")
 
     cel, prev = [], None
-    for cell, axis in CELLS:
+    for cell, axis in cell_rows(meta):
         b = m.get(("0", cell, "A3-cuda", "allocate"))
         if not b:
             continue
         cls = ' class="sep"' if prev and axis != prev else ""
         prev = axis
-        pts, lf = meta[cell]
+        pts, lf, _ax = meta[cell]
         cel.append(f"""<tr{cls}><td><code>{cell}</code></td><td class=g>{axis}</td>
 <td class=n>{pts:,}</td><td class=n>{lf:.3f}</td>
 <td class="n r">{m[('0',cell,'A4-rust','allocate')]/b:.2f}</td>

@@ -17,6 +17,8 @@ ARM = {"A3-cuda": "CUDA C++", "A4-rust": "Rust", "A5-triton": "Triton"}
 def load(path):
     acc = collections.defaultdict(list)
     for r in csv.DictReader(open(path)):
+        if r["axis"] == "coldwarm":
+            continue
         acc[(r["device"], r["cell"], r["arm"], r["stage"])].append(float(r["p50_ms"]))
     return {k: statistics.median(v) for k, v in acc.items()}
 
@@ -151,6 +153,8 @@ def main():
     out.mkdir(exist_ok=True)
     meta = {}
     for r in csv.DictReader(open(src)):
+        if r["axis"] == "coldwarm":
+            continue
         meta[r["cell"]] = (int(r["points"]), float(r["load_factor"]), r["axis"])
     m = load(src)
     n = table_totals(m, out)
