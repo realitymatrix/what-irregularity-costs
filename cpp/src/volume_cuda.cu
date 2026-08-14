@@ -106,6 +106,53 @@ __device__ int32_t d_find_or_insert(const DeviceView& v, int32_t bx, int32_t by,
     return -1;
 }
 
+/// MEASUREMENT ONLY: the same probe, reporting how deep it had to go.
+///
+/// The number this collects is what separates a SIMT model from a tile model.
+/// A thread that resolves on its first probe stops there and costs one step; a
+/// tile program cannot stop until every lane in it has resolved, so it costs
+/// the deepest lane's count for all of them. Summing the first and taking the
+/// per-program maximum of the second prices both models on the same run.
+__device__ int32_t d_find_or_insert_depth(const DeviceView& v, int32_t bx, int32_t by, int32_t bz,
+                                          uint32_t* steps) {
+    const uint32_t size = v.hash_mask + 1;
+    const uint32_t slot = d_hash(bx, by, bz, v.hash_mask);
+    const int64_t want = d_pack(bx, by, bz);
+    for (uint32_t probe = 0; probe < size; ++probe) {
+        ++(*steps);
+        HashEntry& e = v.table[(slot + probe) & v.hash_mask];
+        int64_t key = e.key;
+        if (key == want) {
+            int32_t idx = e.block_idx;
+            while (idx < 0) idx = *(volatile int32_t*)&e.block_idx;
+            return idx;
+        }
+        if (key == kEmptyKey) {
+            const int64_t prev = (int64_t)atomicCAS((unsigned long long*)&e.key,
+                                                    (unsigned long long)kEmptyKey,
+                                                    (unsigned long long)want);
+            if (prev == kEmptyKey) {
+                const int32_t idx = atomicAdd(v.block_count, 1);
+                if (idx >= v.pool_capacity) {
+                    atomicSub(v.block_count, 1);
+                    atomicExch((unsigned long long*)&e.key, (unsigned long long)kEmptyKey);
+                    return -1;
+                }
+                v.block_coord[idx] = BlockCoord{bx, by, bz};
+                __threadfence();
+                atomicExch(&e.block_idx, idx);
+                return idx;
+            }
+            if (prev == want) {
+                int32_t idx = e.block_idx;
+                while (idx < 0) idx = *(volatile int32_t*)&e.block_idx;
+                return idx;
+            }
+        }
+    }
+    return -1;
+}
+
 /// Shared geometry: walk the truncation band along the view ray.
 ///
 /// Returns false when the point is gated out. `body(vx, vy, vz, sdf)` receives
@@ -221,6 +268,37 @@ __global__ void alloc_kernel(DeviceView v, const float* pos, int32_t n, float ca
     });
 }
 
+/// MEASUREMENT ONLY. Emits two totals across the whole launch:
+///   lane_steps  sum over threads of the probe steps that thread needed
+///   tile_steps  sum over programs of (threads per program x deepest lane)
+/// The first is what a per-thread model pays. The second is the floor for any
+/// model that cannot retire a lane early, which is the question a tile language
+/// is being asked here.
+__global__ void alloc_kernel_probe_depth(DeviceView v, const float* pos, int32_t n, float cam0,
+                                         float cam1, float cam2, float radius_sq,
+                                         unsigned long long* lane_steps,
+                                         unsigned long long* tile_steps) {
+    const int i = blockIdx.x * blockDim.x + threadIdx.x;
+    uint32_t mine = 0;
+    if (i < n) {
+        const float cam[3] = {cam0, cam1, cam2};
+        walk_band(v, pos, i, cam, radius_sq, [&](int32_t vx, int32_t vy, int32_t vz, float) {
+            d_find_or_insert_depth(v, d_floor_div(vx, kBlockDim), d_floor_div(vy, kBlockDim),
+                                   d_floor_div(vz, kBlockDim), &mine);
+        });
+    }
+    __shared__ unsigned int s_max, s_sum;
+    if (threadIdx.x == 0) { s_max = 0u; s_sum = 0u; }
+    __syncthreads();
+    atomicMax(&s_max, mine);
+    atomicAdd(&s_sum, mine);
+    __syncthreads();
+    if (threadIdx.x == 0) {
+        atomicAdd(lane_steps, (unsigned long long)s_sum);
+        atomicAdd(tile_steps, (unsigned long long)s_max * (unsigned long long)blockDim.x);
+    }
+}
+
 __global__ void update_kernel(DeviceView v, const float* pos, const uint8_t* col, const float* wts,
                               int32_t n, float cam0, float cam1, float cam2, float radius_sq) {
     const int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -321,6 +399,29 @@ void CudaVolume::allocate_blocks_counting_cas(const PointBatch& b) {
     const float rsq = b.radius_m > 0.0f ? b.radius_m * b.radius_m : 0.0f;
     alloc_kernel<true><<<blocks, threads, 0, impl_->stream>>>(impl_->v, b.positions, b.n, b.cam[0],
                                                               b.cam[1], b.cam[2], rsq);
+}
+
+/// MEASUREMENT ONLY: price the same run under a per-thread and a tile model.
+void CudaVolume::allocate_blocks_probe_depth(const PointBatch& b, uint64_t* lane_steps,
+                                             uint64_t* tile_steps) {
+    *lane_steps = 0; *tile_steps = 0;
+    if (!valid() || b.n <= 0) return;
+    unsigned long long *d_lane = nullptr, *d_tile = nullptr;
+    cudaMalloc(&d_lane, sizeof(unsigned long long));
+    cudaMalloc(&d_tile, sizeof(unsigned long long));
+    cudaMemset(d_lane, 0, sizeof(unsigned long long));
+    cudaMemset(d_tile, 0, sizeof(unsigned long long));
+    const int threads = 256;
+    const int blocks = (b.n + threads - 1) / threads;
+    const float rsq = b.radius_m > 0.0f ? b.radius_m * b.radius_m : 0.0f;
+    alloc_kernel_probe_depth<<<blocks, threads, 0, impl_->stream>>>(
+        impl_->v, b.positions, b.n, b.cam[0], b.cam[1], b.cam[2], rsq, d_lane, d_tile);
+    cudaStreamSynchronize(impl_->stream);
+    unsigned long long hl = 0, ht = 0;
+    cudaMemcpy(&hl, d_lane, sizeof(hl), cudaMemcpyDeviceToHost);
+    cudaMemcpy(&ht, d_tile, sizeof(ht), cudaMemcpyDeviceToHost);
+    *lane_steps = hl; *tile_steps = ht;
+    cudaFree(d_lane); cudaFree(d_tile);
 }
 
 /// MEASUREMENT ONLY: probe and read, never insert. Mirrors arm A4's `-cas`

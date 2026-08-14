@@ -51,6 +51,9 @@ public:
     /// MEASUREMENT ONLY: probe and read, never insert. Mirrors arm A4's `-cas`
     /// variant so the baseline per-thread cost can be compared symmetrically.
     void allocate_blocks_no_cas(const PointBatch& batch);
+    /// MEASUREMENT ONLY: probe steps under a per-thread and a tile model.
+    void allocate_blocks_probe_depth(const PointBatch& batch, uint64_t* lane_steps,
+                                     uint64_t* tile_steps);
     /// MEASUREMENT ONLY: allocate with the block index derived from the hash
     /// slot, mirroring arm A4's variant. Removes the publication spin.
     void allocate_blocks_slot_index(const PointBatch& batch);

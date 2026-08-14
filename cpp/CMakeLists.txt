@@ -84,6 +84,12 @@ if(OSN_TSDF_CUDA)
         target_compile_definitions(bench_arms PRIVATE OSN_TSDF_HAVE_A4=1)
         target_link_libraries(bench_arms PRIVATE ${A4_LIB} CUDA::cuda_driver dl pthread)
 
+        # What a tile model costs before any implementation choice, so the
+        # cuTile question can be bounded without cuTile.
+        add_executable(probe_tile_floor bench/probe_tile_floor.cu)
+        target_include_directories(probe_tile_floor PRIVATE tests)
+        target_link_libraries(probe_tile_floor PRIVATE osn_tsdf CUDA::cuda_driver dl pthread)
+
         add_executable(probe_a4_tail bench/probe_a4_tail.cu)
         target_include_directories(probe_a4_tail PRIVATE tests)
         target_link_libraries(probe_a4_tail PRIVATE osn_tsdf ${A4_LIB} CUDA::cuda_driver dl pthread)
